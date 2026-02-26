@@ -7,35 +7,6 @@ metadata:
 data:
   config.yaml: |
     receivers:
-      # OTLP receiver for traces, metrics, and logs from applications
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:4317
-          http:
-            endpoint: 0.0.0.0:4318
-
-      # Prometheus receiver to scrape metrics from ServiceMonitors
-      prometheus:
-        config:
-          scrape_configs:
-            - job_name: 'kubernetes-pods'
-              kubernetes_sd_configs:
-                - role: pod
-              relabel_configs:
-                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-                  action: keep
-                  regex: true
-                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-                  action: replace
-                  target_label: __metrics_path__
-                  regex: (.+)
-                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-                  action: replace
-                  regex: ([^:]+)(?::\d+)?;(\d+)
-                  replacement: $$1:$$2
-                  target_label: __address__
-
       # Filelog receiver for collecting logs from Kubernetes pods
       filelog:
         include:
@@ -104,20 +75,8 @@ data:
 
     service:
       pipelines:
-        # Traces pipeline
-        traces:
-          receivers: [otlp]
-          processors: [memory_limiter, batch, resource, attributes]
-          exporters: [otlp/uptrace]
-
-        # Metrics pipeline
-        metrics:
-          receivers: [otlp, prometheus]
-          processors: [memory_limiter, batch, resource]
-          exporters: [otlp/uptrace]
-
-        # Logs pipeline
+        # Logs pipeline — filelog → Uptrace
         logs:
-          receivers: [otlp, filelog]
+          receivers: [filelog]
           processors: [memory_limiter, batch, resource, attributes]
           exporters: [otlp/uptrace]

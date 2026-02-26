@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: observability
 resources:
   - backend-dashboard.yaml
+  - frontend-dashboard.yaml
   - backend-slo-rules.yaml
   - backend-alerts.yaml
