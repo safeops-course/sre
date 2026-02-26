@@ -15,7 +15,7 @@ This repository (`sre/`) is the control plane and GitOps source of truth.
 - `infra/terraform/hcloud_cluster/` - Hetzner cluster provisioning + Flux bootstrap.
 - `infra/terraform/kind_cluster/` - local kind cluster provisioning + Flux bootstrap.
 - `flux/` - GitOps manifests for apps, infrastructure, and secrets.
-- `docs/` - architecture, runbooks, workflow docs, and course material.
+- `docs/` - architecture, runbooks, and workflow docs.
 - `scripts/` - helper scripts (repo setup, SOPS setup, encryption helpers).
 - `tests/` - reserved for infra/system tests (currently minimal scaffold).
 
