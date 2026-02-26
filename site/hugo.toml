@@ -5,6 +5,7 @@ enableRobotsTXT = true
 
 [params]
   description = "Production-Grade Kubernetes with Guardrails and AI-Assisted SRE."
+  quizApiEndpoint = ""
 
 [markup]
   [markup.goldmark]

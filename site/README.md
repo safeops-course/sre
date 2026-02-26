@@ -43,3 +43,15 @@ In Cloudflare DNS, keep records proxied.
 
 Do not edit generated files in `site/content/course/` manually.
 Always edit source in `docs/course/`.
+
+## Quiz Mode (Local First)
+
+Quiz pages (`/quiz/`) now have a local interactive mode:
+- auto-check for objective (A/B/C) questions
+- manual self-check for open-ended questions
+- progress saved in browser `localStorage`
+
+Cloudflare-ready hook:
+- `site/hugo.toml` has `params.quizApiEndpoint`
+- keep it empty for local-only mode
+- set it to a Pages Function URL later (for D1-backed progress storage)

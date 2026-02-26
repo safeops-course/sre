@@ -2,7 +2,7 @@
 
 ## Current Status
 
-This directory is in an early scaffold stage.
+This directory is in active draft-delivery state (core track + advanced track packs are already present).
 
 Available now:
 - `00-intro-ai-as-junior.md` - course framing and mental model.
@@ -25,12 +25,18 @@ Available now:
 - `chapter-15-admission-policy-guardrails/{README,lab,runbook-admission-policy,quiz}.md` - advanced policy-as-code enforcement pack (deny risky manifests).
 - `chapter-16-rollback-data-migrations/{README,lab,runbook-rollback-migrations,quiz}.md` - advanced rollback-safe schema migration operations pack.
 - `module-linkerd-progressive-delivery/{README,lab,runbook-linkerd-progressive-delivery,quiz}.md` - advanced mesh and progressive delivery module (canary/A-B).
-- chapter directories under `chapter-*` - work-in-progress placeholders and migration targets.
+- Flux scaffolds for advanced modules:
+  - `flux/infrastructure/policy/kyverno/` + policy packs in `flux/infrastructure/policy/packs/`
+  - `flux/infrastructure/progressive-delivery/{linkerd,flagger,develop}/`
+  - bootstrap wiring in `flux/bootstrap/flux-system/infrastructure.yaml` (controllers enabled, sample canary pack opt-in)
+- Local Git guardrails:
+  - `.pre-commit-config.yaml` includes `flux-kustomize-validate`
+  - `scripts/flux-kustomize-validate.sh` (yq + kustomize + kubeconform + Flux CRD schemas)
 
-Not available yet:
-- complete lecture notes per chapter
-- step-by-step labs with solutions
-- quizzes/knowledge checks per chapter
+Still in progress:
+- instructor-grade solution keys / answer guides per lab
+- chapter numbering and legacy placeholder cleanup across `chapter-*`
+- chapter-16 hands-on wiring to real backend DB migration flow (after backend migration module is implemented)
 
 ## Course Goal
 
@@ -78,13 +84,11 @@ Advanced track (Part 2):
 
 ## Next Recommended Content
 
-1. Core track: finish `chapter-01-introduction` as full lesson from the template.
-2. Core track: finalize `chapter-02-iac` lab and review artifacts.
-3. Core track: extend `chapter-03-secrets-management` with key-rotation drill.
-4. Core track: run one full capstone incident in `chapter-13-24-7-production-sre`.
-5. Advanced track: add dedicated chapter packs for Supply Chain Security and Admission Policy Guardrails.
-6. Advanced track: continue `chapter-12-ai-assisted-sre-guardian` integration with chaos event mapping.
-7. Advanced track: wire `chapter-16-rollback-data-migrations` to real backend DB login flow once implemented.
+1. Content hygiene: align chapter numbering and clearly mark/remove legacy placeholder directories.
+2. Instructor assets: add lab solution keys and scoring rubrics for chapters 09, 11, 13, 14, 15, and 16.
+3. Advanced track enablement: add a documented non-production rollout path for policy packs (`Audit -> Enforce`) and keep production opt-in.
+4. Progressive delivery labs: enable `develop` canary sample only during lab windows and add explicit verify/rollback evidence checklist.
+5. Backend integration: wire `chapter-16-rollback-data-migrations` to real backend DB migration workflow once migration tooling is added.
 
 ## Pending Decisions
 

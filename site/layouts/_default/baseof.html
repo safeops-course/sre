@@ -22,5 +22,16 @@
   <main class="wrap">
     {{ block "main" . }}{{ end }}
   </main>
+
+  {{ if and .IsPage (in .RelPermalink "/quiz/") }}
+  <script>
+    window.__QUIZ_CONFIG = {
+      pageId: "{{ .RelPermalink }}",
+      apiEndpoint: "{{ with site.Params.quizApiEndpoint }}{{ . }}{{ end }}"
+    };
+  </script>
+  {{ $quiz := resources.Get "js/quiz.js" | minify | fingerprint }}
+  <script defer src="{{ $quiz.RelPermalink }}" integrity="{{ $quiz.Data.Integrity }}"></script>
+  {{ end }}
 </body>
 </html>

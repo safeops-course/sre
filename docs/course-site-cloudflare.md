@@ -46,6 +46,18 @@ DNS records should remain proxied in Cloudflare.
 3. Merge to `main`
 4. Cloudflare Pages rebuilds and publishes automatically
 
+## Quiz Progress (Optional Next Step)
+
+Current behavior:
+- quiz pages run in local mode (browser-only `localStorage`)
+- no server-side account/progress yet
+
+Cloudflare upgrade path:
+1. Add Pages Function endpoint (e.g. `/api/quiz-results`)
+2. Store results in D1
+3. Set `params.quizApiEndpoint` in `site/hugo.toml` to that endpoint URL
+4. Keep local mode as fallback when endpoint is unset
+
 ## Guardrails
 
 - Never edit generated content under `site/content/course/`.
