@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-ai-monitor
+  labels:
+    app.kubernetes.io/name: k8s-ai-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-ai-monitor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-ai-monitor
+    spec:
+      serviceAccountName: k8s-ai-monitor
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: k8s-ai-monitor
+          image: ghcr.io/ldbl/k8s-ai-monitor:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: CLUSTER_NAME
+              value: safeops
+            - name: WATCH_NAMESPACES
+              value: production
+            - name: NON_PROD_NAMESPACES
+              value: develop,staging
+            - name: EXCLUDE_NAMESPACES
+              value: kube-system,kube-public,kube-node-lease,flux-system
+            - name: LOG_LEVEL
+              value: INFO
+            - name: LLM_PROVIDER
+              value: openai
+            - name: PROMETHEUS_URL
+              value: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
+            - name: SQLITE_PATH
+              value: /data/k8s-ai-monitor.db
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: anthropic-api-key
+                  optional: true
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: slack-webhook-url
+                  optional: true
+            - name: SLACK_WEBHOOK_URL_NONPROD
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: slack-webhook-url-nonprod
+                  optional: true
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: internal-token
+                  optional: true
+            - name: ELASTICSEARCH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: elasticsearch-url
+                  optional: true
+            - name: ELASTICSEARCH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: elasticsearch-user
+                  optional: true
+            - name: ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ai-monitor-secrets
+                  key: elasticsearch-password
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: k8s-ai-monitor-data
