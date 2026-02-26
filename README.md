@@ -37,8 +37,7 @@ Companion repos in this workspace:
 To enable GitOps reconciliation of this repository, set `TF_VAR_flux_git_repository_url` (and optional branch/path variables) before running Terraform. The default sync path is `./flux/bootstrap/flux-system`. See `docs/gitops/flux.md` for details.
 
 ## Where To Start Reading
-- Course overview: `docs/course/README.md`
-- Course website (Hugo + Cloudflare): `docs/course-site-cloudflare.md`
+- Course website/content has moved to separate repository: `https://github.com/ldbl/sre-course`
 - AI guardrails: `docs/ai-code-of-conduct.md`
 - Hetzner cluster: `docs/hetzner.md`
 - Local bootstrap: `docs/local-dev.md`
