@@ -12,7 +12,7 @@ The point is not “how to use AI” or “how to prompt”. The point is how to
 - Automation: `scripts/` for reusable tooling, `tests/` for infrastructure tests
 
 ## Repository Layout
-- `docs/` – living docs + course material
+- `docs/` – living platform docs (architecture, runbooks, GitOps workflows)
 - `infra/` – Terraform
 - `infra/terraform/kind_cluster/` – Terraform module (tehcyx/kind) defining the local multi-node kind cluster + Flux install
 - `flux/` – FluxCD GitOps configuration

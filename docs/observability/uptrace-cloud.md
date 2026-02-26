@@ -17,7 +17,7 @@ This guide covers the Uptrace Cloud integration for unified observability (logs,
 - ✅ Zero infrastructure management (no ClickHouse, PostgreSQL setup)
 - ✅ Automatic scaling and updates
 - ✅ Built-in high availability
-- ✅ Perfect for demos and course material
+- ✅ Perfect for demos and training environments
 - ✅ Free tier available
 
 ## Architecture

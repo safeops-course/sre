@@ -1,6 +1,6 @@
 # AI Code of Conduct (DevOps / SRE)
 
-AI in this repo/course is treated as a **very fast, very well-read junior engineer**: confident, low context, and indifferent to prod vs dev. The goal is to get leverage **without increasing risk**.
+AI in this repo is treated as a **very fast, very well-read junior engineer**: confident, low context, and indifferent to prod vs dev. The goal is to get leverage **without increasing risk**.
 
 ## Golden Rules
 
@@ -43,4 +43,3 @@ AI in this repo/course is treated as a **very fast, very well-read junior engine
 - Locks on `apply` paths (Terraform state lock + CI concurrency).
 - Approvals for production (GitHub Environments / protected branches).
 - Read-only access paths for AI.
-
