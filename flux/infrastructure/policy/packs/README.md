@@ -3,8 +3,8 @@
 These policy packs are chapter scaffolds and are not reconciled by Flux unless
 you add explicit `Kustomization` entries in `flux/bootstrap/flux-system/infrastructure.yaml`.
 
-- `chapter-14-supply-chain/` contains signature/attestation policy examples.
-- `chapter-15-admission-guardrails/` contains baseline admission policy examples.
+- `chapter-15-supply-chain/` contains signature/attestation policy examples.
+- `chapter-16-admission-guardrails/` contains baseline admission policy examples.
 
 Use staged rollout:
 1. deploy policy engine (Kyverno)
