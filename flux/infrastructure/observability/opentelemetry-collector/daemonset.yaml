@@ -22,16 +22,6 @@ spec:
           image: otel/opentelemetry-collector-contrib:0.114.0
           args:
             - --config=/conf/config.yaml
-          ports:
-            - name: otlp-grpc
-              containerPort: 4317
-              protocol: TCP
-            - name: otlp-http
-              containerPort: 4318
-              protocol: TCP
-            - name: prometheus
-              containerPort: 8888
-              protocol: TCP
           env:
             - name: K8S_NODE_NAME
               valueFrom:

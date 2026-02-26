@@ -116,27 +116,28 @@ spec:
   wait: false
   dependsOn:
     - name: infrastructure
-# ---
-# apiVersion: kustomize.toolkit.fluxcd.io/v1
-# kind: Kustomization
-# metadata:
-#   name: cnpg-cluster-staging
-#   namespace: flux-system
-# spec:
-#   interval: 10m0s
-#   sourceRef:
-#     kind: GitRepository
-#     name: flux-system
-#   path: ./flux/infrastructure/data/cnpg-clusters/staging
-#   prune: true
-#   wait: false
-#   postBuild:
-#     substitute:
-#       R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
-#   dependsOn:
-#     - name: cnpg-operator
-#     - name: network-policies-staging
-#     - name: resource-management-staging
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cnpg-cluster-staging
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/data/cnpg-clusters/staging
+  prune: true
+  wait: false
+  postBuild:
+    substitute:
+      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+  dependsOn:
+    - name: cnpg-operator
+    - name: network-policies-staging
+    - name: resource-management-staging
+    - name: secrets-staging
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -358,19 +359,19 @@ spec:
 #   dependsOn:
 #     - name: flagger
 #     - name: apps-develop
-# ---
-# apiVersion: kustomize.toolkit.fluxcd.io/v1
-# kind: Kustomization
-# metadata:
-#   name: opentelemetry-collector
-#   namespace: flux-system
-# spec:
-#   interval: 10m0s
-#   sourceRef:
-#     kind: GitRepository
-#     name: flux-system
-#   path: ./flux/infrastructure/observability/opentelemetry-collector
-#   prune: true
-#   wait: false
-#   dependsOn:
-#     - name: observability
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: opentelemetry-collector
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/observability/opentelemetry-collector
+  prune: true
+  wait: false
+  dependsOn:
+    - name: observability

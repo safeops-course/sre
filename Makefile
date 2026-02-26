@@ -9,7 +9,7 @@ KUBECTL_VERSION := 1.34.1
 KIND_VERSION := 0.30.0
 FLUX_VERSION := 2.7.0
 
-.PHONY: help versions plan install-hooks pre-commit fmt validate terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
+.PHONY: help versions plan install-hooks pre-commit fmt validate smoke-test terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -38,6 +38,9 @@ pre-commit: ## Run all pre-commit hooks
 
 fmt: ## Format Terraform files
 	terraform fmt -recursive infra/terraform/
+
+smoke-test: ## Run infrastructure smoke tests against the cluster
+	bash tests/smoke-test.sh
 
 validate: ## Validate Terraform configs
 	cd infra/terraform/hcloud_cluster && terraform validate
