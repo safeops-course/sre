@@ -84,6 +84,7 @@ spec:
     - name: cnpg-operator
     - name: network-policies-develop
     - name: resource-management-develop
+    - name: secrets-develop
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
