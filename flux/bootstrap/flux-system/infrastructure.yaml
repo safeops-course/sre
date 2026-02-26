@@ -258,6 +258,23 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
+  name: k8s-ai-monitor
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/observability/k8s-ai-monitor
+  prune: true
+  wait: false
+  dependsOn:
+    - name: observability-resources
+    - name: secrets-observability
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
   name: chaos-monkey-develop
   namespace: flux-system
 spec:

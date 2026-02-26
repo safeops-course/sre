@@ -7,7 +7,7 @@
 - **GitOps operator:** Flux (installed via Flux Operator + `FluxInstance` in Terraform).
 - **Infrastructure as code:** Terraform under `infra/terraform/`.
 - **Manifests:** Flux + Kustomize under `flux/`.
-- **Observability:** kube-prometheus-stack (Prometheus, Alertmanager, Grafana) with optional OpenTelemetry collector manifests.
+- **Observability:** kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor for AI-assisted alert routing and triage.
 
 ## Current Repository Scope
 This repository (`sre/`) is the control plane and GitOps source of truth.
@@ -45,6 +45,8 @@ Reference services are maintained as companion repos (`backend/`, `frontend/`) i
 ## Observability Status
 - Deployed by Flux via `flux/infrastructure/observability/kube-prometheus-stack/`.
 - Includes dashboards and alert rules for backend service metrics.
+- Alertmanager is disabled; alert delivery path is `k8s-ai-monitor` webhook routing.
+- `k8s-ai-monitor` is deployed via `flux/infrastructure/observability/k8s-ai-monitor/` and uses Prometheus + Kubernetes context for incident analysis.
 - OpenTelemetry collector manifests exist under `flux/infrastructure/observability/opentelemetry-collector/`; bootstrap wiring is currently disabled (commented in `flux/bootstrap/flux-system/infrastructure.yaml`).
 
 ## Secrets and Security Model

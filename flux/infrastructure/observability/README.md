@@ -1,6 +1,6 @@
 # Observability Stack
 
-This directory contains the observability infrastructure for the SRE platform, including Prometheus, Grafana, and Alertmanager.
+This directory contains the observability infrastructure for the SRE platform, including Prometheus, Grafana, and k8s-ai-monitor.
 
 ## Components
 
@@ -11,9 +11,17 @@ The `kube-prometheus-stack` Helm chart provides:
 - **Prometheus Operator** - Manages Prometheus, ServiceMonitor, and PrometheusRule resources
 - **Prometheus** - Metrics collection and storage
 - **Grafana** - Metrics visualization and dashboards
-- **Alertmanager** - Alert routing and notification management
 - **Node Exporter** - Node-level metrics
 - **Kube-State-Metrics** - Kubernetes object metrics
+
+### AI Alert Router (`k8s-ai-monitor`)
+
+The `k8s-ai-monitor` deployment provides:
+
+- scanner/event-driven incident detection across Kubernetes and Flux resources
+- context enrichment (logs/events/metrics) for triage
+- LLM-assisted incident analysis
+- webhook alert delivery (Slack-compatible endpoint, can be bridged to OpsGenie)
 
 ## Architecture
 
@@ -30,12 +38,12 @@ The `kube-prometheus-stack` Helm chart provides:
 │         │                                                   │
 │         │ PromQL queries                                   │
 │         ▼                                                   │
-│  ┌──────────────┐      ┌──────────────┐                   │
-│  │   Grafana    │      │ Alertmanager │                   │
-│  │              │      │              │                   │
-│  │  - Dashboards│      │  - Alerts    │                   │
-│  │  - Explore   │      │  - Routing   │                   │
-│  └──────────────┘      └──────────────┘                   │
+│  ┌──────────────┐      ┌────────────────┐                 │
+│  │   Grafana    │      │ k8s-ai-monitor │                 │
+│  │              │      │                │                 │
+│  │  - Dashboards│      │  - Triage      │                 │
+│  │  - Explore   │      │  - Alert route │                 │
+│  └──────────────┘      └────────────────┘                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -66,14 +74,14 @@ kubectl port-forward -n observability svc/kube-prometheus-stack-prometheus 9090:
 
 Then open: http://localhost:9090
 
-### Alertmanager
+### k8s-ai-monitor
 
 **Local Access:**
 ```bash
-kubectl port-forward -n observability svc/kube-prometheus-stack-alertmanager 9093:9093
+kubectl port-forward -n observability svc/k8s-ai-monitor 8080:8080
 ```
 
-Then open: http://localhost:9093
+Then open: http://localhost:8080/healthz
 
 ## ServiceMonitor Configuration
 
@@ -136,6 +144,13 @@ Configured alerts:
 | `BackendPodRestarting` | warning | restarts >0 for 5m | Pod is restarting frequently |
 | `BackendSLOErrorBudgetBurnCritical` | critical | burn rate >14.4x | Fast error-budget burn for 99.5% SLO |
 | `BackendSLOErrorBudgetBurnWarning` | warning | burn rate >6x | Sustained error-budget burn for 99.5% SLO |
+
+### Alert Routing Path
+
+- Prometheus rules define detection logic and severity.
+- `k8s-ai-monitor` consumes cluster context and Prometheus metrics, then sends actionable alerts.
+- Alertmanager is disabled in this stack.
+- For OpsGenie, configure `k8s-ai-monitor` webhook destination to your OpsGenie-compatible endpoint (direct integration or relay).
 
 ## Metrics Reference
 
@@ -212,7 +227,7 @@ The observability stack is deployed automatically by Flux:
 
 ```bash
 # Check deployment status
-kubectl get kustomization -n flux-system observability
+kubectl get kustomization -n flux-system observability observability-resources k8s-ai-monitor
 
 # Check HelmRelease
 kubectl get helmrelease -n observability
@@ -223,6 +238,21 @@ kubectl get pods -n observability
 # Check Prometheus targets
 kubectl port-forward -n observability svc/kube-prometheus-stack-prometheus 9090:9090
 # Then visit: http://localhost:9090/targets
+```
+
+### k8s-ai-monitor Secrets
+
+1. Copy and encrypt the example secret:
+```bash
+cp flux/secrets/observability/k8s-ai-monitor-secrets.yaml.example \
+   flux/secrets/observability/k8s-ai-monitor-secrets.yaml
+sops flux/secrets/observability/k8s-ai-monitor-secrets.yaml
+```
+2. Uncomment `k8s-ai-monitor-secrets.yaml` in `flux/secrets/observability/kustomization.yaml`.
+3. Reconcile:
+```bash
+flux reconcile kustomization secrets-observability -n flux-system --with-source
+flux reconcile kustomization k8s-ai-monitor -n flux-system --with-source
 ```
 
 ## Troubleshooting
@@ -275,10 +305,11 @@ kubectl port-forward -n observability svc/kube-prometheus-stack-prometheus 9090:
 # Visit: http://localhost:9090/alerts
 ```
 
-3. Check Alertmanager:
+3. Check k8s-ai-monitor pipeline:
 ```bash
-kubectl port-forward -n observability svc/kube-prometheus-stack-alertmanager 9093:9093
-# Visit: http://localhost:9093
+kubectl -n observability logs deploy/k8s-ai-monitor --tail=200
+kubectl port-forward -n observability svc/k8s-ai-monitor 8080:8080
+# Visit: http://localhost:8080/state
 ```
 
 ## Storage
@@ -312,22 +343,22 @@ For production deployments, consider:
 
 1. **Security:**
    - Change Grafana admin password
-   - Enable authentication for Prometheus and Alertmanager
+   - Enable authentication for Prometheus and Grafana endpoints
    - Use TLS for ingress
 
 2. **High Availability:**
    - Run multiple Prometheus replicas
    - Use Thanos for long-term storage
-   - Run Alertmanager in HA mode
+   - Define `k8s-ai-monitor` HA/backup strategy before scaling replicas
 
 3. **Resource Limits:**
    - Adjust resource requests/limits based on actual usage
    - Monitor Prometheus memory usage (can grow with cardinality)
 
 4. **Alerting:**
-   - Configure real notification channels (Slack, PagerDuty, email)
+   - Configure `k8s-ai-monitor` webhook destination (OpsGenie relay/integration)
    - Set up escalation policies
-   - Test alert routing regularly
+   - Test end-to-end alert routing regularly
 
 5. **Retention:**
    - Adjust retention based on compliance requirements

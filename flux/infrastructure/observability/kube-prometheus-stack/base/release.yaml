@@ -66,63 +66,11 @@ spec:
           - grafana.local
         path: /
         pathType: Prefix
-      # Additional data sources
-      additionalDataSources:
-        - name: Loki
-          type: loki
-          access: proxy
-          url: http://loki-gateway.observability.svc.cluster.local
-          jsonData:
-            maxLines: 1000
-          editable: false
 
-    # Alertmanager configuration
+    # Alertmanager is intentionally disabled.
+    # Alert routing is handled by k8s-ai-monitor.
     alertmanager:
-      enabled: true
-      alertmanagerSpec:
-        retention: 120h
-        storage:
-          volumeClaimTemplate:
-            spec:
-              accessModes: ["ReadWriteOnce"]
-              resources:
-                requests:
-                  storage: 5Gi
-        resources:
-          requests:
-            cpu: 10m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
-      config:
-        global:
-          resolve_timeout: 5m
-        route:
-          group_by: ['alertname', 'cluster', 'service']
-          group_wait: 10s
-          group_interval: 10s
-          repeat_interval: 12h
-          receiver: 'default'
-          routes:
-            - match:
-                alertname: Watchdog
-              receiver: 'null'
-            - match:
-                severity: critical
-              receiver: 'critical'
-              continue: true
-            - match:
-                severity: warning
-              receiver: 'warning'
-        receivers:
-          - name: 'null'
-          - name: 'default'
-            # Add your notification integrations here (Slack, email, etc.)
-          - name: 'warning'
-            # Warning notifications
-          - name: 'critical'
-            # Critical notifications
+      enabled: false
 
     # Prometheus Operator configuration
     prometheusOperator:

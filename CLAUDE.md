@@ -75,7 +75,7 @@ docs/                # Course materials, architecture notes
 - **Secrets**: SOPS with AGE encryption
 - **DNS/TLS**: external-dns + cert-manager (Cloudflare DNS-01)
 - **Ingress**: Traefik (via kube-hetzner)
-- **Observability**: kube-prometheus-stack (Prometheus, Grafana, Alertmanager)
+- **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)
 - **Database**: CloudNativePG
 - **State**: Terraform remote state in Cloudflare R2 (S3-compatible)
 
