@@ -1,0 +1,77 @@
+name: sync-course-snippets
+
+# Triggered when files referenced by the course change.
+# Clones sre-course, runs snippet extraction, updates course-map.yml,
+# and pushes changes to both repos.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "scripts/**"
+      - "flux/**"
+      - "infra/**"
+      - "docs/**"
+      - ".github/workflows/**"
+      - ".pre-commit-config.yaml"
+      - ".sops.yaml"
+      - ".coderabbit.yml"
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  sync-snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sre repo
+        uses: actions/checkout@v4
+        with:
+          path: sre
+          token: ${{ secrets.COURSE_REPO_PAT }}
+
+      - name: Checkout sre-course repo
+        uses: actions/checkout@v4
+        with:
+          repository: ldbl/sre-course
+          token: ${{ secrets.COURSE_REPO_PAT }}
+          path: sre-course
+
+      - name: Run content sync
+        run: |
+          cd sre-course
+          ./scripts/sync-course-to-hugo.sh
+
+      - name: Run snippet extraction
+        run: |
+          cd sre-course
+          ./scripts/inline-repo-snippets.sh "${{ github.workspace }}/sre"
+
+      - name: Regenerate course-map.yml
+        run: |
+          cd sre-course
+          ./scripts/generate-course-map.sh "${{ github.workspace }}/sre/course-map.yml"
+
+      - name: Push snippet updates to sre-course
+        run: |
+          cd sre-course
+          git diff --quiet && git diff --cached --quiet && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/content/members/
+          git commit -m "chore: sync code snippets from sre repo
+
+          Triggered by ${{ github.repository }}@${{ github.sha }}"
+          git push
+
+      - name: Push course-map.yml to sre
+        run: |
+          cd sre
+          git diff --quiet course-map.yml && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add course-map.yml
+          git commit -m "chore: update course-map.yml
+
+          Auto-generated from sre-course chapter references."
+          git push
