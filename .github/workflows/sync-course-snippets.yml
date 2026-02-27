@@ -55,10 +55,10 @@ jobs:
       - name: Push snippet updates to sre-course
         run: |
           cd sre-course
-          git diff --quiet && git diff --cached --quiet && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/content/members/
+          git add site/content/members/ site/content/course/
+          git diff --cached --quiet && { echo "No snippet changes"; exit 0; }
           git commit -m "chore: sync code snippets from sre repo
 
           Triggered by ${{ github.repository }}@${{ github.sha }}"
@@ -67,10 +67,10 @@ jobs:
       - name: Push course-map.yml to sre
         run: |
           cd sre
-          git diff --quiet course-map.yml && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add course-map.yml
+          git diff --cached --quiet && { echo "No course-map changes"; exit 0; }
           git commit -m "chore: update course-map.yml
 
           Auto-generated from sre-course chapter references."
