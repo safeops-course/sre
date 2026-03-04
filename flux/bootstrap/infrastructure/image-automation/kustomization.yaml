@@ -4,3 +4,4 @@ resources:
   - git-repository.yaml
   - backend-image-repo.yaml
   - frontend-image-repo.yaml
+  - k8s-ai-monitor-image-repo.yaml
