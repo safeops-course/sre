@@ -88,7 +88,7 @@ flux/bootstrap/flux-system/apps.yaml:
 flux/bootstrap/flux-system/infrastructure.yaml:
   - chapter-06-network-policies
   - chapter-08-resource-management
-  - module-linkerd-progressive-delivery
+  - module-progressive-delivery
 
 flux/bootstrap/flux-system/secrets.yaml:
   - chapter-03-secrets-management
@@ -124,7 +124,6 @@ flux/infrastructure/network-policies/staging:
 
 flux/infrastructure/policy/kyverno:
   - chapter-15-supply-chain-security
-  - chapter-16-admission-policy-guardrails
 
 flux/infrastructure/policy/kyverno/kustomization.yaml:
   - chapter-16-admission-policy-guardrails
@@ -132,17 +131,11 @@ flux/infrastructure/policy/kyverno/kustomization.yaml:
 flux/infrastructure/policy/kyverno/release.yaml:
   - chapter-16-admission-policy-guardrails
 
-flux/infrastructure/policy/packs/chapter-15-supply-chain:
-  - chapter-15-supply-chain-security
-
 flux/infrastructure/policy/packs/chapter-15-supply-chain/verify-attestations.example.yaml:
   - chapter-15-supply-chain-security
 
 flux/infrastructure/policy/packs/chapter-15-supply-chain/verify-images.example.yaml:
   - chapter-15-supply-chain-security
-
-flux/infrastructure/policy/packs/chapter-16-admission-guardrails:
-  - chapter-16-admission-policy-guardrails
 
 flux/infrastructure/policy/packs/chapter-16-admission-guardrails/disallow-latest-tag.example.yaml:
   - chapter-16-admission-policy-guardrails
@@ -154,13 +147,10 @@ flux/infrastructure/policy/packs/chapter-16-admission-guardrails/require-securit
   - chapter-16-admission-policy-guardrails
 
 flux/infrastructure/progressive-delivery/develop:
-  - module-linkerd-progressive-delivery
+  - module-progressive-delivery
 
 flux/infrastructure/progressive-delivery/flagger:
-  - module-linkerd-progressive-delivery
-
-flux/infrastructure/progressive-delivery/linkerd:
-  - module-linkerd-progressive-delivery
+  - module-progressive-delivery
 
 flux/infrastructure/resource-management/develop:
   - chapter-08-resource-management
@@ -170,6 +160,9 @@ flux/infrastructure/resource-management/production:
 
 flux/infrastructure/resource-management/staging:
   - chapter-08-resource-management
+
+flux/infrastructure/security/dns-and-certificates:
+  - chapter-02-iac
 
 flux/secrets:
   - chapter-03-secrets-management
