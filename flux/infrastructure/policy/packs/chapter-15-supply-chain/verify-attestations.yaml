@@ -22,6 +22,7 @@ spec:
       verifyImages:
         - imageReferences:
             - "ghcr.io/ldbl/*"
+          mutateDigest: false
           attestations:
             - type: "https://spdx.dev/Document"
               attestors:
