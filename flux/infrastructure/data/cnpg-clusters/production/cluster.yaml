@@ -6,7 +6,7 @@ metadata:
   annotations:
     cnpg.io/validation: "disabled"
 spec:
-  instances: 2
+  instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   primaryUpdateStrategy: unsupervised
   bootstrap:
@@ -31,8 +31,8 @@ spec:
           key: ACCESS_SECRET_KEY
   resources:
     requests:
-      cpu: 300m
-      memory: 1Gi
+      cpu: 10m
+      memory: 128Mi
     limits:
-      cpu: "2"
-      memory: 4Gi
+      cpu: 100m
+      memory: 512Mi

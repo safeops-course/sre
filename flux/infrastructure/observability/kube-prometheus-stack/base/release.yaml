@@ -26,8 +26,8 @@ spec:
             cpu: 50m
             memory: 256Mi
           limits:
-            cpu: 1000m
-            memory: 2Gi
+            cpu: 100m
+            memory: 512Mi
         storageSpec:
           volumeClaimTemplate:
             spec:
@@ -50,18 +50,18 @@ spec:
         size: 5Gi
       resources:
         requests:
-          cpu: 25m
-          memory: 128Mi
+          cpu: 10m
+          memory: 64Mi
         limits:
-          cpu: 500m
-          memory: 512Mi
+          cpu: 100m
+          memory: 256Mi
       # Default dashboards
       defaultDashboardsEnabled: true
       defaultDashboardsTimezone: UTC
       # Ingress for Grafana
       ingress:
         enabled: true
-        ingressClassName: nginx
+        ingressClassName: traefik
         hosts:
           - grafana.local
         path: /
@@ -76,10 +76,10 @@ spec:
     prometheusOperator:
       resources:
         requests:
-          cpu: 25m
-          memory: 100Mi
+          cpu: 10m
+          memory: 64Mi
         limits:
-          cpu: 500m
+          cpu: 100m
           memory: 256Mi
 
     # Node exporter - collect node metrics
