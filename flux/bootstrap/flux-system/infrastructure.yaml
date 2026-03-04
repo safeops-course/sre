@@ -254,7 +254,8 @@ spec:
     name: flux-system
   path: ./flux/infrastructure/observability/kube-prometheus-stack/base
   prune: true
-  wait: false
+  wait: true
+  timeout: 10m0s
   dependsOn:
     - name: infrastructure
 ---
