@@ -66,6 +66,15 @@ data:
         headers:
           uptrace-dsn: ${UPTRACE_DSN}
         compression: gzip
+        retry_on_failure:
+          enabled: true
+          initial_interval: 10s
+          max_interval: 300s
+          max_elapsed_time: 0
+        sending_queue:
+          enabled: true
+          num_consumers: 2
+          queue_size: 100
 
       # Debug exporter for troubleshooting (logs to stdout)
       debug:
@@ -75,8 +84,8 @@ data:
 
     service:
       pipelines:
-        # Logs pipeline — filelog → debug (add otlp/uptrace when UPTRACE_DSN is configured)
+        # Logs pipeline — filelog → Uptrace + debug
         logs:
           receivers: [filelog]
           processors: [memory_limiter, batch, resource, attributes]
-          exporters: [debug]
+          exporters: [otlp/uptrace, debug]
