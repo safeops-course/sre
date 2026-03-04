@@ -8,3 +8,5 @@ resources:
   - pvc.yaml
   - deployment.yaml
   - service.yaml
+  - image-policy.yaml
+  - image-automation.yaml

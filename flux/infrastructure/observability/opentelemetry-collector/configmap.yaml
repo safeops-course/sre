@@ -68,7 +68,7 @@ data:
         compression: gzip
 
       # Debug exporter for troubleshooting (logs to stdout)
-      logging:
+      debug:
         verbosity: basic
         sampling_initial: 5
         sampling_thereafter: 200
