@@ -14,6 +14,12 @@ BEGIN;
 ALTER TABLE IF EXISTS users
   ADD COLUMN IF NOT EXISTS login_method_v2 VARCHAR(64) DEFAULT 'password';
 
+-- Backfill: copy existing login_method values into the new column.
+-- In production this is critical — without it, existing users with non-default
+-- login methods (e.g. 'oauth', 'saml') would revert to 'password' when the
+-- feature flag is enabled.
+UPDATE users SET login_method_v2 = login_method WHERE login_method IS NOT NULL;
+
 COMMENT ON COLUMN users.login_method_v2 IS
   'New login method field (expand phase). Safe to coexist with login_method.';
 

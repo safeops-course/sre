@@ -42,6 +42,15 @@ patches:
       kind: Deployment
       name: backend
   - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom
+        value:
+          - configMapRef:
+              name: feature-flags
+    target:
+      kind: Deployment
+      name: backend
+  - patch: |-
       - op: replace
         path: /spec/rules/0/host
         value: backend.develop.local

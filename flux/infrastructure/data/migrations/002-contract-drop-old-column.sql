@@ -6,6 +6,8 @@
 -- ║  2. Rollback window has passed with stable SLO                  ║
 -- ║  3. Backup verified: ScheduledBackup ran after expand phase     ║
 -- ║  4. Explicit go/no-go approval documented                       ║
+-- ║  5. App redeployed to read canonical 'login_method' column      ║
+-- ║     (remove _v2 suffix from queries before running contract)    ║
 -- ╚══════════════════════════════════════════════════════════════════╝
 --
 -- Migration 002: CONTRACT — Drop old login_method column
