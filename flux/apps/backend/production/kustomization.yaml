@@ -37,10 +37,3 @@ patches:
     target:
       kind: Ingress
       name: backend
-  - patch: |-
-      - op: add
-        path: /metadata/annotations/nginx.ingress.kubernetes.io~1ssl-redirect
-        value: "true"
-    target:
-      kind: Ingress
-      name: backend
