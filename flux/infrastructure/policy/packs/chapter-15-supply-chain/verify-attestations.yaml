@@ -1,0 +1,31 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-sbom-attestation
+  annotations:
+    policies.kyverno.io/title: Require SBOM Attestation
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Require that container images from ghcr.io/ldbl have an SPDX
+      SBOM attestation signed via GitHub Actions OIDC.
+spec:
+  validationFailureAction: Audit
+  background: false
+  rules:
+    - name: verify-spdx-attestation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/ldbl/*"
+          attestations:
+            - type: "https://spdx.dev/Document"
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: "https://token.actions.githubusercontent.com"
+                        subject: "https://github.com/ldbl/*"

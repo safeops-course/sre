@@ -13,6 +13,7 @@ resources:
   - image-automation.yaml
   - hpa.yaml
   - pdb.yaml
+  - patches/feature-flags.yaml
 images:
   - name: ghcr.io/ldbl/backend
     newTag: develop-v0.0.3-75c41cc-1771664366 # {"$imagepolicy": "develop:backend:tag"}

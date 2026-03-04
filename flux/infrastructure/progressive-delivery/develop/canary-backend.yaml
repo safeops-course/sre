@@ -3,13 +3,15 @@ kind: Canary
 metadata:
   name: backend
   namespace: develop
+  annotations:
+    flagger.app/max-weight-on-timeout: rollback
 spec:
   provider: linkerd
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: backend
-  progressDeadlineSeconds: 120
+  progressDeadlineSeconds: 600
   service:
     port: 80
     targetPort: http

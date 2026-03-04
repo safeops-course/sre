@@ -1,0 +1,27 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow Latest Tag
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Mutable image tags like 'latest' break artifact identity
+      and make rollback unreliable. Require immutable tags or digests.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: no-latest
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Mutable image tags are not allowed. Use immutable tags or digests."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
