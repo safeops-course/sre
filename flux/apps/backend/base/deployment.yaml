@@ -95,8 +95,10 @@ spec:
             secretKeyRef:
               name: app-postgres-app
               key: password
-        - name: DATABASE_URL
-          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@app-postgres-rw:5432/app?sslmode=disable"
+        - name: POSTGRES_HOST
+          value: app-postgres-rw
+        - name: POSTGRES_DB
+          value: app
         livenessProbe:
           httpGet:
             path: /livez
