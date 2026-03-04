@@ -4,8 +4,10 @@ metadata:
   name: allow-backend-egress-postgres
 spec:
   podSelector:
-    matchLabels:
-      app: backend
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [backend, backend-primary]
   policyTypes:
     - Egress
   egress:
