@@ -126,12 +126,12 @@ spec:
         resources:
           requests:
             cpu: 10m
-            memory: 64Mi
-            ephemeral-storage: 128Mi
+            memory: 32Mi
+            ephemeral-storage: 64Mi
           limits:
-            cpu: 500m
-            memory: 512Mi
-            ephemeral-storage: 512Mi
+            cpu: 100m
+            memory: 128Mi
+            ephemeral-storage: 128Mi
         volumeMounts:
         - name: tmp
           mountPath: /tmp
