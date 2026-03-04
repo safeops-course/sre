@@ -88,6 +88,12 @@ spec:
                   name: k8s-ai-monitor-secrets
                   key: elasticsearch-password
                   optional: true
+            - name: SCANNER_CRITICAL_ENDPOINT_ENABLED
+              value: "true"
+            - name: ENDPOINT_INGRESS_SERVICE
+              value: traefik.traefik.svc.cluster.local
+            - name: SCANNER_BACKUP_ENABLED
+              value: "true"
           volumeMounts:
             - name: data
               mountPath: /data

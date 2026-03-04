@@ -24,7 +24,5 @@ spec:
   values:
     crd:
       create: true
-    meshProvider: linkerd
+    meshProvider: traefik
     metricsServer: http://kube-prometheus-stack-prometheus.observability:9090
-    linkerdAuthPolicy:
-      create: true

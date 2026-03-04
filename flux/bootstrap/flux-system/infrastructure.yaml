@@ -343,24 +343,6 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: linkerd-control-plane
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/progressive-delivery/linkerd
-  prune: true
-  wait: true
-  timeout: 10m0s
-  dependsOn:
-    - name: infrastructure
-    - name: dns-and-certificates
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
   name: flagger
   namespace: flux-system
 spec:
@@ -373,7 +355,6 @@ spec:
   wait: true
   timeout: 10m0s
   dependsOn:
-    - name: linkerd-control-plane
     - name: observability
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1

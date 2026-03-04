@@ -6,7 +6,7 @@ metadata:
   annotations:
     flagger.app/max-weight-on-timeout: rollback
 spec:
-  provider: linkerd
+  provider: traefik
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
@@ -22,10 +22,16 @@ spec:
     stepWeight: 10
     metrics:
       - name: request-success-rate
+        templateRef:
+          name: request-success-rate
+          namespace: develop
         thresholdRange:
           min: 99
         interval: 30s
       - name: request-duration
+        templateRef:
+          name: request-duration
+          namespace: develop
         thresholdRange:
           max: 500
         interval: 30s
