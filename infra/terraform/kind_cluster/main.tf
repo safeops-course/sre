@@ -267,7 +267,7 @@ resource "kubernetes_namespace" "bootstrap" {
 
 # Create imagePullSecret for GHCR in each namespace
 resource "kubernetes_secret" "ghcr_credentials" {
-  for_each   = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production"]) : toset([])
+  for_each   = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production", "observability"]) : toset([])
   depends_on = [null_resource.flux_instance, kubernetes_namespace.bootstrap]
 
   metadata {
