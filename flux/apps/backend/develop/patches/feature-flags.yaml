@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags
+  namespace: develop
+  labels:
+    app.kubernetes.io/part-of: backend
+data:
+  FEATURE_LOGIN_V2: "false"

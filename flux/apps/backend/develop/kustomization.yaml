@@ -13,6 +13,7 @@ resources:
   - image-automation.yaml
   - hpa.yaml
   - pdb.yaml
+  - patches/feature-flags.yaml
 images:
   - name: ghcr.io/ldbl/backend
     newTag: develop-v0.0.3-75c41cc-1771664366 # {"$imagepolicy": "develop:backend:tag"}
@@ -37,6 +38,15 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "256Mi"
+    target:
+      kind: Deployment
+      name: backend
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom
+        value:
+          - configMapRef:
+              name: feature-flags
     target:
       kind: Deployment
       name: backend

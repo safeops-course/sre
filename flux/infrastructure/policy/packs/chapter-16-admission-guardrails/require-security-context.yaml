@@ -1,0 +1,29 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-security-context
+  annotations:
+    policies.kyverno.io/title: Require Security Context
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Containers must run as non-root and disallow privilege escalation.
+      This enforces least-privilege at the container runtime level.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-container-security-context
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Containers must run as non-root and disallow privilege escalation."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false

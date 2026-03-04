@@ -1,0 +1,43 @@
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-success-rate
+  namespace: develop
+spec:
+  provider:
+    type: prometheus
+    address: http://kube-prometheus-stack-prometheus.observability:9090
+  query: |
+    sum(
+      rate(traefik_service_requests_total{
+        service=~"{{ namespace }}-{{ target }}-canary-.*",
+        code!~"5.."
+      }[{{ interval }}])
+    )
+    /
+    sum(
+      rate(traefik_service_requests_total{
+        service=~"{{ namespace }}-{{ target }}-canary-.*"
+      }[{{ interval }}])
+    )
+    * 100
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-duration
+  namespace: develop
+spec:
+  provider:
+    type: prometheus
+    address: http://kube-prometheus-stack-prometheus.observability:9090
+  query: |
+    histogram_quantile(0.99,
+      sum(
+        rate(traefik_service_request_duration_seconds_bucket{
+          service=~"{{ namespace }}-{{ target }}-canary-.*"
+        }[{{ interval }}])
+      ) by (le)
+    )
+    * 1000
