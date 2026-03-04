@@ -90,10 +90,6 @@ resource "kind_cluster" "sre" {
     node {
       role = "worker"
     }
-
-    node {
-      role = "worker"
-    }
   }
 }
 
