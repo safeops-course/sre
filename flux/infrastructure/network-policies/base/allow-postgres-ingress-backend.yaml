@@ -11,8 +11,10 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app: backend
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [backend, backend-primary]
       ports:
         - protocol: TCP
           port: 5432
