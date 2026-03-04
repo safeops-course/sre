@@ -32,6 +32,23 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
+  name: cert-manager
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/cert-manager
+  prune: true
+  wait: true
+  timeout: 10m0s
+  dependsOn:
+    - name: infrastructure
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
   name: dns-and-certificates
   namespace: flux-system
 spec:
@@ -44,7 +61,7 @@ spec:
   wait: true
   timeout: 10m0s
   dependsOn:
-    - name: infrastructure
+    - name: cert-manager
     - name: secrets-cloudflare
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1

@@ -128,6 +128,42 @@ output "kubeconfig_load_instructions" {
   EOT
 }
 
+resource "kubernetes_namespace" "traefik" {
+  metadata { name = "traefik" }
+  depends_on = [time_sleep.wait_for_cluster]
+}
+
+resource "helm_release" "traefik" {
+  name       = "traefik"
+  repository = "https://traefik.github.io/charts"
+  chart      = "traefik"
+  namespace  = "traefik"
+  version    = "34.5.0"
+
+  depends_on = [kubernetes_namespace.traefik]
+
+  set {
+    name  = "service.type"
+    value = "NodePort"
+  }
+  set {
+    name  = "ports.web.nodePort"
+    value = "30080"
+  }
+  set {
+    name  = "ports.websecure.nodePort"
+    value = "30443"
+  }
+  set {
+    name  = "providers.kubernetesIngress.enabled"
+    value = "true"
+  }
+  set {
+    name  = "providers.kubernetesCRD.enabled"
+    value = "true"
+  }
+}
+
 resource "null_resource" "flux_operator_install" {
   depends_on = [time_sleep.wait_for_cluster]
 
