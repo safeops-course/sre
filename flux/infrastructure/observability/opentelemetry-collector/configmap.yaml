@@ -75,8 +75,8 @@ data:
 
     service:
       pipelines:
-        # Logs pipeline — filelog → Uptrace
+        # Logs pipeline — filelog → debug (add otlp/uptrace when UPTRACE_DSN is configured)
         logs:
           receivers: [filelog]
           processors: [memory_limiter, batch, resource, attributes]
-          exporters: [otlp/uptrace]
+          exporters: [debug]

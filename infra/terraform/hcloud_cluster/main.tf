@@ -262,7 +262,7 @@ EOF
 
 # Optional: GHCR imagePullSecret in every namespace used by workloads.
 resource "kubernetes_secret" "ghcr_credentials" {
-  for_each = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production"]) : toset([])
+  for_each = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production", "observability"]) : toset([])
 
   metadata {
     name      = "ghcr-credentials-docker"
