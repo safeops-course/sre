@@ -10,7 +10,7 @@ resources:
   - pdb.yaml
 images:
   - name: ghcr.io/ldbl/frontend
-    newTag: staging-v0.0.3-76bc7f9-1771664028 # {"$imagepolicy": "staging:frontend:tag"}
+    newTag: staging-v0.0.3-5f3e15b-1772709786 # {"$imagepolicy": "staging:frontend:tag"}
 patches:
   - path: patches/deployment.yaml
   - path: patches/ingress.yaml
