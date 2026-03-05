@@ -32,7 +32,10 @@ spec:
             name: cloudflare-api-token
             key: api-token
     extraArgs:
-      - --cloudflare-proxied=${cloudflare_proxied}
+      - --annotation-filter=cloudflare-proxied=true
+      - --cloudflare-proxied
+      - --request-timeout=60s
+      - --cloudflare-dns-records-per-page=500
     domainFilters:
       - safeops.work
     policy: sync
