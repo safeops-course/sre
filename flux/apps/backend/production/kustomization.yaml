@@ -15,7 +15,7 @@ resources:
   - pdb.yaml
 images:
   - name: ghcr.io/ldbl/backend
-    newTag: production-v0.0.4-bdd783c-1772667495 # {"$imagepolicy": "production:backend:tag"}
+    newTag: production-v0.0.5-90c95fb-1772718720 # {"$imagepolicy": "production:backend:tag"}
 patches:
   - patch: |-
       - op: replace
