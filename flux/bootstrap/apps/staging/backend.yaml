@@ -57,6 +57,9 @@ spec:
       NAMESPACE: "staging"
       ENVIRONMENT: "staging"
       LOG_LEVEL: "info"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: flux-system
     - name: observability
