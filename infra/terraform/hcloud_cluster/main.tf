@@ -100,6 +100,9 @@ module "kube_hetzner" {
   automatically_upgrade_k3s = var.auto_upgrade_k3s
   automatically_upgrade_os  = var.auto_upgrade_os
 
+  # cert-manager is managed by Flux, not kube-hetzner
+  enable_cert_manager = false
+
   # Kured
   kured_options = local.kured_options
 
