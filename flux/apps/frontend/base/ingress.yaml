@@ -5,6 +5,7 @@ metadata:
   name: frontend
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-production
+    cloudflare-proxied: "${cloudflare_proxied}"
 spec:
   ingressClassName: traefik
   rules:

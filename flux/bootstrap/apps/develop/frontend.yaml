@@ -18,6 +18,9 @@ spec:
     substitute:
       NAMESPACE: "develop"
       ENVIRONMENT: "development"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: flux-system
     - name: observability

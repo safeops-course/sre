@@ -31,8 +31,11 @@ spec:
           secretKeyRef:
             name: cloudflare-api-token
             key: api-token
-      - name: CF_PROXIED
-        value: "${cloudflare_proxied}"
+    extraArgs:
+      - --annotation-filter=cloudflare-proxied=true
+      - --cloudflare-proxied
+      - --request-timeout=60s
+      - --cloudflare-dns-records-per-page=500
     domainFilters:
       - safeops.work
     policy: sync

@@ -18,6 +18,9 @@ spec:
     substitute:
       NAMESPACE: "production"
       ENVIRONMENT: "production"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: flux-system
     - name: observability
