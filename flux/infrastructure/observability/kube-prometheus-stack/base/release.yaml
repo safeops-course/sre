@@ -65,14 +65,9 @@ spec:
       # Default dashboards
       defaultDashboardsEnabled: true
       defaultDashboardsTimezone: UTC
-      # Ingress for Grafana
+      # Grafana is accessed via kubectl port-forward
       ingress:
-        enabled: true
-        ingressClassName: traefik
-        hosts:
-          - grafana.local
-        path: /
-        pathType: Prefix
+        enabled: false
 
     # Alertmanager is intentionally disabled.
     # Alert routing is handled by k8s-ai-monitor.
