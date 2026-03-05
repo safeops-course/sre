@@ -50,10 +50,3 @@ patches:
     target:
       kind: Deployment
       name: backend
-  - patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: backend.develop.local
-    target:
-      kind: Ingress
-      name: backend
