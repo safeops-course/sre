@@ -122,6 +122,12 @@ flux/infrastructure/network-policies/production:
 flux/infrastructure/network-policies/staging:
   - chapter-06-network-policies
 
+flux/infrastructure/observability/opentelemetry-collector/release.yaml:
+  - chapter-10-observability
+
+flux/infrastructure/observability/opentelemetry-collector/repository.yaml:
+  - chapter-10-observability
+
 flux/infrastructure/policy/kyverno:
   - chapter-15-supply-chain-security
 
@@ -166,6 +172,9 @@ flux/infrastructure/security/dns-and-certificates:
 
 flux/secrets:
   - chapter-03-secrets-management
+
+flux/secrets/observability/uptrace-secrets.yaml:
+  - chapter-10-observability
 
 infra/terraform/hcloud_cluster:
   - chapter-02-iac
