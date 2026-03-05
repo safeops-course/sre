@@ -13,8 +13,10 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app: frontend
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [frontend, frontend-primary]
       ports:
         - protocol: TCP
           port: 8080

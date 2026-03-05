@@ -4,8 +4,10 @@ metadata:
   name: allow-frontend-egress-backend
 spec:
   podSelector:
-    matchLabels:
-      app: frontend
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [frontend, frontend-primary]
   policyTypes:
     - Egress
   egress:
