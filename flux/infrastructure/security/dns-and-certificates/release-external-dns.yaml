@@ -31,8 +31,8 @@ spec:
           secretKeyRef:
             name: cloudflare-api-token
             key: api-token
-    extraArgs:
-      - --cloudflare-proxied=${cloudflare_proxied}
+      - name: CF_PROXIED
+        value: "${cloudflare_proxied}"
     domainFilters:
       - safeops.work
     policy: sync
