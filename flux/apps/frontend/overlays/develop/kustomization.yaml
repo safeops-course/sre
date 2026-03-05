@@ -10,7 +10,7 @@ resources:
   - pdb.yaml
 images:
   - name: ghcr.io/ldbl/frontend
-    newTag: develop-v0.0.3-7657397-1772668609 # {"$imagepolicy": "develop:frontend:tag"}
+    newTag: develop-v0.0.3-ec5289e-1772717018 # {"$imagepolicy": "develop:frontend:tag"}
 patches:
   - path: patches/deployment.yaml
   - path: patches/ingress.yaml
