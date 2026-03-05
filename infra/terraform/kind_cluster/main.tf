@@ -248,6 +248,20 @@ resource "kubernetes_secret" "flux_github_app" {
   type = "Opaque"
 }
 
+# Cluster-level config consumed by Flux postBuild substitutions.
+resource "kubernetes_config_map" "cluster_config" {
+  metadata {
+    name      = "cluster-config"
+    namespace = "flux-system"
+  }
+
+  data = {
+    cloudflare_proxied = "false"
+  }
+
+  depends_on = [time_sleep.wait_for_cluster]
+}
+
 # Bootstrap namespaces early so Terraform can safely create cross-namespace secrets.
 resource "kubernetes_namespace" "bootstrap" {
   for_each = toset(["develop", "staging", "production", "observability"])

@@ -60,6 +60,10 @@ spec:
   prune: true
   wait: true
   timeout: 10m0s
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: cert-manager
     - name: secrets-cloudflare
