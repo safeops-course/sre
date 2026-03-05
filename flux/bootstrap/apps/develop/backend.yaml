@@ -57,6 +57,9 @@ spec:
       NAMESPACE: "develop"
       ENVIRONMENT: "development"
       LOG_LEVEL: "debug"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: flux-system
     - name: observability

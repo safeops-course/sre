@@ -70,6 +70,8 @@ spec:
           value: "v1.0.0"
         - name: DEPLOYMENT_ENVIRONMENT
           value: "${ENVIRONMENT}"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "k8s.cluster.name=${cluster_name}"
         - name: UPTRACE_DSN
           valueFrom:
             secretKeyRef:

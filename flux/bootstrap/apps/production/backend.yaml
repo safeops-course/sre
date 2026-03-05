@@ -57,6 +57,9 @@ spec:
       NAMESPACE: "production"
       ENVIRONMENT: "production"
       LOG_LEVEL: "warn"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: flux-system
     - name: observability
