@@ -173,6 +173,20 @@ resource "kubernetes_namespace" "bootstrap" {
   }
 }
 
+# Cluster-level config consumed by Flux postBuild substitutions.
+resource "kubernetes_config_map" "cluster_config" {
+  metadata {
+    name      = "cluster-config"
+    namespace = "flux-system"
+  }
+
+  data = {
+    cloudflare_proxied = "true"
+  }
+
+  depends_on = [kubernetes_namespace.bootstrap]
+}
+
 # Optional: credentials for syncing a private Git repository over HTTPS.
 resource "kubernetes_secret" "flux_git_credentials" {
   count = local.flux_git_secret_enabled ? 1 : 0

@@ -32,7 +32,7 @@ spec:
             name: cloudflare-api-token
             key: api-token
     extraArgs:
-      - --cloudflare-proxied
+      - --cloudflare-proxied=${cloudflare_proxied}
     domainFilters:
       - safeops.work
     policy: sync
