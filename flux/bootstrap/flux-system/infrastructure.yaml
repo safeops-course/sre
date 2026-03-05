@@ -257,7 +257,7 @@ spec:
   wait: true
   timeout: 10m0s
   dependsOn:
-    - name: infrastructure
+    - name: cert-manager
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

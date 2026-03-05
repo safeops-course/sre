@@ -16,7 +16,7 @@ control_plane_server_type         = "cx23"
 control_plane_count               = 1
 allow_scheduling_on_control_plane = false
 
-workers_server_type = "cx23"
+workers_server_type = "cx33"
 workers_count       = 1
 
 # ─── Autoscaling ─────────────────────────────────────────────────────────────
