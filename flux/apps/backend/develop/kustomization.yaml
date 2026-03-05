@@ -16,7 +16,7 @@ resources:
   - patches/feature-flags.yaml
 images:
   - name: ghcr.io/ldbl/backend
-    newTag: develop-v0.0.5-4c980b8-1772717385 # {"$imagepolicy": "develop:backend:tag"}
+    newTag: develop-v0.0.5-2b1b93b-1772717435 # {"$imagepolicy": "develop:backend:tag"}
 patches:
   - patch: |-
       - op: replace
