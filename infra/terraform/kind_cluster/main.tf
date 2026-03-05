@@ -256,7 +256,7 @@ resource "kubernetes_config_map" "cluster_config" {
   }
 
   data = {
-    cloudflare_proxied = "false"
+    cloudflare_proxied = "disabled"
   }
 
   depends_on = [time_sleep.wait_for_cluster]

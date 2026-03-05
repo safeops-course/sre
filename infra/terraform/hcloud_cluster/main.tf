@@ -181,7 +181,7 @@ resource "kubernetes_config_map" "cluster_config" {
   }
 
   data = {
-    cloudflare_proxied = "true"
+    cloudflare_proxied = "enabled"
   }
 
   depends_on = [kubernetes_namespace.bootstrap]
