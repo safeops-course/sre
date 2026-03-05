@@ -30,10 +30,10 @@ spec:
         retentionSize: "10GB"
         resources:
           requests:
-            cpu: 50m
+            cpu: 100m
             memory: 256Mi
           limits:
-            cpu: 100m
+            cpu: 500m
             memory: 512Mi
         storageSpec:
           volumeClaimTemplate:
@@ -52,6 +52,10 @@ spec:
     grafana:
       enabled: true
       adminPassword: admin
+      initChownData:
+        enabled: false
+      securityContext:
+        fsGroup: 472
       persistence:
         enabled: true
         size: 5Gi
