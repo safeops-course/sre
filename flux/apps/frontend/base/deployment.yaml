@@ -61,6 +61,8 @@ spec:
               key: uptrace-dsn
         - name: ENVIRONMENT
           value: "${ENVIRONMENT}"
+        - name: CLUSTER_NAME
+          value: "${cluster_name}"
         - name: VERSION
           value: "v1.0.0"
         livenessProbe:
