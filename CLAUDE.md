@@ -4,7 +4,7 @@
 
 ### Repository Context
 
-This is the SRE DevOps infrastructure repository, responsible for managing k3s clusters on Hetzner Cloud via Terraform IaC and FluxCD GitOps. Contains reference backend/frontend services, observability stack, and course materials. Terraform uses remote state in Cloudflare R2 with per-environment namespace isolation via FluxCD overlays.
+This is the SRE DevOps infrastructure repository, responsible for managing k3s clusters on Hetzner Cloud via Terraform IaC and FluxCD GitOps. It contains the reference backend/frontend services, observability stack, and the platform implementation that the separate `sre-course` repository teaches from. Terraform uses remote state in Cloudflare R2 with per-environment namespace isolation via FluxCD overlays.
 
 ### AI Agent Operating Principles
 
@@ -65,7 +65,7 @@ flux/
 backend/             # Go reference service (health, metrics, chaos endpoints)
 frontend/            # Vue 3 SRE dashboard (Vite + Tailwind + nginx)
 scripts/             # Pre-commit hooks, automation scripts
-docs/                # Course materials, architecture notes
+  docs/                # Platform runbooks, architecture notes, and repo pointers
 ```
 
 ## Key Technologies
