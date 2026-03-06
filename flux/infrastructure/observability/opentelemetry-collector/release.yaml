@@ -34,6 +34,8 @@ spec:
         includeCollectorLogs: false
       kubernetesAttributes:
         enabled: true
+      kubeletMetrics:
+        enabled: true
 
     extraEnvs:
       - name: UPTRACE_DSN
@@ -43,17 +45,25 @@ spec:
             key: dsn
             optional: true
       - name: DEPLOYMENT_ENVIRONMENT
-        value: "development"
-      - name: K8S_NAMESPACE
+        value: "${cluster_name}"
+      - name: K8S_CLUSTER_NAME
+        value: "${cluster_name}"
+      - name: K8S_NODE_NAME
         valueFrom:
           fieldRef:
-            fieldPath: metadata.namespace
+            fieldPath: spec.nodeName
 
     config:
       receivers:
         jaeger: null
         zipkin: null
         prometheus: null
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
 
       processors:
         memory_limiter:
@@ -61,15 +71,16 @@ spec:
           limit_mib: 512
           spike_limit_mib: 128
         batch:
-          send_batch_size: 1000
+          send_batch_size: 10000
           timeout: 10s
+        cumulativetodelta: {}
         resource:
           attributes:
             - key: deployment.environment
               value: ${env:DEPLOYMENT_ENVIRONMENT}
               action: upsert
-            - key: service.namespace
-              value: ${env:K8S_NAMESPACE}
+            - key: k8s.cluster.name
+              value: ${env:K8S_CLUSTER_NAME}
               action: upsert
         attributes:
           actions:
@@ -77,8 +88,8 @@ spec:
               action: delete
 
       exporters:
-        otlp/uptrace:
-          endpoint: api.uptrace.dev:4317
+        otlphttp/uptrace:
+          endpoint: https://api.uptrace.dev
           headers:
             uptrace-dsn: ${env:UPTRACE_DSN}
           compression: gzip
@@ -101,9 +112,15 @@ spec:
           logs:
             receivers: [filelog]
             processors: [memory_limiter, batch, resource, attributes]
-            exporters: [otlp/uptrace, debug]
-          traces: null
-          metrics: null
+            exporters: [otlphttp/uptrace, debug]
+          traces:
+            receivers: [otlp]
+            processors: [memory_limiter, batch, resource, attributes]
+            exporters: [otlphttp/uptrace, debug]
+          metrics:
+            receivers: [otlp, kubeletstats]
+            processors: [memory_limiter, cumulativetodelta, batch, resource]
+            exporters: [otlphttp/uptrace, debug]
 
     ports:
       jaeger-compact:
@@ -120,8 +137,8 @@ spec:
         cpu: 10m
         memory: 64Mi
       limits:
-        cpu: 100m
-        memory: 256Mi
+        cpu: 200m
+        memory: 512Mi
 
     tolerations:
       - key: node-role.kubernetes.io/master

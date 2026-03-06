@@ -409,5 +409,9 @@ spec:
   path: ./flux/infrastructure/observability/opentelemetry-collector
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: observability
