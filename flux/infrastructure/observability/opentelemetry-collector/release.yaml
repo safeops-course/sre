@@ -60,6 +60,9 @@ spec:
               endpoint: 0.0.0.0:4317
             http:
               endpoint: 0.0.0.0:4318
+        kubeletstats:
+          auth_type: serviceAccount
+          insecure_skip_verify: true
 
       processors:
         memory_limiter:
