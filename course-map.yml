@@ -25,34 +25,15 @@
 docs/gitops-workflow.md:
   - chapter-04-gitops
 
-docs/hetzner.md:
-  - chapter-02-iac
-
-docs/observability/uptrace-cloud.md:
-  - chapter-10-observability
-
-docs/observability/uptrace-e2e-plan.md:
-  - chapter-10-observability
-
 flux:
   - chapter-13-ai-assisted-sre-guardian
-
-flux/apps:
-  - chapter-01-introduction
-  - chapter-15-supply-chain-security
-  - chapter-16-admission-policy-guardrails
-
-flux/apps/backend:
-  - chapter-04-gitops
-  - chapter-09-availability-engineering
 
 flux/apps/backend/base/deployment.yaml:
   - chapter-07-security-context
   - chapter-08-resource-management
-  - chapter-10-observability
 
-flux/apps/backend/base/ingress.yaml:
-  - chapter-06-network-policies
+flux/apps/backend/base/servicemonitor.yaml:
+  - chapter-10-observability
 
 flux/apps/backend/develop:
   - chapter-04-gitops
@@ -61,40 +42,10 @@ flux/apps/backend/develop:
 flux/apps/backend/production:
   - chapter-04-gitops
 
-flux/apps/backend/staging:
-  - chapter-04-gitops
-
-flux/apps/frontend:
-  - chapter-04-gitops
-
-flux/apps/frontend/base/deployment.yaml:
-  - chapter-07-security-context
-  - chapter-08-resource-management
-  - chapter-10-observability
-
-flux/apps/frontend/base/ingress.yaml:
-  - chapter-06-network-policies
-
-flux/apps/frontend/overlays:
-  - chapter-09-availability-engineering
-
 flux/apps/frontend/overlays/develop:
   - chapter-09-availability-engineering
 
-flux/bootstrap/flux-system/apps.yaml:
-  - chapter-06-network-policies
-  - chapter-08-resource-management
-
-flux/bootstrap/flux-system/infrastructure.yaml:
-  - chapter-06-network-policies
-  - chapter-08-resource-management
-  - module-progressive-delivery
-
-flux/bootstrap/flux-system/secrets.yaml:
-  - chapter-03-secrets-management
-
 flux/bootstrap/infrastructure/base/namespaces.yaml:
-  - chapter-06-network-policies
   - chapter-07-security-context
 
 flux/bootstrap/infrastructure/image-automation:
@@ -107,32 +58,17 @@ flux/infrastructure/data/cnpg-clusters:
   - chapter-11-backup-restore
   - chapter-17-rollback-data-migrations
 
-flux/infrastructure/data/cnpg-operator:
-  - chapter-11-backup-restore
-
 flux/infrastructure/network-policies/base:
   - chapter-06-network-policies
 
-flux/infrastructure/network-policies/develop:
+flux/infrastructure/network-policies/base/allow-backend-ingress.yaml:
   - chapter-06-network-policies
 
-flux/infrastructure/network-policies/production:
-  - chapter-06-network-policies
-
-flux/infrastructure/network-policies/staging:
-  - chapter-06-network-policies
-
-flux/infrastructure/observability/opentelemetry-collector/release.yaml:
+flux/infrastructure/observability/k8s-ai-monitor/deployment.yaml:
   - chapter-10-observability
 
-flux/infrastructure/observability/opentelemetry-collector/repository.yaml:
+flux/infrastructure/observability/kube-prometheus-stack/monitoring/backend-alerts.yaml:
   - chapter-10-observability
-
-flux/infrastructure/policy/kyverno:
-  - chapter-15-supply-chain-security
-
-flux/infrastructure/policy/kyverno/kustomization.yaml:
-  - chapter-16-admission-policy-guardrails
 
 flux/infrastructure/policy/kyverno/release.yaml:
   - chapter-16-admission-policy-guardrails
@@ -143,13 +79,7 @@ flux/infrastructure/policy/packs/chapter-15-supply-chain/verify-attestations.exa
 flux/infrastructure/policy/packs/chapter-15-supply-chain/verify-images.example.yaml:
   - chapter-15-supply-chain-security
 
-flux/infrastructure/policy/packs/chapter-16-admission-guardrails/disallow-latest-tag.example.yaml:
-  - chapter-16-admission-policy-guardrails
-
 flux/infrastructure/policy/packs/chapter-16-admission-guardrails/require-requests-limits.example.yaml:
-  - chapter-16-admission-policy-guardrails
-
-flux/infrastructure/policy/packs/chapter-16-admission-guardrails/require-security-context.example.yaml:
   - chapter-16-admission-policy-guardrails
 
 flux/infrastructure/progressive-delivery/develop:
@@ -161,40 +91,11 @@ flux/infrastructure/progressive-delivery/flagger:
 flux/infrastructure/resource-management/develop:
   - chapter-08-resource-management
 
-flux/infrastructure/resource-management/production:
-  - chapter-08-resource-management
-
-flux/infrastructure/resource-management/staging:
-  - chapter-08-resource-management
-
-flux/infrastructure/security/dns-and-certificates:
-  - chapter-02-iac
-
-flux/secrets:
-  - chapter-03-secrets-management
-
-flux/secrets/observability/uptrace-secrets.yaml:
-  - chapter-10-observability
-
-infra/terraform/hcloud_cluster:
-  - chapter-02-iac
-
 infra/terraform/hcloud_cluster/main.tf:
-  - chapter-11-backup-restore
-
-infra/terraform/hcloud_cluster/variables.tf:
   - chapter-11-backup-restore
 
 infra/terraform/kind_cluster:
   - chapter-02-iac
-
-scripts/block-secrets.sh:
-  - chapter-05-cicd-developer-guardrails
-
-scripts/flux-kustomize-validate.sh:
-  - chapter-01-introduction
-  - chapter-02-iac
-  - chapter-05-cicd-developer-guardrails
 
 scripts/guard-kube-context.sh:
   - chapter-01-introduction
@@ -203,22 +104,5 @@ scripts/guard-terraform-plan.sh:
   - chapter-01-introduction
   - chapter-02-iac
 
-scripts/pre-commit-master-check.sh:
-  - chapter-01-introduction
-  - chapter-05-cicd-developer-guardrails
-
-scripts/prevent-amend-after-push.sh:
-  - chapter-01-introduction
-  - chapter-05-cicd-developer-guardrails
-
 scripts/sops-encrypt-secret.sh:
   - chapter-03-secrets-management
-
-scripts/sops-setup.sh:
-  - chapter-03-secrets-management
-
-scripts/terraform-security.sh:
-  - chapter-02-iac
-
-scripts/terraform-validate.sh:
-  - chapter-02-iac
