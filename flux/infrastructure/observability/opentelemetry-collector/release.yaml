@@ -48,10 +48,6 @@ spec:
         value: "${cluster_name}"
       - name: K8S_CLUSTER_NAME
         value: "${cluster_name}"
-      - name: K8S_NODE_NAME
-        valueFrom:
-          fieldRef:
-            fieldPath: spec.nodeName
 
     config:
       receivers:
