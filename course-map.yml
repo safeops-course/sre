@@ -25,6 +25,9 @@
 docs/gitops-workflow.md:
   - chapter-04-gitops
 
+docs/local-dev.md:
+  - appendix-local-dev
+
 flux:
   - chapter-13-ai-assisted-sre-guardian
 
@@ -41,6 +44,9 @@ flux/apps/backend/develop:
 
 flux/apps/backend/production:
   - chapter-04-gitops
+
+flux/apps/frontend/base/ingress.yaml:
+  - appendix-dns-tls
 
 flux/apps/frontend/overlays/develop:
   - chapter-09-availability-engineering
@@ -91,10 +97,20 @@ flux/infrastructure/progressive-delivery/flagger:
 flux/infrastructure/resource-management/develop:
   - chapter-08-resource-management
 
+flux/infrastructure/security/dns-and-certificates:
+  - appendix-dns-tls
+
+flux/infrastructure/security/dns-and-certificates/cluster-issuer.yaml:
+  - appendix-dns-tls
+
+flux/infrastructure/security/dns-and-certificates/release-external-dns.yaml:
+  - appendix-dns-tls
+
 infra/terraform/hcloud_cluster/main.tf:
   - chapter-11-backup-restore
 
 infra/terraform/kind_cluster:
+  - appendix-local-dev
   - chapter-02-iac
 
 scripts/guard-kube-context.sh:
