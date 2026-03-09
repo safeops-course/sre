@@ -160,6 +160,21 @@ resource "helm_release" "traefik" {
   }
 }
 
+resource "helm_release" "metrics_server" {
+  name       = "metrics-server"
+  repository = "https://kubernetes-sigs.github.io/metrics-server/"
+  chart      = "metrics-server"
+  namespace  = "kube-system"
+  version    = "3.12.2"
+
+  depends_on = [time_sleep.wait_for_cluster]
+
+  set {
+    name  = "args[0]"
+    value = "--kubelet-insecure-tls"
+  }
+}
+
 resource "null_resource" "flux_operator_install" {
   depends_on = [time_sleep.wait_for_cluster]
 
@@ -224,7 +239,29 @@ EOF
 
   provisioner "local-exec" {
     when        = destroy
-    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true"
+    on_failure  = continue
+    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=false"
+    interpreter = ["/bin/bash", "-c"]
+  }
+}
+
+resource "null_resource" "flux_pre_destroy" {
+  depends_on = [
+    kind_cluster.sre,
+    kubernetes_namespace.traefik,
+    kubernetes_namespace.bootstrap,
+    null_resource.flux_instance,
+  ]
+
+  triggers = {
+    kubeconfig_path = local.kubeconfig_path
+    namespaces      = "develop,staging,production,observability,traefik"
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    on_failure  = continue
+    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.triggers.kubeconfig_path}\" \"${self.triggers.namespaces}\""
     interpreter = ["/bin/bash", "-c"]
   }
 }

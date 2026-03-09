@@ -16,11 +16,11 @@ plan: ## Terraform plan
 apply: ## Terraform apply
 	$(TF) apply
 
-destroy: ## Destroy cluster (graceful — flux first, then infra)
-	@echo "==> Removing Flux resources from state (avoid kubectl timeout)..."
+destroy: ## Destroy cluster (run Flux/Kubernetes pre-destroy cleanup, then infra)
+	@echo "==> Removing Flux resources from state (pre-destroy hook handles in-cluster cleanup)..."
 	@$(TF) state rm 'null_resource.flux_instance' 2>/dev/null || true
 	@$(TF) state rm 'null_resource.flux_operator_install' 2>/dev/null || true
-	@echo "==> Removing Kubernetes resources from state (avoid API timeout)..."
+	@echo "==> Removing Kubernetes resources from state (cluster-side teardown already handled)..."
 	@$(MAKE) --no-print-directory state-clean-k8s
 	@echo "==> Destroying infrastructure..."
 	$(TF) destroy
