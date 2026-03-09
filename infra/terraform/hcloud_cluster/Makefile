@@ -17,7 +17,9 @@ apply: ## Terraform apply
 	$(TF) apply
 
 destroy: ## Destroy cluster (run Flux/Kubernetes pre-destroy cleanup, then infra)
-	@echo "==> Removing Flux resources from state (pre-destroy hook handles in-cluster cleanup)..."
+	@echo "==> Running Flux/Kubernetes pre-destroy cleanup..."
+	@$(TF) destroy -target='null_resource.flux_pre_destroy' -auto-approve
+	@echo "==> Removing Flux resources from state (pre-destroy hook already ran)..."
 	@$(TF) state rm 'null_resource.flux_instance' 2>/dev/null || true
 	@$(TF) state rm 'null_resource.flux_operator_install' 2>/dev/null || true
 	@echo "==> Removing Kubernetes resources from state (cluster-side teardown already handled)..."
