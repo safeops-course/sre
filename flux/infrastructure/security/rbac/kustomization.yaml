@@ -2,7 +2,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - restricted-readonly.yaml
   - cluster-view.yaml
   - develop-admin.yaml
   - staging-admin.yaml
   - production-readonly.yaml
+  - flux-system-readonly.yaml
+  - kube-system-readonly.yaml

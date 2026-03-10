@@ -23,12 +23,18 @@ provider "kind" {}
 
 provider "helm" {
   kubernetes {
-    config_path = local.kubeconfig_path
+    host                   = kind_cluster.sre.endpoint
+    client_certificate     = kind_cluster.sre.client_certificate
+    client_key             = kind_cluster.sre.client_key
+    cluster_ca_certificate = kind_cluster.sre.cluster_ca_certificate
   }
 }
 
 provider "kubernetes" {
-  config_path = local.kubeconfig_path
+  host                   = kind_cluster.sre.endpoint
+  client_certificate     = kind_cluster.sre.client_certificate
+  client_key             = kind_cluster.sre.client_key
+  cluster_ca_certificate = kind_cluster.sre.cluster_ca_certificate
 }
 
 locals {
@@ -299,7 +305,23 @@ resource "kubernetes_config_map" "cluster_config" {
     git_owner          = var.git_owner
   }
 
-  depends_on = [time_sleep.wait_for_cluster]
+  depends_on = [null_resource.flux_operator_install]
+}
+
+# Sensitive config consumed by Flux postBuild substitutions (via substituteFrom Secret).
+resource "kubernetes_secret" "cluster_secrets" {
+  metadata {
+    name      = "cluster-secrets"
+    namespace = "flux-system"
+  }
+
+  type = "Opaque"
+
+  data = {
+    uptrace_dsn = var.uptrace_dsn
+  }
+
+  depends_on = [null_resource.flux_operator_install]
 }
 
 # Bootstrap namespaces early so Terraform can safely create cross-namespace secrets.

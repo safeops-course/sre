@@ -125,6 +125,13 @@ variable "r2_region" {
   default     = "auto"
 }
 
+variable "uptrace_dsn" {
+  description = "Uptrace Cloud DSN for OpenTelemetry. Leave empty to skip. Sign up at https://uptrace.dev"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "image_registry" {
   description = "Container image registry prefix (e.g., ghcr.io/safeops-course). Change this if you fork the repos."
   type        = string

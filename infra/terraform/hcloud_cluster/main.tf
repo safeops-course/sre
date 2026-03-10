@@ -194,6 +194,22 @@ resource "kubernetes_config_map" "cluster_config" {
   depends_on = [kubernetes_namespace.bootstrap]
 }
 
+# Sensitive config consumed by Flux postBuild substitutions (via substituteFrom Secret).
+resource "kubernetes_secret" "cluster_secrets" {
+  metadata {
+    name      = "cluster-secrets"
+    namespace = "flux-system"
+  }
+
+  type = "Opaque"
+
+  data = {
+    uptrace_dsn = var.uptrace_dsn
+  }
+
+  depends_on = [kubernetes_namespace.bootstrap]
+}
+
 # Optional: credentials for syncing a private Git repository over HTTPS.
 resource "kubernetes_secret" "flux_git_credentials" {
   count = local.flux_git_secret_enabled ? 1 : 0
