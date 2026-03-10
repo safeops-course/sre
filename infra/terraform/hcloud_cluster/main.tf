@@ -274,7 +274,27 @@ EOF
     when        = destroy
     on_failure  = continue
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --timeout=30s 2>/dev/null || true"
+    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=false --timeout=30s 2>/dev/null || true"
+  }
+}
+
+resource "null_resource" "flux_pre_destroy" {
+  depends_on = [
+    local_sensitive_file.kubeconfig,
+    kubernetes_namespace.bootstrap,
+    null_resource.flux_instance,
+  ]
+
+  triggers = {
+    kubeconfig_path = local.kubeconfig_path
+    namespaces      = "flux-system,develop,staging,production,observability"
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    on_failure  = continue
+    interpreter = ["/bin/bash", "-c"]
+    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.triggers.kubeconfig_path}\" \"${self.triggers.namespaces}\""
   }
 }
 
