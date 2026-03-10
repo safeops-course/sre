@@ -108,6 +108,9 @@ module "kube_hetzner" {
 
   # etcd backup to S3/R2
   etcd_s3_backup = local.etcd_s3_backup
+
+  # OIDC / extra kube-apiserver flags
+  k3s_exec_server_args = var.k3s_exec_server_args
 }
 
 locals {
@@ -154,6 +157,7 @@ resource "kubernetes_namespace" "bootstrap" {
     "staging",
     "production",
     "observability",
+    "auth",
   ])
 
   metadata {
@@ -183,6 +187,24 @@ resource "kubernetes_config_map" "cluster_config" {
   data = {
     cloudflare_proxied = "enabled"
     cluster_name       = var.cluster_name
+    image_registry     = var.image_registry
+    git_owner          = var.git_owner
+  }
+
+  depends_on = [kubernetes_namespace.bootstrap]
+}
+
+# Sensitive config consumed by Flux postBuild substitutions (via substituteFrom Secret).
+resource "kubernetes_secret" "cluster_secrets" {
+  metadata {
+    name      = "cluster-secrets"
+    namespace = "flux-system"
+  }
+
+  type = "Opaque"
+
+  data = {
+    uptrace_dsn = var.uptrace_dsn
   }
 
   depends_on = [kubernetes_namespace.bootstrap]
@@ -300,7 +322,7 @@ resource "null_resource" "flux_pre_destroy" {
 
 # Optional: GHCR imagePullSecret in every namespace used by workloads.
 resource "kubernetes_secret" "ghcr_credentials" {
-  for_each = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production", "observability"]) : toset([])
+  for_each = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production", "observability", "auth"]) : toset([])
 
   metadata {
     name      = "ghcr-credentials-docker"

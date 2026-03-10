@@ -14,11 +14,11 @@ spec:
                 - Pod
       verifyImages:
         - imageReferences:
-            - "ghcr.io/ldbl/*"
+            - "${image_registry}/*"
           mutateDigest: true
           attestors:
             - entries:
                 - keyless:
                     # Replace with your CI issuer and subject constraints.
                     issuer: "https://token.actions.githubusercontent.com"
-                    subject: "https://github.com/ldbl/*"
+                    subject: "https://github.com/${git_owner}/*"

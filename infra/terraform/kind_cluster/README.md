@@ -70,7 +70,7 @@ github_app_installation_id = "12345678"
 github_app_private_key_file = "~/.ssh/flux-github-app.pem"
 
 # GitOps Configuration (already set)
-flux_git_repository_url    = "https://github.com/ldbl/sre.git"
+flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
 flux_kustomization_path    = "./flux/bootstrap/flux-system"
 ```
@@ -84,7 +84,7 @@ terraform apply
 ```
 
 This will create a FluxInstance with built-in sync configured to:
-- Monitor the `ldbl/sre` repository
+- Monitor the `safeops-course/sre` repository
 - Sync from `./flux/bootstrap/flux-system` path
 - Use GitHub App authentication
 

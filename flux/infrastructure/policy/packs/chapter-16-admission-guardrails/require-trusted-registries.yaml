@@ -8,7 +8,7 @@ metadata:
     policies.kyverno.io/severity: high
     policies.kyverno.io/description: >-
       Only images from trusted registries may be admitted.
-      Allowed sources: ghcr.io/ldbl/*, ghcr.io/cloudnative-pg/*, docker.io/library/*.
+      Allowed sources: ${image_registry}/*, ghcr.io/cloudnative-pg/*, docker.io/library/*.
 spec:
   validationFailureAction: Audit
   background: true
@@ -22,13 +22,13 @@ spec:
       validate:
         message: >-
           Images must come from trusted registries:
-          ghcr.io/ldbl/*, ghcr.io/cloudnative-pg/* or docker.io/library/*.
+          ${image_registry}/*, ghcr.io/cloudnative-pg/* or docker.io/library/*.
         deny:
           conditions:
             all:
               - key: "{{request.object.spec.containers[].image}}"
                 operator: AnyNotIn
                 value:
-                  - "ghcr.io/ldbl/*"
+                  - "${image_registry}/*"
                   - "ghcr.io/cloudnative-pg/*"
                   - "docker.io/library/*"

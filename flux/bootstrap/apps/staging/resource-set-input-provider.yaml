@@ -8,7 +8,7 @@ metadata:
     fluxcd.controlplane.io/reconcileEvery: "5m"
 spec:
   type: OCIArtifactTag
-  url: oci://ghcr.io/ldbl/backend
+  url: oci://${image_registry}/backend
   secretRef:
     name: ghcr-credentials-docker
   filter:

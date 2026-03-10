@@ -2,6 +2,14 @@
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: auth
+  labels:
+    name: auth
+    managed-by: flux
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: cert-manager
   labels:
     name: cert-manager

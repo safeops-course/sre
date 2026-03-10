@@ -39,11 +39,7 @@ spec:
 
     extraEnvs:
       - name: UPTRACE_DSN
-        valueFrom:
-          secretKeyRef:
-            name: uptrace-secrets
-            key: dsn
-            optional: true
+        value: "${uptrace_dsn}"
       - name: DEPLOYMENT_ENVIRONMENT
         value: "${cluster_name}"
       - name: K8S_CLUSTER_NAME

@@ -251,7 +251,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 **Creating Custom Spans:**
 ```go
-import "github.com/ldbl/sre/backend/pkg/telemetry"
+import "github.com/safeops-course/sre/backend/pkg/telemetry"
 
 func processOrder(ctx context.Context, orderID string) error {
     ctx, span := telemetry.StartSpan(ctx, "processOrder")

@@ -10,4 +10,4 @@ spec:
     branch: main
   secretRef:
     name: github-image-automation
-  url: https://github.com/ldbl/sre.git
+  url: https://github.com/${git_owner}/sre.git

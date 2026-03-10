@@ -14,13 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flux CLI
         uses: fluxcd/flux2/action@main
 
       - name: Setup kubeconform
-        uses: bmuschko/setup-kubeconform@v1
+        run: |
+          KUBECONFORM_VERSION="v0.6.7"
+          curl -sLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar xzf kubeconform-linux-amd64.tar.gz
+          chmod +x kubeconform && sudo mv kubeconform /usr/local/bin/
+          rm kubeconform-linux-amd64.tar.gz
 
       - name: Build and validate kustomizations
         id: validate
@@ -76,12 +81,36 @@ jobs:
 
       - name: Comment on PR
         if: always()
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: flux-diff
-          message: |
-            ## Flux Kustomize Validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RESULT: ${{ steps.validate.outputs.result }}
+          BUILD_ERRORS: ${{ steps.validate.outputs.build_errors }}
+        run: |
+          HEADER="<!-- flux-diff -->"
+          if [ "$RESULT" = "success" ]; then
+            BODY="${HEADER}
+          ## Flux Kustomize Validation
 
-            **Result:** ${{ steps.validate.outputs.result == 'success' && '✅ All kustomizations build successfully' || '❌ Build failures detected' }}
+          **Result:** All kustomizations build successfully"
+          else
+            BODY="${HEADER}
+          ## Flux Kustomize Validation
 
-            ${{ steps.validate.outputs.build_errors && format('**Errors:**\n{0}', steps.validate.outputs.build_errors) || '' }}
+          **Result:** Build failures detected
+
+          **Errors:**
+          ${BUILD_ERRORS}"
+          fi
+
+          # Find existing comment
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.body | startswith(\"${HEADER}\")) | .id" 2>/dev/null | head -1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+              -X PATCH -f body="$BODY"
+          else
+            gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              -f body="$BODY"
+          fi

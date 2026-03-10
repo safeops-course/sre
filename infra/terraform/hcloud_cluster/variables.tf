@@ -256,3 +256,32 @@ variable "flux_kustomization_path" {
   type        = string
   default     = "./flux/bootstrap/flux-system"
 }
+
+# ─── OIDC / Authentication ─────────────────────────────────────────────────────
+
+variable "k3s_exec_server_args" {
+  description = "Extra arguments passed to k3s server (e.g., kube-apiserver OIDC flags)."
+  type        = string
+  default     = ""
+}
+
+# ─── Image Registry ────────────────────────────────────────────────────────────
+
+variable "uptrace_dsn" {
+  description = "Uptrace Cloud DSN for OpenTelemetry. Leave empty to skip. Sign up at https://uptrace.dev"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "image_registry" {
+  description = "Container image registry prefix (e.g., ghcr.io/safeops-course). Change this if you fork the repos."
+  type        = string
+  default     = "ghcr.io/safeops-course"
+}
+
+variable "git_owner" {
+  description = "GitHub org or user that owns the repos (e.g., safeops-course). Used by image automation."
+  type        = string
+  default     = "safeops-course"
+}

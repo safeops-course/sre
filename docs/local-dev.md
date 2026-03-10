@@ -19,7 +19,7 @@ Use Terraform to provision a local multi-node kind cluster. Terraform manages li
 Use the Terraform module under `infra/terraform/kind_cluster/` to create (or destroy) the local kind cluster. The module codifies the multi-node topology directly in Terraform, automatically merges the generated kubeconfig into `~/.kube/config`, and bootstraps Flux via Flux Operator + `FluxInstance`.
 Optionally, configure GitOps reconciliation by setting:
 ```bash
-export TF_VAR_flux_git_repository_url="https://github.com/ldbl/sre.git"
+export TF_VAR_flux_git_repository_url="https://github.com/safeops-course/sre.git"
 export TF_VAR_flux_git_repository_branch="main"
 export TF_VAR_flux_kustomization_path="./flux/bootstrap/flux-system"
 ```

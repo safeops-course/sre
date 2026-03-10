@@ -22,7 +22,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: k8s-ai-monitor
-          image: ghcr.io/ldbl/k8s-ai-monitor:main # {"$imagepolicy": "observability:k8s-ai-monitor:tag"}
+          image: ${image_registry}/k8s-ai-monitor:main # {"$imagepolicy": "observability:k8s-ai-monitor:tag"}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

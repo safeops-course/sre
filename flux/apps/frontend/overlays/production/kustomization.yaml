@@ -9,7 +9,7 @@ resources:
   - hpa.yaml
   - pdb.yaml
 images:
-  - name: ghcr.io/ldbl/frontend
+  - name: ${image_registry}/frontend
     newTag: production-v0.0.3-f06c2a1-1772717052 # {"$imagepolicy": "production:frontend:tag"}
 patches:
   - path: patches/deployment.yaml

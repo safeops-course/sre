@@ -7,7 +7,7 @@ metadata:
     policies.kyverno.io/category: Supply Chain Security
     policies.kyverno.io/severity: medium
     policies.kyverno.io/description: >-
-      Require that container images from ghcr.io/ldbl have an SPDX
+      Require that container images from ${image_registry} have an SPDX
       SBOM attestation signed via GitHub Actions OIDC.
 spec:
   validationFailureAction: Audit
@@ -21,7 +21,7 @@ spec:
                 - Pod
       verifyImages:
         - imageReferences:
-            - "ghcr.io/ldbl/*"
+            - "${image_registry}/*"
           mutateDigest: false
           attestations:
             - type: "https://spdx.dev/Document"
@@ -29,6 +29,6 @@ spec:
                 - entries:
                     - keyless:
                         issuer: "https://token.actions.githubusercontent.com"
-                        subject: "https://github.com/ldbl/*"
+                        subject: "https://github.com/${git_owner}/*"
                         rekor:
                           url: "https://rekor.sigstore.dev"

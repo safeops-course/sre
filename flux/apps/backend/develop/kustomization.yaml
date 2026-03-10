@@ -15,7 +15,7 @@ resources:
   - pdb.yaml
   - patches/feature-flags.yaml
 images:
-  - name: ghcr.io/ldbl/backend
+  - name: ${image_registry}/backend
     newTag: develop-v0.0.5-5e78219-1772781114 # {"$imagepolicy": "develop:backend:tag"}
 patches:
   - patch: |-

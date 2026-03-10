@@ -31,6 +31,16 @@ patch_finalizers() {
   kc "$@" patch "${name}" --type=merge -p '{"metadata":{"finalizers":[]}}' >/dev/null 2>&1 || true
 }
 
+# Namespace deletion blockers live in spec.finalizers, not metadata.finalizers.
+# The only way to clear them is to PUT the finalize subresource via the API.
+force_delete_namespace() {
+  local ns="$1"
+  log "force-clearing spec.finalizers on namespace ${ns}"
+  kc get namespace "${ns}" -o json \
+    | jq '.spec.finalizers = []' \
+    | kc replace --raw "/api/v1/namespaces/${ns}/finalize" -f - >/dev/null 2>&1 || true
+}
+
 delete_all_if_present() {
   local resource="$1"
   shift || true
@@ -133,7 +143,7 @@ delete_target_namespaces() {
   for namespace in "${namespaces[@]}"; do
     [[ -z "${namespace}" ]] && continue
     if kc get namespace "${namespace}" >/dev/null 2>&1; then
-      patch_finalizers "namespace/${namespace}"
+      force_delete_namespace "${namespace}"
     fi
   done
 }

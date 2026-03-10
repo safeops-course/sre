@@ -1,0 +1,76 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: dex
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: dex
+      version: "0.22.1"
+      sourceRef:
+        kind: HelmRepository
+        name: dex
+        namespace: flux-system
+      interval: 30m
+  targetNamespace: auth
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    config:
+      issuer: https://dex.safeops.work
+      storage:
+        type: kubernetes
+        config:
+          inCluster: true
+      web:
+        http: 0.0.0.0:5556
+      connectors:
+        - type: github
+          id: github
+          name: GitHub
+          config:
+            clientID: $DEX_GITHUB_CLIENT_ID
+            clientSecret: $DEX_GITHUB_CLIENT_SECRET
+            redirectURI: https://dex.safeops.work/callback
+            orgs:
+              - name: safeops-course
+      oauth2:
+        skipApprovalScreen: true
+      staticClients:
+        - id: headlamp
+          name: Headlamp
+          redirectURIs:
+            - https://headlamp.safeops.work/oidc-callback
+          secretEnv: DEX_HEADLAMP_CLIENT_SECRET
+        - id: kubernetes
+          name: Kubernetes
+          redirectURIs:
+            - http://localhost:8000
+            - http://localhost:18000
+          secretEnv: DEX_KUBERNETES_CLIENT_SECRET
+          public: true
+    envFrom:
+      - secretRef:
+          name: dex-secrets
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-production
+      hosts:
+        - host: dex.safeops.work
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: dex-tls
+          hosts:
+            - dex.safeops.work

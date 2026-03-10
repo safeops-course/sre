@@ -5,7 +5,7 @@ metadata:
   name: backend
   namespace: flux-system
 spec:
-  image: ghcr.io/ldbl/backend
+  image: ${image_registry}/backend
   interval: 1m0s
   secretRef:
     name: ghcr-credentials-docker
