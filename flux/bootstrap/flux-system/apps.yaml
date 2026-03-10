@@ -12,6 +12,10 @@ spec:
   path: ./flux/bootstrap/apps/develop
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: network-policies-develop
     - name: resource-management-develop
@@ -29,6 +33,10 @@ spec:
   path: ./flux/bootstrap/apps/staging
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: network-policies-staging
     - name: resource-management-staging
@@ -46,6 +54,10 @@ spec:
   path: ./flux/bootstrap/apps/production
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: network-policies-production
     - name: resource-management-production
