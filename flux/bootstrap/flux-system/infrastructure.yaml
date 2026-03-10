@@ -26,6 +26,10 @@ spec:
   path: ./flux/bootstrap/infrastructure/image-automation
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: infrastructure
 ---
@@ -292,6 +296,10 @@ spec:
   path: ./flux/infrastructure/observability/k8s-ai-monitor
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: observability-resources
     - name: secrets-observability
@@ -343,6 +351,10 @@ spec:
   path: ./flux/infrastructure/policy/packs/chapter-15-supply-chain
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: kyverno
 ---
@@ -359,6 +371,10 @@ spec:
   path: ./flux/infrastructure/policy/packs/chapter-16-admission-guardrails
   prune: true
   wait: false
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: kyverno
 ---
@@ -395,6 +411,58 @@ spec:
   dependsOn:
     - name: flagger
     - name: apps-develop
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dex
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/dex
+  prune: true
+  wait: true
+  timeout: 10m0s
+  dependsOn:
+    - name: cert-manager
+    - name: dns-and-certificates
+    - name: secrets-auth
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: headlamp
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/headlamp
+  prune: true
+  wait: false
+  dependsOn:
+    - name: dex
+    - name: secrets-auth
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: oidc-rbac
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/rbac
+  prune: true
+  wait: false
+  dependsOn:
+    - name: infrastructure
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

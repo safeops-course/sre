@@ -7,6 +7,11 @@ creation_rules:
     encrypted_regex: ^(data|stringData)$
     age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
 
+  # Auth secrets (Dex OIDC)
+  - path_regex: flux/secrets/auth/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
   # Observability secrets (shared)
   - path_regex: flux/secrets/observability/.*\.yaml
     encrypted_regex: ^(data|stringData)$

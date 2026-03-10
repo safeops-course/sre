@@ -5,7 +5,7 @@ metadata:
   name: k8s-ai-monitor
   namespace: flux-system
 spec:
-  image: ghcr.io/ldbl/k8s-ai-monitor
+  image: ${image_registry}/k8s-ai-monitor
   interval: 1m0s
   secretRef:
     name: ghcr-credentials-docker

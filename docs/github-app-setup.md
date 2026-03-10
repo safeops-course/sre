@@ -20,7 +20,7 @@ GitHub App authentication is more secure than SSH keys or Personal Access Tokens
 
    **GitHub App name:** `Flux SRE`
 
-   **Homepage URL:** `https://github.com/ldbl/sre`
+   **Homepage URL:** `https://github.com/safeops-course/sre`
 
    **Webhook:** Uncheck "Active" (not needed for Flux)
 
@@ -50,7 +50,7 @@ GitHub App authentication is more secure than SSH keys or Personal Access Tokens
 
 2. **Configure Repository Access**
    - Select "Only select repositories"
-   - Choose the `ldbl/sre` repository
+   - Choose the `safeops-course/sre` repository
    - Click "Install"
 
 3. **Get Installation ID**
@@ -69,7 +69,7 @@ github_app_installation_id = "12345678"                    # Your Installation I
 github_app_private_key_file = "~/.ssh/flux-github-app.pem" # Path to downloaded PEM file
 
 # GitOps Configuration (already configured)
-flux_git_repository_url    = "https://github.com/ldbl/sre.git"
+flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
 flux_kustomization_path    = "./flux/bootstrap/flux-system"
 ```

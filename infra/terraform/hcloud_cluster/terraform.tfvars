@@ -44,8 +44,17 @@ ingress_controller = "traefik"
 # traefik_autoscaling       = true
 
 # ─── Flux ────────────────────────────────────────────────────────────────────
-flux_git_repository_url    = "https://github.com/ldbl/sre.git"
+flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
 flux_kustomization_path    = "./flux/bootstrap/flux-system"
 # flux_version             = "2.x"
 # flux_operator_version    = "0.30.0"
+
+# ─── Image Registry ────────────────────────────────────────────────────────────
+# Change these if you fork the repos to your own GitHub account.
+# image_registry = "ghcr.io/your-github-username"
+# git_owner      = "your-github-username"
+
+# ─── OIDC (Dex) ───────────────────────────────────────────────────────────────
+# Enable after Dex is deployed and reachable at dex.safeops.work
+# k3s_exec_server_args = "--kube-apiserver-arg oidc-issuer-url=https://dex.safeops.work --kube-apiserver-arg oidc-client-id=kubernetes --kube-apiserver-arg oidc-username-claim=email --kube-apiserver-arg oidc-groups-claim=groups"

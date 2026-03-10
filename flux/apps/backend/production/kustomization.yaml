@@ -14,7 +14,7 @@ resources:
   - hpa.yaml
   - pdb.yaml
 images:
-  - name: ghcr.io/ldbl/backend
+  - name: ${image_registry}/backend
     newTag: production-v0.0.5-90c95fb-1772718720 # {"$imagepolicy": "production:backend:tag"}
 patches:
   - patch: |-

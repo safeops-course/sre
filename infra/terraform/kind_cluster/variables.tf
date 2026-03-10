@@ -124,3 +124,15 @@ variable "r2_region" {
   type        = string
   default     = "auto"
 }
+
+variable "image_registry" {
+  description = "Container image registry prefix (e.g., ghcr.io/safeops-course). Change this if you fork the repos."
+  type        = string
+  default     = "ghcr.io/safeops-course"
+}
+
+variable "git_owner" {
+  description = "GitHub org or user that owns the repos (e.g., safeops-course). Used by image automation."
+  type        = string
+  default     = "safeops-course"
+}

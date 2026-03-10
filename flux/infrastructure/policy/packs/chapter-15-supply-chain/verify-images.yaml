@@ -7,7 +7,7 @@ metadata:
     policies.kyverno.io/category: Supply Chain Security
     policies.kyverno.io/severity: medium
     policies.kyverno.io/description: >-
-      Verify that container images from ghcr.io/ldbl are signed
+      Verify that container images from ${image_registry} are signed
       using keyless cosign via GitHub Actions OIDC.
 spec:
   validationFailureAction: Audit
@@ -21,12 +21,12 @@ spec:
                 - Pod
       verifyImages:
         - imageReferences:
-            - "ghcr.io/ldbl/*"
+            - "${image_registry}/*"
           mutateDigest: false
           attestors:
             - entries:
                 - keyless:
                     issuer: "https://token.actions.githubusercontent.com"
-                    subject: "https://github.com/ldbl/*"
+                    subject: "https://github.com/${git_owner}/*"
                     rekor:
                       url: "https://rekor.sigstore.dev"

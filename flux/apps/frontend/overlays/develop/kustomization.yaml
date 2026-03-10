@@ -9,7 +9,7 @@ resources:
   - hpa.yaml
   - pdb.yaml
 images:
-  - name: ghcr.io/ldbl/frontend
+  - name: ${image_registry}/frontend
     newTag: develop-v0.0.3-ec5289e-1772717018 # {"$imagepolicy": "develop:frontend:tag"}
 patches:
   - path: patches/deployment.yaml

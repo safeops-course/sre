@@ -26,8 +26,8 @@
 #         wait: true
 #         timeout: 3m
 #         images:
-#           - name: ghcr.io/ldbl/backend
-#             newName: ghcr.io/ldbl/backend
+#           - name: ${image_registry}/backend
+#             newName: ${image_registry}/backend
 #             newTag: "<< inputs.backend_develop.tag >>"
 #         postBuild:
 #           substitute:

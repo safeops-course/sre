@@ -21,7 +21,7 @@ Terraform will:
 
 To enable GitOps reconciliation of this repository, set the following environment variables (or add to your Terraform variables file) before running `terraform apply`:
 ```bash
-export TF_VAR_flux_git_repository_url="https://github.com/ldbl/sre.git"
+export TF_VAR_flux_git_repository_url="https://github.com/safeops-course/sre.git"
 export TF_VAR_flux_git_repository_branch="main"
 export TF_VAR_flux_kustomization_path="./flux/bootstrap/flux-system"
 ```

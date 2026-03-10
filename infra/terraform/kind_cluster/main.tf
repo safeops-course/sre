@@ -295,6 +295,8 @@ resource "kubernetes_config_map" "cluster_config" {
   data = {
     cloudflare_proxied = "disabled"
     cluster_name       = "sre-control-plane"
+    image_registry     = var.image_registry
+    git_owner          = var.git_owner
   }
 
   depends_on = [time_sleep.wait_for_cluster]
