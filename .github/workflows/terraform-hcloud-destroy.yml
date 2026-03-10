@@ -18,7 +18,7 @@ on:
         default: 1
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
   group: terraform-hcloud-destroy
@@ -64,9 +64,9 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup kubectl (needed for FluxInstance cleanup via Terraform)
-        uses: azure/setup-kubectl@v4
-        with:
-          version: "v1.34.1"
+        run: |
+          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
