@@ -40,26 +40,6 @@ variable "flux_version" {
   default     = "2.x"
 }
 
-variable "github_app_id" {
-  description = "GitHub App ID for Flux authentication. Leave empty to skip GitHub App secret creation."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "github_app_installation_id" {
-  description = "GitHub App Installation ID for Flux authentication."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "github_app_private_key_file" {
-  description = "Path to GitHub App private key PEM file."
-  type        = string
-  default     = ""
-}
-
 variable "ghcr_token" {
   description = "GitHub Personal Access Token for pulling images from GitHub Container Registry (GHCR)."
   type        = string

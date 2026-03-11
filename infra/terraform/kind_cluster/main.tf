@@ -39,7 +39,7 @@ provider "kubernetes" {
 
 locals {
   kubeconfig_path          = pathexpand("${path.module}/kubeconfig.yaml")
-  flux_pull_secret_yaml    = var.github_app_id != "" ? "    pullSecret: \"flux-system\"\n" : ""
+  flux_pull_secret_yaml    = var.flux_git_token != "" ? "    pullSecret: \"flux-system\"\n" : ""
   backup_s3_secret_enabled = nonsensitive(var.r2_access_key_id != "" && var.r2_secret_access_key != "")
 }
 
@@ -202,7 +202,7 @@ resource "null_resource" "flux_operator_install" {
 resource "null_resource" "flux_instance" {
   depends_on = [
     null_resource.flux_operator_install,
-    kubernetes_secret.flux_github_app
+    kubernetes_secret.flux_git_auth
   ]
 
   triggers = {
@@ -235,7 +235,7 @@ spec:
     kind: GitRepository
     url: "${var.flux_git_repository_url}"
     ref: "refs/heads/${var.flux_git_repository_branch}"
-    provider: github
+    provider: generic
     path: "${var.flux_kustomization_path}"
 ${local.flux_pull_secret_yaml}
 EOF
@@ -272,9 +272,9 @@ resource "null_resource" "flux_pre_destroy" {
   }
 }
 
-# Create GitHub App secret for Flux authentication
-resource "kubernetes_secret" "flux_github_app" {
-  count      = var.github_app_id != "" ? 1 : 0
+# Create PAT secret for Flux git authentication
+resource "kubernetes_secret" "flux_git_auth" {
+  count      = var.flux_git_token != "" ? 1 : 0
   depends_on = [null_resource.flux_operator_install]
 
   metadata {
@@ -283,9 +283,8 @@ resource "kubernetes_secret" "flux_github_app" {
   }
 
   data = {
-    "githubAppID"             = var.github_app_id
-    "githubAppInstallationID" = var.github_app_installation_id
-    "githubAppPrivateKey"     = file(var.github_app_private_key_file)
+    username = "git"
+    password = var.flux_git_token
   }
 
   type = "Opaque"
@@ -366,23 +365,6 @@ resource "kubernetes_secret" "ghcr_credentials" {
   }
 }
 
-# Create GitHub token secret for ImageUpdateAutomation
-resource "kubernetes_secret" "github_image_automation" {
-  count      = var.flux_git_token != "" ? 1 : 0
-  depends_on = [null_resource.flux_instance]
-
-  metadata {
-    name      = "github-image-automation"
-    namespace = "flux-system"
-  }
-
-  type = "Opaque"
-
-  data = {
-    username = "git"
-    password = var.flux_git_token
-  }
-}
 
 # Create SOPS age secret for Flux decryption
 resource "kubernetes_secret" "sops_age" {

@@ -9,5 +9,5 @@ spec:
   ref:
     branch: main
   secretRef:
-    name: github-image-automation
+    name: flux-system
   url: https://github.com/${git_owner}/sre.git
