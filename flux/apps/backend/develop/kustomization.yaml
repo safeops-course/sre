@@ -16,7 +16,7 @@ resources:
   - patches/feature-flags.yaml
 images:
   - name: ${image_registry}/backend
-    newTag: develop-v0.0.5-5e78219-1772781114 # {"$imagepolicy": "develop:backend:tag"}
+    newTag: develop-v0.0.0-66c44a2-1773188532 # {"$imagepolicy": "develop:backend:tag"}
 patches:
   - patch: |-
       - op: replace
