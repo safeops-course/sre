@@ -10,7 +10,7 @@ resources:
   - pdb.yaml
 images:
   - name: ${image_registry}/frontend
-    newTag: production-v0.0.3-f06c2a1-1772717052 # {"$imagepolicy": "production:frontend:tag"}
+    newTag: production-v0.0.0-0c4cc88-1773188231 # {"$imagepolicy": "production:frontend:tag"}
 patches:
   - path: patches/deployment.yaml
   - path: patches/ingress.yaml
