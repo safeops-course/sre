@@ -15,7 +15,7 @@ resources:
   - pdb.yaml
 images:
   - name: ${image_registry}/backend
-    newTag: production-v0.0.5-90c95fb-1772718720 # {"$imagepolicy": "production:backend:tag"}
+    newTag: production-v0.0.0-a00f7ba-1773188261 # {"$imagepolicy": "production:backend:tag"}
 patches:
   - patch: |-
       - op: replace
