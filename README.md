@@ -71,7 +71,7 @@ To enable GitOps reconciliation of this repository, set `TF_VAR_flux_git_reposit
 ## Where To Start Reading
 
 - Course website: [safeops.work](https://safeops.work/)
-- Course source repo: [`sre-course`](https://github.com/safeops-course/sre-course)
+- Course source repo: [`sre-course`](https://github.com/safeops-course/sre)
 - AI guardrails: `docs/ai-code-of-conduct.md`
 - Hetzner cluster: `docs/hetzner.md`
 - Local bootstrap: `docs/local-dev.md`
