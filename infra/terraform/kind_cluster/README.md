@@ -32,10 +32,13 @@ terraform apply
 ```
 
 This will:
-1. Create a kind cluster named `sre-control-plane`
+1. Create a kind cluster named `sre-control-plane` (+ Traefik, metrics-server)
 2. Install the Flux Operator
-3. Deploy a FluxInstance with all Flux controllers
-4. Merge the kubeconfig into your `~/.kube/config`
+3. Deploy a FluxInstance with all Flux controllers, syncing `./flux/bootstrap/profiles/local` from the course repo
+4. Generate the local runtime secrets (JWT, Postgres owner, MinIO, sops-age from `age.agekey`) - see `local-profile.tf`
+5. Merge the kubeconfig into your `~/.kube/config`
+
+Defaults target the SafeOps course repo and the local profile; set `TF_VAR_flux_git_repository_url` to your fork and `TF_VAR_flux_kustomization_path=./flux/bootstrap/flux-system` for the full platform (`docs/local-dev.md`).
 
 ### 3. Verify Installation
 

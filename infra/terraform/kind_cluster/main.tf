@@ -16,6 +16,14 @@ terraform {
       source  = "hashicorp/null"
       version = "~> 3.2"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.5"
+    }
   }
 }
 
@@ -41,6 +49,7 @@ locals {
   kubeconfig_path          = pathexpand("${path.module}/kubeconfig.yaml")
   flux_pull_secret_yaml    = var.flux_git_token != "" ? "    pullSecret: \"flux-system\"\n" : ""
   backup_s3_secret_enabled = nonsensitive(var.r2_access_key_id != "" && var.r2_secret_access_key != "")
+  ghcr_secret_enabled      = var.enable_ghcr && nonsensitive(var.ghcr_token != "")
 }
 
 resource "kind_cluster" "sre" {
@@ -207,6 +216,13 @@ resource "null_resource" "flux_instance" {
 
   triggers = {
     kubeconfig_path = local.kubeconfig_path
+    # Re-create the FluxInstance when its sync spec changes; before this only
+    # the kubeconfig path was tracked, so switching repo/branch/path/token
+    # after the first apply silently did nothing.
+    repo_url    = var.flux_git_repository_url
+    repo_branch = var.flux_git_repository_branch
+    repo_path   = var.flux_kustomization_path
+    pull_secret = local.flux_pull_secret_yaml
   }
 
   provisioner "local-exec" {
@@ -244,9 +260,12 @@ EOF
   }
 
   provisioner "local-exec" {
-    when        = destroy
-    on_failure  = continue
-    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=false"
+    when       = destroy
+    on_failure = continue
+    # Wait for the operator to finish uninstalling: with --wait=false a
+    # replacement (new FluxInstance applied while the old one is still
+    # terminating) gets deleted together with the old one.
+    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=true --timeout=5m"
     interpreter = ["/bin/bash", "-c"]
   }
 }
@@ -261,7 +280,7 @@ resource "null_resource" "flux_pre_destroy" {
 
   triggers = {
     kubeconfig_path = local.kubeconfig_path
-    namespaces      = "develop,staging,production,observability,traefik"
+    namespaces      = "develop,staging,production,observability,traefik,minio"
   }
 
   provisioner "local-exec" {
@@ -342,7 +361,7 @@ resource "kubernetes_namespace" "bootstrap" {
 
 # Create imagePullSecret for GHCR in each namespace
 resource "kubernetes_secret" "ghcr_credentials" {
-  for_each   = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production", "observability"]) : toset([])
+  for_each   = local.ghcr_secret_enabled ? toset(["flux-system", "develop", "staging", "production", "observability"]) : toset([])
   depends_on = [null_resource.flux_instance, kubernetes_namespace.bootstrap]
 
   metadata {
@@ -368,8 +387,8 @@ resource "kubernetes_secret" "ghcr_credentials" {
 
 # Create SOPS age secret for Flux decryption
 resource "kubernetes_secret" "sops_age" {
-  count      = var.sops_age_key != "" ? 1 : 0
-  depends_on = [null_resource.flux_instance]
+  count      = var.sops_age_key != "" || var.local_profile ? 1 : 0
+  depends_on = [null_resource.flux_instance, null_resource.age_key]
 
   metadata {
     name      = "sops-age"
@@ -379,7 +398,7 @@ resource "kubernetes_secret" "sops_age" {
   type = "Opaque"
 
   data = {
-    "age.agekey" = var.sops_age_key
+    "age.agekey" = var.sops_age_key != "" ? var.sops_age_key : data.local_file.age_key[0].content
   }
 }
 

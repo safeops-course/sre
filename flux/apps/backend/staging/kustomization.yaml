@@ -14,13 +14,14 @@ resources:
   - hpa.yaml
   - pdb.yaml
 images:
-  - name: ${image_registry}/backend
+  - name: backend
+    newName: ${image_registry}/backend
     newTag: staging-v0.0.0-66c44a2-1773188533 # {"$imagepolicy": "staging:backend:tag"}
 patches:
   - patch: |-
       - op: replace
         path: /spec/replicas
-        value: 1
+        value: 2
     target:
       kind: Deployment
       name: backend

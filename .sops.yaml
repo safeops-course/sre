@@ -31,3 +31,9 @@ creation_rules:
   - path_regex: flux/secrets/production/.*\.yaml
     encrypted_regex: ^(data|stringData)$
     age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Local (kind) profile - the learner's own key. Placeholder until
+  # `scripts/sops-setup.sh --local` writes your public key here.
+  - path_regex: flux/secrets/local/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1REPLACE_WITH_YOUR_PUBLIC_KEY_RUN_scripts_sops-setup.sh_--local

@@ -135,6 +135,33 @@ update_sops_config() {
     echo
 }
 
+# Register the local key in .sops.yaml (local profile rule only).
+# The platform rules keep the SafeOps key; learners only ever encrypt under
+# flux/secrets/local/, which is what the local Flux profile decrypts.
+update_local_sops_rule() {
+    if [[ ! -f "${AGE_KEY_FILE}" ]]; then
+        echo "❌ Age key not found at: ${AGE_KEY_FILE}"
+        exit 1
+    fi
+    PUBLIC_KEY=$(grep "# public key:" "${AGE_KEY_FILE}" | cut -d: -f2 | tr -d ' ')
+    SOPS_CONFIG="${REPO_ROOT}/.sops.yaml"
+
+    if ! grep -q "path_regex: flux/secrets/local/" "${SOPS_CONFIG}"; then
+        echo "❌ No flux/secrets/local rule in ${SOPS_CONFIG}"
+        exit 1
+    fi
+    # Replace only the recipient on the line that follows the local path rule.
+    awk -v key="${PUBLIC_KEY}" '
+        /path_regex: flux\/secrets\/local\// { in_local = 1 }
+        in_local && /^[[:space:]]*age: / { sub(/age: .*/, "age: " key); in_local = 0 }
+        { print }
+    ' "${SOPS_CONFIG}" > "${SOPS_CONFIG}.tmp" && mv "${SOPS_CONFIG}.tmp" "${SOPS_CONFIG}"
+
+    echo "✅ .sops.yaml: flux/secrets/local/** now encrypts to ${PUBLIC_KEY}"
+    echo "   Commit .sops.yaml in your fork; keep ${AGE_KEY_FILE} out of Git."
+    echo
+}
+
 # Show usage
 usage() {
     cat <<EOF
@@ -147,6 +174,9 @@ OPTIONS:
     --create-secret     Create sops-age secret in Kubernetes
     --update-config     Show instructions for updating .sops.yaml
     --all               Run all steps (generate, create secret, show config)
+    --local             Local (kind) profile: generate key if missing, register
+                        its public half for flux/secrets/local/ in .sops.yaml,
+                        and create/refresh the sops-age secret in the cluster
     -h, --help          Show this help message
 
 EXAMPLES:
@@ -182,6 +212,23 @@ main() {
             generate_age_key
             create_k8s_secret
             update_sops_config
+            ;;
+        --local)
+            check_tools
+            if [[ ! -f "${AGE_KEY_FILE}" ]]; then
+                generate_age_key
+            else
+                echo "🔑 Using existing key: ${AGE_KEY_FILE}"
+            fi
+            update_local_sops_rule
+            # infra/terraform/kind_cluster already created sops-age from this
+            # key file; only create it when it is missing (no prompts - this
+            # runs inside course labs and CI).
+            if kubectl -n flux-system get secret sops-age &> /dev/null; then
+                echo "✅ sops-age secret already present in flux-system (created by Terraform)"
+            else
+                create_k8s_secret
+            fi
             ;;
         -h|--help)
             usage
