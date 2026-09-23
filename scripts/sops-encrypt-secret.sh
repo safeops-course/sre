@@ -8,13 +8,17 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 usage() {
     cat <<EOF
-Usage: $0 ENVIRONMENT SECRET_NAME
+Usage: $0 ENVIRONMENT SECRET_NAME [NAMESPACE]
 
 Create and encrypt a Kubernetes Secret with SOPS
 
 ARGUMENTS:
-    ENVIRONMENT     Target environment (develop, staging, production)
+    ENVIRONMENT     Target directory under flux/secrets/: develop, staging,
+                    production, or local (the kind profile - encrypted with
+                    your own key, see scripts/sops-setup.sh --local)
     SECRET_NAME     Name of the secret (e.g., backend-secrets)
+    NAMESPACE       Namespace the Secret is created in (default: ENVIRONMENT,
+                    or develop when ENVIRONMENT is local)
 
 EXAMPLES:
     # Create encrypted secret for develop environment
@@ -22,6 +26,8 @@ EXAMPLES:
 
     # Create encrypted secret for production
     $0 production backend-secrets
+    # Local kind profile: encrypted with your key, applied to develop
+    $0 local lab-secret
 
 WORKFLOW:
     1. Creates a plaintext secret template
@@ -40,6 +46,8 @@ EOF
 create_and_encrypt() {
     local env="$1"
     local secret_name="$2"
+    local namespace="${3:-$env}"
+    [[ "${env}" == "local" && -z "${3:-}" ]] && namespace="develop"
     local secrets_dir="${REPO_ROOT}/flux/secrets/${env}"
     local output_file="${secrets_dir}/${secret_name}.yaml"
     local temp_file="${secrets_dir}/${secret_name}.yaml.tmp"
@@ -47,7 +55,7 @@ create_and_encrypt() {
     # Validate environment
     if [[ ! -d "${secrets_dir}" ]]; then
         echo "❌ Invalid environment: ${env}"
-        echo "   Available: develop, staging, production"
+        echo "   Available: develop, staging, production, local"
         exit 1
     fi
 
@@ -71,7 +79,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: ${secret_name}
-  namespace: ${env}
+  namespace: ${namespace}
 type: Opaque
 stringData:
   # Add your secret keys here
@@ -117,13 +125,14 @@ EOF
 }
 
 # Main
-if [[ $# -ne 2 ]]; then
+if [[ $# -lt 2 || $# -gt 3 ]]; then
     usage
     exit 1
 fi
 
 ENV="$1"
 SECRET_NAME="$2"
+NAMESPACE_ARG="${3:-}"
 
 # Check tools
 if ! command -v sops &> /dev/null; then
@@ -132,4 +141,4 @@ if ! command -v sops &> /dev/null; then
     exit 1
 fi
 
-create_and_encrypt "${ENV}" "${SECRET_NAME}"
+create_and_encrypt "${ENV}" "${SECRET_NAME}" "${NAMESPACE_ARG}"
