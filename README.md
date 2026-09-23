@@ -63,10 +63,10 @@ Companion repos in this workspace:
 
 1. Install system prerequisites: Docker (running), `curl`, `tar`, `unzip`.
 2. Install the Kubernetes/IaC CLIs manually (recommended versions): Terraform 1.13.3, kubectl 1.34.1, kind 0.30.0, flux 2.7.0.
-3. Provision the local kind cluster via Terraform (`infra/terraform/kind_cluster`) -- this also installs Flux controllers automatically.
-4. Follow `docs/local-dev.md` for extra tips (Terraform workflow, local registry, manual commands) and advanced workflows.
+3. Provision the local kind cluster via Terraform (`infra/terraform/kind_cluster`) -- this installs Flux and reconciles the **local profile** (`flux/bootstrap/profiles/local`): the platform without its cloud-only parts, with MinIO standing in for R2 and Terraform-generated runtime secrets. `flux get kustomizations -A` should be all green.
+4. Follow `docs/local-dev.md` for what the local profile includes, how to point it at your fork, and the verification commands.
 
-To enable GitOps reconciliation of this repository, set `TF_VAR_flux_git_repository_url` (and optional branch/path variables) before running Terraform. The default sync path is `./flux/bootstrap/flux-system`. See `docs/gitops/flux.md` for details.
+The full platform profile (`./flux/bootstrap/flux-system`) is what Hetzner runs; select it with `TF_VAR_flux_kustomization_path` once you have the cloud secrets. See `docs/gitops/flux.md`.
 
 ## Where To Start Reading
 

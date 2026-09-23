@@ -19,11 +19,11 @@ Terraform will:
 2. Install Flux Operator from upstream manifests.
 3. Create a `FluxInstance` with source/kustomize/helm/notification/image controllers enabled.
 
-To enable GitOps reconciliation of this repository, set the following environment variables (or add to your Terraform variables file) before running `terraform apply`:
+GitOps reconciliation is enabled by default against the course repo and the local profile. To change the source or profile, set these before `terraform apply`:
 ```bash
 export TF_VAR_flux_git_repository_url="https://github.com/safeops-course/sre.git"
 export TF_VAR_flux_git_repository_branch="main"
-export TF_VAR_flux_kustomization_path="./flux/bootstrap/flux-system"
+export TF_VAR_flux_kustomization_path="./flux/bootstrap/flux-system"   # default: ./flux/bootstrap/profiles/local
 ```
 Terraform will create a `GitRepository` and `Kustomization` in `flux-system` pointing to the specified path. Adjust the URL/path to match your desired GitOps layout.
 Terraform sets the `sync` block on `FluxInstance`; Flux then manages `GitRepository`/`Kustomization` resources in-cluster.
