@@ -1,8 +1,13 @@
 name: sync-course-snippets
 
 # Triggered when files referenced by the course change.
-# Clones sre-course, runs snippet extraction, updates course-map.yml,
+# Clones ldbl/sre-course, runs snippet extraction, updates course-map.yml,
 # and pushes changes to both repos.
+#
+# Needs the repository secret COURSE_REPO_PAT: a fine-grained PAT from the
+# ldbl account with Contents read/write on ldbl/sre-course (that repo is
+# private and lives under another owner, so GITHUB_TOKEN cannot reach it).
+# The course-map.yml push to this repo uses GITHUB_TOKEN.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -23,20 +28,31 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   sync-snippets:
     runs-on: ubuntu-latest
     steps:
+      - name: Require COURSE_REPO_PAT
+        env:
+          COURSE_REPO_PAT: ${{ secrets.COURSE_REPO_PAT }}
+        run: |
+          if [[ -z "${COURSE_REPO_PAT}" ]]; then
+            echo "::error::secret COURSE_REPO_PAT is not set - add a fine-grained PAT (ldbl account, ldbl/sre-course, Contents: read/write) under Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+
       - name: Checkout sre repo
         uses: actions/checkout@v5
         with:
           path: sre
-          token: ${{ secrets.COURSE_REPO_PAT }}
 
       - name: Checkout sre-course repo
         uses: actions/checkout@v5
         with:
-          repository: safeops-course/sre-course
+          repository: ldbl/sre-course
           token: ${{ secrets.COURSE_REPO_PAT }}
           path: sre-course
 
