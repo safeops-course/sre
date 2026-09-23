@@ -9,6 +9,7 @@
 # What is added:
 #   - minio          S3-compatible target for CNPG backups instead of R2
 #   - secrets-local  the learner's own SOPS-encrypted secrets (Chapter 03)
+#   - lab            scratch namespace with Pod Security warn/audit (Chapter 16 drills)
 # Runtime secrets the apps need (JWT, Postgres owner, MinIO creds, sops-age)
 # are created by infra/terraform/kind_cluster at cluster creation.
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -17,6 +18,7 @@ resources:
   - ../../flux-system
   - minio.yaml
   - secrets-local.yaml
+  - lab.yaml
 patches:
   # Point the self-managing Kustomization at this profile, not at the base.
   - target: { kind: Kustomization, name: flux-system }

@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+  labels:
+    name: lab
+    environment: lab
+    managed-by: flux
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
