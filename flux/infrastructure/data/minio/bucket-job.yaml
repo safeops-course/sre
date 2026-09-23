@@ -6,6 +6,9 @@ kind: Job
 metadata:
   name: minio-create-bucket
   namespace: minio
+  annotations:
+    # Job specs are immutable; let Flux recreate it when the manifest changes.
+    kustomize.toolkit.fluxcd.io/force: Enabled
 spec:
   backoffLimit: 20
   template:
