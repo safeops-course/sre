@@ -153,7 +153,7 @@ update_local_sops_rule() {
     # Replace only the recipient on the line that follows the local path rule.
     awk -v key="${PUBLIC_KEY}" '
         /path_regex: flux\/secrets\/local\// { in_local = 1 }
-        in_local && /^\s*age: / { sub(/age: .*/, "age: " key); in_local = 0 }
+        in_local && /^[[:space:]]*age: / { sub(/age: .*/, "age: " key); in_local = 0 }
         { print }
     ' "${SOPS_CONFIG}" > "${SOPS_CONFIG}.tmp" && mv "${SOPS_CONFIG}.tmp" "${SOPS_CONFIG}"
 
@@ -221,7 +221,14 @@ main() {
                 echo "🔑 Using existing key: ${AGE_KEY_FILE}"
             fi
             update_local_sops_rule
-            create_k8s_secret
+            # infra/terraform/kind_cluster already created sops-age from this
+            # key file; only create it when it is missing (no prompts - this
+            # runs inside course labs and CI).
+            if kubectl -n flux-system get secret sops-age &> /dev/null; then
+                echo "✅ sops-age secret already present in flux-system (created by Terraform)"
+            else
+                create_k8s_secret
+            fi
             ;;
         -h|--help)
             usage
