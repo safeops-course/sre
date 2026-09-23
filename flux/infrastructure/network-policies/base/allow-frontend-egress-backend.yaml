@@ -12,9 +12,14 @@ spec:
     - Egress
   egress:
     - to:
+        # Flagger relabels the primary pods app=backend-primary and points the
+        # Service at them; without it the frontend cannot reach the backend in
+        # any namespace with a Canary.
         - podSelector:
-            matchLabels:
-              app: backend
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [backend, backend-primary]
       ports:
         - protocol: TCP
           port: 8080
