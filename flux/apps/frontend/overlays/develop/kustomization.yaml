@@ -3,7 +3,6 @@ kind: Kustomization
 namespace: develop
 resources:
   - ../../base
-  - namespace.yaml
   - image-policy.yaml
   - image-automation.yaml
   - hpa.yaml
