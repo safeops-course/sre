@@ -1,0 +1,96 @@
+name: sync-course-snippets
+
+# Triggered when files referenced by the course change.
+# Clones ldbl/sre-course, runs snippet extraction, updates course-map.yml,
+# and pushes changes to both repos.
+#
+# Needs the repository secret COURSE_REPO_PAT: a fine-grained PAT from the
+# ldbl account with Contents read/write on ldbl/sre-course (that repo is
+# private and lives under another owner, so GITHUB_TOKEN cannot reach it).
+# The course-map.yml push to this repo uses GITHUB_TOKEN.
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "scripts/**"
+      - "flux/**"
+      - "infra/**"
+      - "docs/**"
+      - ".github/workflows/**"
+      - ".pre-commit-config.yaml"
+      - ".sops.yaml"
+      - ".coderabbit.yml"
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require COURSE_REPO_PAT
+        env:
+          COURSE_REPO_PAT: ${{ secrets.COURSE_REPO_PAT }}
+        run: |
+          if [[ -z "${COURSE_REPO_PAT}" ]]; then
+            echo "::error::secret COURSE_REPO_PAT is not set - add a fine-grained PAT (ldbl account, ldbl/sre-course, Contents: read/write) under Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+
+      - name: Checkout sre repo
+        uses: actions/checkout@v5
+        with:
+          path: sre
+
+      - name: Checkout sre-course repo
+        uses: actions/checkout@v5
+        with:
+          repository: ldbl/sre-course
+          token: ${{ secrets.COURSE_REPO_PAT }}
+          path: sre-course
+
+      - name: Run content sync
+        run: |
+          cd sre-course
+          ./scripts/sync-course-to-hugo.sh
+
+      - name: Run snippet extraction
+        run: |
+          cd sre-course
+          ./scripts/inline-repo-snippets.sh "${{ github.workspace }}/sre"
+
+      - name: Regenerate course-map.yml
+        run: |
+          cd sre-course
+          ./scripts/generate-course-map.sh "${{ github.workspace }}/sre/course-map.yml"
+
+      - name: Push snippet updates to sre-course
+        run: |
+          cd sre-course
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/content/members/ site/content/course/
+          git diff --cached --quiet && { echo "No snippet changes"; exit 0; }
+          git commit -m "chore: sync code snippets from sre repo
+
+          Triggered by ${{ github.repository }}@${{ github.sha }}"
+          git push
+
+      - name: Push course-map.yml to sre
+        run: |
+          cd sre
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add course-map.yml
+          git diff --cached --quiet && { echo "No course-map changes"; exit 0; }
+          git commit -m "chore: update course-map.yml
+
+          Auto-generated from sre-course chapter references."
+          git push

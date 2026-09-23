@@ -1,0 +1,65 @@
+---
+# Temporarily disabled ResourceSet - will enable after testing
+# apiVersion: fluxcd.controlplane.io/v1
+# kind: ResourceSet
+# metadata:
+#   name: backend-production
+#   namespace: flux-system
+# spec:
+#   inputsFrom:
+#     - kind: ResourceSetInputProvider
+#       name: backend-production
+#   resources:
+#     - apiVersion: kustomize.toolkit.fluxcd.io/v1
+#       kind: Kustomization
+#       metadata:
+#         name: backend-production
+#         namespace: flux-system
+#       spec:
+#         interval: 10m0s
+#         sourceRef:
+#           kind: GitRepository
+#           name: flux-system
+#           namespace: flux-system
+#         path: ./flux/apps/backend/production
+#         prune: true
+#         wait: true
+#         timeout: 5m
+#         images:
+#           - name: ${image_registry}/backend
+#             newName: ${image_registry}/backend
+#             newTag: "<< inputs.backend_production.tag >>"
+#         postBuild:
+#           substitute:
+#             NAMESPACE: "production"
+#             ENVIRONMENT: "production"
+#             LOG_LEVEL: "warn"
+#         dependsOn:
+#           - name: flux-system
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: backend-production
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  path: ./flux/apps/backend/production
+  prune: true
+  wait: true
+  timeout: 5m
+  postBuild:
+    substitute:
+      NAMESPACE: "production"
+      ENVIRONMENT: "production"
+      LOG_LEVEL: "warn"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+  dependsOn:
+    - name: flux-system
+    - name: observability

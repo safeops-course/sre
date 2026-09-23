@@ -1,0 +1,8 @@
+components:
+  - source-controller
+  - kustomize-controller
+  - helm-controller
+  - notification-controller
+  - image-reflector-controller
+  - image-automation-controller
+watchAllNamespaces: true

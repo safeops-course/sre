@@ -1,0 +1,67 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth
+  labels:
+    name: auth
+    managed-by: flux
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    name: cert-manager
+    managed-by: flux
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    # A Namespace must never be garbage-collected by Flux, even if another
+    # Kustomization once applied it (see the duplicate namespace.yaml files).
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+  name: develop
+  labels:
+    name: develop
+    environment: development
+    managed-by: flux
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    # A Namespace must never be garbage-collected by Flux, even if another
+    # Kustomization once applied it (see the duplicate namespace.yaml files).
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+  name: staging
+  labels:
+    name: staging
+    environment: staging
+    managed-by: flux
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    # A Namespace must never be garbage-collected by Flux, even if another
+    # Kustomization once applied it (see the duplicate namespace.yaml files).
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+  name: production
+  labels:
+    name: production
+    environment: production
+    managed-by: flux
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest

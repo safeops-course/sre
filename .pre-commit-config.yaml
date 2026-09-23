@@ -1,0 +1,89 @@
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+  - pre-merge-commit
+  - prepare-commit-msg
+
+repos:
+  - repo: local
+    hooks:
+      - id: master-branch-check
+        name: Protected branch guard
+        entry: scripts/pre-commit-master-check.sh
+        language: script
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit, pre-push, pre-merge-commit]
+        args:
+          - --protected=master
+          - --protected=main
+
+      - id: prevent-amend-after-push
+        name: Prevent amending pushed commits
+        entry: scripts/prevent-amend-after-push.sh
+        language: script
+        always_run: true
+        pass_filenames: false
+        stages: [prepare-commit-msg]
+
+  - repo: local
+    hooks:
+      - id: flux-kustomize-validate
+        name: Flux kustomize validate
+        entry: scripts/flux-kustomize-validate.sh
+        language: script
+        files: ^flux/.*\.ya?ml$
+        pass_filenames: true
+        require_serial: true
+        stages: [pre-commit]
+
+      - id: terraform-fmt
+        name: Terraform format check
+        entry: terraform fmt -recursive -diff -check
+        language: system
+        files: \.tf$
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: terraform-validate
+        name: Terraform validate
+        entry: scripts/terraform-validate.sh
+        language: script
+        files: \.(tf|tfvars)$
+        pass_filenames: false
+        require_serial: true
+        stages: [pre-commit]
+
+      - id: terraform-security
+        name: Terraform security scan
+        entry: scripts/terraform-security.sh
+        language: script
+        files: \.(tf|tfvars)$
+        pass_filenames: false
+        require_serial: true
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: no-secrets
+        name: Block sensitive files
+        entry: scripts/block-secrets.sh
+        language: script
+        files: (kubeconfig|\.key$|\.pem$|credentials|\.env$)
+        stages: [pre-commit]
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        files: \.sh$
+        args: [--severity=warning]
+        stages: [pre-commit]
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        files: \.ya?ml$
+        args: [-d, relaxed]
+        stages: [pre-commit]

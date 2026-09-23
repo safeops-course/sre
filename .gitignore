@@ -1,0 +1,18 @@
+.DS_Store
+.env.local
+/bin/
+/node_modules/
+/.venv/
+/dist/
+__pycache__/
+*.tfstate
+*.tfstate.backup
+terraform.tfstate.d/
+infra/terraform/kind_cluster/kubeconfig.yaml
+site/content/course/
+site/public/
+
+# SOPS private keys (generated locally, never committed)
+age.agekey
+*.agekey
+*.agekey.*.bak

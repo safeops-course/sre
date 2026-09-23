@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - default-deny-all.yaml
+  - allow-dns-egress.yaml
+  - allow-frontend-egress-backend.yaml
+  - allow-backend-egress-postgres.yaml
+  - allow-backend-ingress.yaml
+  - allow-postgres-ingress-backend.yaml
+  - allow-frontend-ingress.yaml
+  - allow-backend-egress-https.yaml
+  - allow-postgres-egress-https.yaml
+  - allow-postgres-egress-apiserver.yaml
+  - allow-postgres-ingress-cnpg-operator.yaml
+  - allow-backend-metrics-from-observability.yaml

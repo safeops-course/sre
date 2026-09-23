@@ -1,0 +1,182 @@
+# Local (kind) profile.
+#
+# Same GitOps tree as production, minus everything that needs a cloud account,
+# a DNS zone, an LLM key or the author's SOPS key. What is removed:
+#   - cert-manager, dns-and-certificates, dex, headlamp, oidc-rbac  (Cloudflare DNS, OIDC)
+#   - opentelemetry-collector, k8s-ai-monitor                         (Uptrace DSN, LLM key)
+#   - image-automation                                                (needs git write token)
+#   - secrets-*                                                       (encrypted for the platform key)
+# What is added:
+#   - minio          S3-compatible target for CNPG backups instead of R2
+#   - secrets-local  the learner's own SOPS-encrypted secrets (Chapter 04)
+#   - lab            scratch namespace with Pod Security warn/audit (Chapter 15 drills)
+# Runtime secrets the apps need (JWT, Postgres owner, MinIO creds, sops-age)
+# are created by infra/terraform/kind_cluster at cluster creation.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../flux-system
+  - minio.yaml
+  - secrets-local.yaml
+  - lab.yaml
+patches:
+  # Point the self-managing Kustomization at this profile, not at the base.
+  - target: { kind: Kustomization, name: flux-system }
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./flux/bootstrap/profiles/local
+
+  # --- remove cloud-only Kustomizations -------------------------------------
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: image-automation, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: cert-manager, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: dns-and-certificates, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: dex, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: headlamp, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: oidc-rbac, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: opentelemetry-collector, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: k8s-ai-monitor, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: secrets-auth, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: secrets-cloudflare, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: secrets-observability, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: secrets-develop, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: secrets-staging, namespace: flux-system }
+      $patch: delete
+  - patch: |-
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata: { name: secrets-production, namespace: flux-system }
+      $patch: delete
+
+  # --- observability no longer waits for cert-manager -----------------------
+  - target: { kind: Kustomization, name: observability }
+    patch: |-
+      - op: replace
+        path: /spec/dependsOn
+        value:
+          - name: infrastructure
+
+  # --- CNPG clusters: back up to MinIO, secrets come from Terraform ---------
+  - target: { kind: Kustomization, name: cnpg-cluster-develop }
+    patch: |-
+      - op: replace
+        path: /spec/postBuild/substitute/R2_ENDPOINT_URL
+        value: http://minio.minio.svc.cluster.local:9000
+      - op: replace
+        path: /spec/dependsOn
+        value:
+          - name: cnpg-operator
+          - name: network-policies-develop
+          - name: resource-management-develop
+          - name: minio
+  - target: { kind: Kustomization, name: cnpg-cluster-staging }
+    patch: |-
+      - op: replace
+        path: /spec/postBuild/substitute/R2_ENDPOINT_URL
+        value: http://minio.minio.svc.cluster.local:9000
+      - op: replace
+        path: /spec/dependsOn
+        value:
+          - name: cnpg-operator
+          - name: network-policies-staging
+          - name: resource-management-staging
+          - name: minio
+  - target: { kind: Kustomization, name: cnpg-cluster-production }
+    patch: |-
+      - op: replace
+        path: /spec/postBuild/substitute/R2_ENDPOINT_URL
+        value: http://minio.minio.svc.cluster.local:9000
+      - op: replace
+        path: /spec/dependsOn
+        value:
+          - name: cnpg-operator
+          - name: network-policies-production
+          - name: resource-management-production
+          - name: minio
+
+  # --- apps: no image automation locally -----------------------------------
+  # apps-<env> renders flux/bootstrap/apps/<env>, which creates the
+  # backend-<env>/frontend-<env> Kustomizations and a ResourceSetInputProvider
+  # that scans GHCR. Drop the provider, and give the inner Kustomizations a
+  # patch that drops ImagePolicy/ImageUpdateAutomation (their ImageRepository
+  # lives in the excluded image-automation Kustomization; with wait: true they
+  # would keep the apps NotReady forever).
+  - target: { kind: Kustomization, name: apps-(develop|staging|production) }
+    patch: |-
+      - op: add
+        path: /spec/patches
+        value:
+          - target: { kind: ResourceSetInputProvider }
+            patch: |-
+              apiVersion: fluxcd.controlplane.io/v1
+              kind: ResourceSetInputProvider
+              metadata: { name: placeholder }
+              $patch: delete
+          - target: { kind: Kustomization }
+            patch: |-
+              - op: add
+                path: /spec/patches
+                value:
+                  - target: { kind: ImagePolicy }
+                    patch: |-
+                      apiVersion: image.toolkit.fluxcd.io/v1
+                      kind: ImagePolicy
+                      metadata: { name: placeholder }
+                      $patch: delete
+                  - target: { kind: ImageUpdateAutomation }
+                    patch: |-
+                      apiVersion: image.toolkit.fluxcd.io/v1
+                      kind: ImageUpdateAutomation
+                      metadata: { name: placeholder }
+                      $patch: delete

@@ -1,0 +1,117 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backend-alerts
+  namespace: observability
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+    - name: backend.rules
+      interval: 30s
+      rules:
+        # High error rate alert
+        - alert: BackendHighErrorRate
+          expr: |
+            (
+              sum(rate(app_http_requests_total{job="backend",status=~"5.."}[5m]))
+              / clamp_min(sum(rate(app_http_requests_total{job="backend"}[5m])), 1e-9)
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: backend
+          annotations:
+            summary: "Backend service has high error rate"
+            description: "Backend error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+
+        # Critical error rate alert
+        - alert: BackendCriticalErrorRate
+          expr: |
+            (
+              sum(rate(app_http_requests_total{job="backend",status=~"5.."}[5m]))
+              / clamp_min(sum(rate(app_http_requests_total{job="backend"}[5m])), 1e-9)
+            ) > 0.10
+          for: 2m
+          labels:
+            severity: critical
+            component: backend
+          annotations:
+            summary: "Backend service has critical error rate"
+            description: "Backend error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+
+        # High latency alert (p95)
+        - alert: BackendHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(app_http_request_duration_seconds_bucket{job="backend"}[5m])) by (le)
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+            component: backend
+          annotations:
+            summary: "Backend service has high latency"
+            description: "Backend p95 latency is {{ $value }}s (threshold: 1s)"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+
+        # Service down alert
+        - alert: BackendServiceDown
+          expr: up{job="backend"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: backend
+          annotations:
+            summary: "Backend service is down"
+            description: "Backend service {{ $labels.instance }} is down"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+
+        # High memory usage
+        - alert: BackendHighMemoryUsage
+          expr: |
+            (
+              process_resident_memory_bytes{job="backend"}
+              /
+              1024 / 1024 / 1024
+            ) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            component: backend
+          annotations:
+            summary: "Backend service has high memory usage"
+            description: "Backend memory usage is {{ $value }}GB (threshold: 0.8GB)"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+
+        # Too many goroutines
+        - alert: BackendHighGoroutines
+          expr: go_goroutines{job="backend"} > 10000
+          for: 5m
+          labels:
+            severity: warning
+            component: backend
+          annotations:
+            summary: "Backend has too many goroutines"
+            description: "Backend has {{ $value }} goroutines (threshold: 10000)"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+
+        # Pod restarts
+        - alert: BackendPodRestarting
+          expr: |
+            rate(kube_pod_container_status_restarts_total{
+              namespace=~"develop|staging|production",
+              pod=~"backend-.*"
+            }[15m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: backend
+          annotations:
+            summary: "Backend pod is restarting frequently"
+            description: "Backend pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting"
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"

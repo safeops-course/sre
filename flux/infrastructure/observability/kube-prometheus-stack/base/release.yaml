@@ -1,0 +1,115 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: observability
+spec:
+  interval: 30m
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "82.1.1"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: observability
+      interval: 12h
+  values:
+    # Prometheus configuration
+    prometheus:
+      prometheusSpec:
+        retention: 7d
+        retentionSize: "10GB"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+        # Enable service monitor discovery across all namespaces
+        serviceMonitorSelector: {}
+        serviceMonitorNamespaceSelector: {}
+        podMonitorSelector: {}
+        podMonitorNamespaceSelector: {}
+
+    # Grafana configuration
+    grafana:
+      enabled: true
+      adminPassword: admin
+      initChownData:
+        enabled: false
+      securityContext:
+        fsGroup: 472
+      persistence:
+        enabled: true
+        size: 5Gi
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 256Mi
+      # Default dashboards
+      defaultDashboardsEnabled: true
+      defaultDashboardsTimezone: UTC
+      # Grafana is accessed via kubectl port-forward
+      ingress:
+        enabled: false
+
+    # Alertmanager is intentionally disabled.
+    # Alert routing is handled by k8s-ai-monitor.
+    alertmanager:
+      enabled: false
+
+    # Prometheus Operator configuration
+    prometheusOperator:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 256Mi
+
+    # Node exporter - collect node metrics
+    nodeExporter:
+      enabled: true
+
+    # Kube-state-metrics - collect Kubernetes object metrics
+    kubeStateMetrics:
+      enabled: true
+    kube-state-metrics:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+
+    # Additional scrape configs
+    prometheus-node-exporter:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi

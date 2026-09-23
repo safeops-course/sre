@@ -1,0 +1,37 @@
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: backend
+  namespace: develop
+  annotations:
+    flagger.app/max-weight-on-timeout: rollback
+spec:
+  provider: traefik
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  progressDeadlineSeconds: 600
+  service:
+    port: 80
+    targetPort: http
+  analysis:
+    interval: 30s
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    metrics:
+      - name: request-success-rate
+        templateRef:
+          name: request-success-rate
+          namespace: develop
+        thresholdRange:
+          min: 99
+        interval: 30s
+      - name: request-duration
+        templateRef:
+          name: request-duration
+          namespace: develop
+        thresholdRange:
+          max: 500
+        interval: 30s

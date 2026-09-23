@@ -1,0 +1,67 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backend-slo-rules
+  namespace: observability
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+    - name: backend.slo.recording
+      interval: 30s
+      rules:
+        - record: backend:error_rate5m
+          expr: |
+            sum(rate(app_http_requests_total{job="backend",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(app_http_requests_total{job="backend"}[5m])), 1e-9)
+        - record: backend:error_rate30m
+          expr: |
+            sum(rate(app_http_requests_total{job="backend",status=~"5.."}[30m]))
+            /
+            clamp_min(sum(rate(app_http_requests_total{job="backend"}[30m])), 1e-9)
+        - record: backend:error_rate1h
+          expr: |
+            sum(rate(app_http_requests_total{job="backend",status=~"5.."}[1h]))
+            /
+            clamp_min(sum(rate(app_http_requests_total{job="backend"}[1h])), 1e-9)
+        - record: backend:availability30m
+          expr: 1 - backend:error_rate30m
+        - record: backend:latency_p95_5m
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(app_http_request_duration_seconds_bucket{job="backend"}[5m])) by (le)
+            )
+    - name: backend.slo.alerts
+      interval: 30s
+      rules:
+        - alert: BackendSLOErrorBudgetBurnCritical
+          expr: |
+            backend:error_rate5m > (14.4 * 0.005)
+            and
+            backend:error_rate1h > (14.4 * 0.005)
+          for: 5m
+          labels:
+            severity: critical
+            component: backend
+            slo: availability
+          annotations:
+            summary: "Backend error budget burn is critical"
+            description: "Fast burn-rate alert for 99.5% SLO (error budget 0.5%)."
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"
+        - alert: BackendSLOErrorBudgetBurnWarning
+          expr: |
+            backend:error_rate30m > (6 * 0.005)
+            and
+            backend:error_rate1h > (6 * 0.005)
+          for: 15m
+          labels:
+            severity: warning
+            component: backend
+            slo: availability
+          annotations:
+            summary: "Backend error budget burn is elevated"
+            description: "Sustained burn-rate alert for 99.5% SLO (error budget 0.5%)."
+            runbook: "docs/course/chapter-09-observability/runbook-incident-debug.md"

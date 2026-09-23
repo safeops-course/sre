@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: staging
+resources:
+  - ../../base
+  - image-policy.yaml
+  - image-automation.yaml
+  - hpa.yaml
+  - pdb.yaml
+images:
+  - name: frontend
+    newName: ${image_registry}/frontend
+    newTag: staging-v0.0.0-f71ece9-1773188532 # {"$imagepolicy": "staging:frontend:tag"}
+patches:
+  - path: patches/deployment.yaml
+  - path: patches/ingress.yaml

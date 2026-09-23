@@ -1,0 +1,24 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-sbom-attestation-example
+spec:
+  validationFailureAction: Audit
+  background: false
+  rules:
+    - name: verify-spdx-attestation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "${image_registry}/*"
+          attestations:
+            - type: "https://spdx.dev/Document"
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: "https://token.actions.githubusercontent.com"
+                        subject: "https://github.com/${git_owner}/*"

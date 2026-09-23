@@ -1,0 +1,17 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-monkey
+  namespace: develop
+  labels:
+    app.kubernetes.io/name: chaos-monkey
+    app.kubernetes.io/component: chaos
+subjects:
+  - kind: ServiceAccount
+    name: chaos-monkey
+    namespace: flux-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: chaos-monkey

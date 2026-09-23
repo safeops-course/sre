@@ -1,0 +1,172 @@
+name: Terraform - Hetzner
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/hcloud_cluster/**"
+      - "flux/**"
+      - ".github/workflows/terraform-hcloud*.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/hcloud_cluster/**"
+      - "flux/**"
+      - ".github/workflows/terraform-hcloud*.yml"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: terraform-hcloud
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+
+    defaults:
+      run:
+        working-directory: infra/terraform/hcloud_cluster
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.5"
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        id: plan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.HCLOUD_SSH_PUBLIC_KEY }}
+          TF_VAR_ssh_private_key: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+          TF_VAR_flux_git_repository_url: https://github.com/${{ github.repository }}.git
+          TF_VAR_flux_git_repository_branch: main
+          TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
+          TF_VAR_flux_git_token: ${{ secrets.FLUX_GIT_TOKEN }}
+          TF_VAR_enable_ghcr: "true"
+          TF_VAR_ghcr_username: ${{ secrets.GHCR_USERNAME }}
+          TF_VAR_ghcr_token: ${{ secrets.GHCR_TOKEN }}
+          TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
+          TF_VAR_backup_s3_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          TF_VAR_backup_s3_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TF_VAR_backup_s3_bucket: ${{ secrets.R2_BUCKET }}
+          TF_VAR_backup_s3_endpoint: ${{ secrets.R2_ENDPOINT }}
+          TF_VAR_backup_s3_region: ${{ secrets.R2_REGION }}
+        run: |
+          set +e
+          set -o pipefail
+          terraform plan -input=false -lock-timeout=5m -no-color -detailed-exitcode -out=tfplan 2>&1 | tee plan.txt
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          if [ "$exit_code" -eq 1 ]; then
+            echo "Terraform plan failed."
+            exit 1
+          fi
+          if [ "$exit_code" -eq 0 ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload tfplan artifact
+        if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-hcloud-tfplan
+          path: |
+            infra/terraform/hcloud_cluster/tfplan
+            infra/terraform/hcloud_cluster/plan.txt
+          retention-days: 1
+
+  approval:
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.event_name == 'push' && needs.plan.outputs.has_changes == 'true'
+    timeout-minutes: 60
+    steps:
+      - name: Manual approval gate
+        uses: pavlospt/manual-approval@v2
+        with:
+          secret: ${{ github.token }}
+          approvers: ldbl
+          minimum-approvals: 1
+          issue-title: "Terraform apply — ${{ github.sha }}"
+          issue-body: |
+            Terraform plan detected infrastructure changes on `main`.
+
+            **Commit:** ${{ github.sha }}
+            **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Approve or deny this apply.
+          exclude-workflow-initiator-as-approver: false
+
+  apply:
+    runs-on: ubuntu-latest
+    needs: [plan, approval]
+    if: github.event_name == 'push' && needs.plan.outputs.has_changes == 'true' && needs.approval.result == 'success'
+
+    defaults:
+      run:
+        working-directory: infra/terraform/hcloud_cluster
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.5"
+
+      - name: Terraform init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: terraform init -input=false
+
+      - name: Download tfplan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-hcloud-tfplan
+          path: infra/terraform/hcloud_cluster
+
+      - name: Terraform apply
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: terraform apply -input=false -lock-timeout=5m tfplan

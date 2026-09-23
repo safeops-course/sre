@@ -1,0 +1,34 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-trusted-registries
+  annotations:
+    policies.kyverno.io/title: Require Trusted Container Registries
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Only images from trusted registries may be admitted.
+      Allowed sources: ${image_registry}/*, ghcr.io/cloudnative-pg/*, docker.io/library/*.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: trusted-registries-only
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Images must come from trusted registries:
+          ${image_registry}/*, ghcr.io/cloudnative-pg/* or docker.io/library/*.
+        deny:
+          conditions:
+            all:
+              - key: "{{request.object.spec.containers[].image}}"
+                operator: AnyNotIn
+                value:
+                  - "${image_registry}/*"
+                  - "ghcr.io/cloudnative-pg/*"
+                  - "docker.io/library/*"

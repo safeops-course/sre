@@ -1,0 +1,98 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: chaos-monkey
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: chaos-monkey
+    app.kubernetes.io/component: chaos
+spec:
+  schedule: "*/15 * * * *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: chaos-monkey
+            app.kubernetes.io/component: chaos
+        spec:
+          serviceAccountName: chaos-monkey
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: monkey
+              image: bitnami/kubectl:1.31
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: TARGET_NAMESPACE
+                  value: develop
+                - name: TARGET_APPS
+                  value: "frontend backend"
+                - name: ALLOWED_HOURS_UTC
+                  value: "10-16"
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  hour="$(date -u +%H)"
+                  start_hour="${ALLOWED_HOURS_UTC%-*}"
+                  end_hour="${ALLOWED_HOURS_UTC#*-}"
+                  if [ "$hour" -lt "$start_hour" ] || [ "$hour" -ge "$end_hour" ]; then
+                    echo "outside allowed UTC window ${ALLOWED_HOURS_UTC}; skipping"
+                    exit 0
+                  fi
+
+                  set -- ${TARGET_APPS}
+                  count="$#"
+                  if [ "$count" -eq 0 ]; then
+                    echo "no target apps configured; skipping"
+                    exit 0
+                  fi
+                  index="$(awk -v n="$count" 'BEGIN{srand(); print int(rand()*n)+1}')"
+                  eval "app=\${$index}"
+
+                  pods="$(kubectl -n "${TARGET_NAMESPACE}" get pods -l "app=${app}" --field-selector=status.phase=Running -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+                  target="$(printf '%s\n' "$pods" | awk 'NF {a[++n]=$0} END {if (n>0) {srand(); print a[int(rand()*n)+1]}}')"
+                  if [ -z "${target}" ]; then
+                    echo "no running pods for app=${app}; skipping"
+                    exit 0
+                  fi
+
+                  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                  echo "{\"event\":\"chaos_monkey_delete_pod\",\"timestamp\":\"${ts}\",\"namespace\":\"${TARGET_NAMESPACE}\",\"app\":\"${app}\",\"pod\":\"${target}\"}"
+                  kubectl -n "${TARGET_NAMESPACE}" delete pod "${target}" --wait=false
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                  ephemeral-storage: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+                  ephemeral-storage: 128Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}

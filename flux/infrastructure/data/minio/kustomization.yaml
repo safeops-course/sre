@@ -1,0 +1,14 @@
+# MinIO: in-cluster S3-compatible object store for the local (kind) profile.
+# Replaces Cloudflare R2 as the CNPG backup target so Chapter 11 (backup &
+# restore) and Chapter 17 (PITR) work without a cloud account.
+# Root credentials come from the `minio-credentials` secret created by
+# infra/terraform/kind_cluster (random per cluster, never committed).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - bucket-job.yaml
+  - network-policies.yaml

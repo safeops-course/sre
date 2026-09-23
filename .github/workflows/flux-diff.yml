@@ -1,0 +1,116 @@
+name: Flux Diff
+
+on:
+  pull_request:
+    paths:
+      - "flux/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flux CLI
+        uses: fluxcd/flux2/action@main
+
+      - name: Setup kubeconform
+        run: |
+          KUBECONFORM_VERSION="v0.6.7"
+          curl -sLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar xzf kubeconform-linux-amd64.tar.gz
+          chmod +x kubeconform && sudo mv kubeconform /usr/local/bin/
+          rm kubeconform-linux-amd64.tar.gz
+
+      - name: Build and validate kustomizations
+        id: validate
+        run: |
+          set -euo pipefail
+          errors=""
+          paths=(
+            "flux/infrastructure/observability/kube-prometheus-stack/base"
+            "flux/infrastructure/observability/kube-prometheus-stack/monitoring"
+            "flux/infrastructure/observability/opentelemetry-collector"
+            "flux/infrastructure/data/cnpg-operator"
+            "flux/infrastructure/data/cnpg-clusters/develop"
+            "flux/infrastructure/data/cnpg-clusters/staging"
+            "flux/infrastructure/network-policies/develop"
+            "flux/infrastructure/network-policies/staging"
+            "flux/infrastructure/network-policies/production"
+            "flux/infrastructure/resource-management/develop"
+            "flux/infrastructure/resource-management/staging"
+            "flux/infrastructure/resource-management/production"
+            "flux/infrastructure/security/dns-and-certificates"
+            "flux/infrastructure/policy/kyverno"
+            "flux/apps/backend/develop"
+            "flux/apps/frontend/overlays/develop"
+            "flux/secrets/develop"
+            "flux/secrets/staging"
+          )
+
+          for p in "${paths[@]}"; do
+            if [ -d "$p" ]; then
+              echo "--- Building $p ---"
+              if ! kustomize build "$p" > /tmp/build-output.yaml 2>&1; then
+                echo "FAIL: kustomize build $p"
+                errors="$errors\n- \`$p\`: kustomize build failed"
+                continue
+              fi
+              echo "--- Validating $p ---"
+              if ! kubeconform -strict -ignore-missing-schemas -summary /tmp/build-output.yaml 2>&1; then
+                echo "WARN: kubeconform issues in $p (non-blocking)"
+              fi
+              echo "OK: $p"
+            fi
+          done
+
+          if [ -n "$errors" ]; then
+            echo "build_errors<<EOF" >> "$GITHUB_OUTPUT"
+            echo -e "$errors" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RESULT: ${{ steps.validate.outputs.result }}
+          BUILD_ERRORS: ${{ steps.validate.outputs.build_errors }}
+        run: |
+          HEADER="<!-- flux-diff -->"
+          if [ "$RESULT" = "success" ]; then
+            BODY="${HEADER}
+          ## Flux Kustomize Validation
+
+          **Result:** All kustomizations build successfully"
+          else
+            BODY="${HEADER}
+          ## Flux Kustomize Validation
+
+          **Result:** Build failures detected
+
+          **Errors:**
+          ${BUILD_ERRORS}"
+          fi
+
+          # Find existing comment
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.body | startswith(\"${HEADER}\")) | .id" 2>/dev/null | head -1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+              -X PATCH -f body="$BODY"
+          else
+            gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              -f body="$BODY"
+          fi

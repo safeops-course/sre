@@ -1,0 +1,65 @@
+---
+# Temporarily disabled ResourceSet - will enable after testing
+# apiVersion: fluxcd.controlplane.io/v1
+# kind: ResourceSet
+# metadata:
+#   name: backend-staging
+#   namespace: flux-system
+# spec:
+#   inputsFrom:
+#     - kind: ResourceSetInputProvider
+#       name: backend-staging
+#   resources:
+#     - apiVersion: kustomize.toolkit.fluxcd.io/v1
+#       kind: Kustomization
+#       metadata:
+#         name: backend-staging
+#         namespace: flux-system
+#       spec:
+#         interval: 5m0s
+#         sourceRef:
+#           kind: GitRepository
+#           name: flux-system
+#           namespace: flux-system
+#         path: ./flux/apps/backend/staging
+#         prune: true
+#         wait: true
+#         timeout: 3m
+#         images:
+#           - name: ${image_registry}/backend
+#             newName: ${image_registry}/backend
+#             newTag: "<< inputs.backend_staging.tag >>"
+#         postBuild:
+#           substitute:
+#             NAMESPACE: "staging"
+#             ENVIRONMENT: "staging"
+#             LOG_LEVEL: "info"
+#         dependsOn:
+#           - name: flux-system
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: backend-staging
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  path: ./flux/apps/backend/staging
+  prune: true
+  wait: true
+  timeout: 3m
+  postBuild:
+    substitute:
+      NAMESPACE: "staging"
+      ENVIRONMENT: "staging"
+      LOG_LEVEL: "info"
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+  dependsOn:
+    - name: flux-system
+    - name: observability

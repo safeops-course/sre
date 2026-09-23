@@ -1,0 +1,16 @@
+---
+apiVersion: fluxcd.controlplane.io/v1
+kind: ResourceSetInputProvider
+metadata:
+  name: backend-develop
+  namespace: flux-system
+  annotations:
+    fluxcd.controlplane.io/reconcileEvery: "1m"
+spec:
+  type: OCIArtifactTag
+  url: oci://${image_registry}/backend
+  secretRef:
+    name: ghcr-credentials-docker
+  filter:
+    includeTag: "develop"
+    limit: 1

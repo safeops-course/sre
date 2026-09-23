@@ -1,0 +1,142 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: otel-collector
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: opentelemetry-collector
+      version: "0.146.1"
+      sourceRef:
+        kind: HelmRepository
+        name: open-telemetry
+        namespace: flux-system
+      interval: 12h
+  targetNamespace: observability
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    mode: daemonset
+
+    image:
+      repository: otel/opentelemetry-collector-contrib
+
+    presets:
+      logsCollection:
+        enabled: true
+        includeCollectorLogs: false
+      kubernetesAttributes:
+        enabled: true
+      kubeletMetrics:
+        enabled: true
+
+    extraEnvs:
+      - name: UPTRACE_DSN
+        value: "${uptrace_dsn}"
+      - name: DEPLOYMENT_ENVIRONMENT
+        value: "${cluster_name}"
+      - name: K8S_CLUSTER_NAME
+        value: "${cluster_name}"
+
+    config:
+      receivers:
+        jaeger: null
+        zipkin: null
+        prometheus: null
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+        kubeletstats:
+          auth_type: serviceAccount
+          insecure_skip_verify: true
+
+      processors:
+        memory_limiter:
+          check_interval: 1s
+          limit_mib: 512
+          spike_limit_mib: 128
+        batch:
+          send_batch_size: 10000
+          timeout: 10s
+        cumulativetodelta: {}
+        resource:
+          attributes:
+            - key: deployment.environment
+              value: $${env:DEPLOYMENT_ENVIRONMENT}
+              action: upsert
+            - key: k8s.cluster.name
+              value: $${env:K8S_CLUSTER_NAME}
+              action: upsert
+        attributes:
+          actions:
+            - key: uptrace.dsn
+              action: delete
+
+      exporters:
+        otlp_http/uptrace:
+          endpoint: https://api.uptrace.dev
+          headers:
+            uptrace-dsn: $${env:UPTRACE_DSN}
+          compression: gzip
+          retry_on_failure:
+            enabled: true
+            initial_interval: 10s
+            max_interval: 300s
+            max_elapsed_time: 0
+          sending_queue:
+            enabled: true
+            num_consumers: 2
+            queue_size: 100
+        debug:
+          verbosity: basic
+          sampling_initial: 5
+          sampling_thereafter: 200
+
+      service:
+        pipelines:
+          logs:
+            receivers: [filelog]
+            processors: [memory_limiter, batch, resource, attributes]
+            exporters: [otlp_http/uptrace, debug]
+          traces:
+            receivers: [otlp]
+            processors: [memory_limiter, batch, resource, attributes]
+            exporters: [otlp_http/uptrace, debug]
+          metrics:
+            receivers: [otlp, kubeletstats]
+            processors: [memory_limiter, cumulativetodelta, batch, resource]
+            exporters: [otlp_http/uptrace, debug]
+
+    ports:
+      jaeger-compact:
+        enabled: false
+      jaeger-thrift:
+        enabled: false
+      jaeger-grpc:
+        enabled: false
+      zipkin:
+        enabled: false
+
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule

@@ -1,0 +1,98 @@
+name: Terraform - Destroy (Hetzner)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Type DESTROY to confirm"
+        required: true
+        type: string
+      approvers:
+        description: "GitHub users/team slugs (comma-separated) for manual approval"
+        required: true
+        type: string
+      minimum_approvals:
+        description: "Minimum number of approvals"
+        required: true
+        type: number
+        default: 1
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: terraform-hcloud-destroy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm destroy string
+        env:
+          CONFIRM_DESTROY: ${{ github.event.inputs.confirm_destroy }}
+        run: |
+          [ "$CONFIRM_DESTROY" = "DESTROY" ] || {
+            echo "Invalid confirmation value. You must type DESTROY."
+            exit 1
+          }
+
+  approval:
+    runs-on: ubuntu-latest
+    needs: guard
+    steps:
+      - name: Manual approval gate
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.token }}
+          approvers: ${{ github.event.inputs.approvers }}
+          minimum-approvals: ${{ github.event.inputs.minimum_approvals }}
+          issue-title: "Terraform destroy approval"
+          issue-body: "Approve to continue with terraform destroy for commit ${{ github.sha }}."
+          exclude-workflow-initiator-as-approver: false
+
+  destroy:
+    runs-on: ubuntu-latest
+    needs: approval
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup kubectl (needed for FluxInstance cleanup via Terraform)
+        run: |
+          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.5"
+
+      - name: Destroy infrastructure via Makefile target
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+          TF_VAR_ssh_public_key: ${{ secrets.HCLOUD_SSH_PUBLIC_KEY }}
+          TF_VAR_ssh_private_key: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+          TF_VAR_flux_git_repository_url: https://github.com/${{ github.repository }}.git
+          TF_VAR_flux_git_repository_branch: main
+          TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
+          TF_VAR_flux_git_token: ${{ secrets.FLUX_GIT_TOKEN }}
+          TF_VAR_enable_ghcr: "true"
+          TF_VAR_ghcr_username: ${{ secrets.GHCR_USERNAME }}
+          TF_VAR_ghcr_token: ${{ secrets.GHCR_TOKEN }}
+          TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
+          TF_VAR_backup_s3_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          TF_VAR_backup_s3_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TF_VAR_backup_s3_bucket: ${{ secrets.R2_BUCKET }}
+          TF_VAR_backup_s3_endpoint: ${{ secrets.R2_ENDPOINT }}
+          TF_VAR_backup_s3_region: ${{ secrets.R2_REGION }}
+          TF_INPUT: "false"
+          TF_CLI_ARGS_destroy: "-auto-approve -lock-timeout=5m"
+        run: make terraform-hcloud-destroy

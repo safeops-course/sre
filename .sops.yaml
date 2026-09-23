@@ -1,0 +1,39 @@
+# SOPS configuration for encrypting Kubernetes secrets with age
+# See: https://fluxcd.io/flux/guides/mozilla-sops/
+
+creation_rules:
+  # Cloudflare API token (cert-manager + external-dns)
+  - path_regex: flux/secrets/cloudflare/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Auth secrets (Dex OIDC)
+  - path_regex: flux/secrets/auth/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Observability secrets (shared)
+  - path_regex: flux/secrets/observability/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Development environment secrets
+  - path_regex: flux/secrets/develop/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Staging environment secrets
+  - path_regex: flux/secrets/staging/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Production environment secrets
+  - path_regex: flux/secrets/production/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+
+  # Local (kind) profile - the learner's own key. Placeholder until
+  # `scripts/sops-setup.sh --local` writes your public key here.
+  - path_regex: flux/secrets/local/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1REPLACE_WITH_YOUR_PUBLIC_KEY_RUN_scripts_sops-setup.sh_--local

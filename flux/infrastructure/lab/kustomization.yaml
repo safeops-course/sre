@@ -1,0 +1,11 @@
+# `lab`: a scratch namespace for course exercises that need to *observe* a
+# guardrail rather than be stopped by it - e.g. Chapter 15 applies a risky pod
+# and reads the Kyverno PolicyReport. Pod Security is set to warn/audit here
+# (the environment namespaces enforce restricted, which rejects such pods
+# before Kyverno ever sees them). Local profile only.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limitrange.yaml
+  - resourcequota.yaml
