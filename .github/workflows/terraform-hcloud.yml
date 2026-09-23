@@ -1,16 +1,18 @@
 name: Terraform - Hetzner
 
+# Plans on PRs that touch the Hetzner Terraform; applies (after approval) when such a
+# change reaches main. Changes under flux/ are delivered by Flux itself and no longer
+# trigger a Terraform apply request. End-to-end check: hetzner-e2e.yml.
+
 on:
   pull_request:
     paths:
       - "infra/terraform/hcloud_cluster/**"
-      - "flux/**"
       - ".github/workflows/terraform-hcloud*.yml"
   push:
     branches: [main]
     paths:
       - "infra/terraform/hcloud_cluster/**"
-      - "flux/**"
       - ".github/workflows/terraform-hcloud*.yml"
 
 env:
