@@ -16,12 +16,5 @@ fi
 mv "$TMP_MERGE" "$DEFAULT_KCFG"
 chmod 600 "$DEFAULT_KCFG"
 
-export KUBECONFIG="$DEFAULT_KCFG"
-DEFAULT_CTX="kind-sre-control-plane"
-TARGET_CTX="sre-control-plane"
-if kubectl config get-contexts "$TARGET_CTX" >/dev/null 2>&1; then
-  exit 0
-fi
-if kubectl config get-contexts "$DEFAULT_CTX" >/dev/null 2>&1; then
-  kubectl config rename-context "$DEFAULT_CTX" "$TARGET_CTX"
-fi
+# The context keeps kind's own name, kind-<cluster>, e.g. kind-sre-control-plane.
+# It is not renamed: a bare name is left for the Hetzner cluster.
