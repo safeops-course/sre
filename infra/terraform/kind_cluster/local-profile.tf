@@ -70,6 +70,12 @@ resource "kubernetes_secret" "local_postgres_app" {
     username = "app"
     password = random_password.postgres_app[each.key].result
   }
+
+  # CNPG adopts this secret and adds connection keys (host, port, dbname, uri,
+  # jdbc-uri, pgpass...) plus its own labels; Terraform only seeds it.
+  lifecycle {
+    ignore_changes = [data, metadata[0].labels, metadata[0].annotations]
+  }
 }
 
 resource "kubernetes_namespace" "minio" {

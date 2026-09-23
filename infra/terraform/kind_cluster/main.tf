@@ -353,8 +353,12 @@ resource "kubernetes_namespace" "bootstrap" {
   depends_on = [time_sleep.wait_for_cluster]
 
   lifecycle {
+    # Flux owns labels (pod-security, kustomize.toolkit) and annotations
+    # (kustomize.toolkit.fluxcd.io/prune) on these namespaces; Terraform only
+    # guarantees they exist early enough for the generated secrets.
     ignore_changes = [
       metadata[0].labels,
+      metadata[0].annotations,
     ]
   }
 }
