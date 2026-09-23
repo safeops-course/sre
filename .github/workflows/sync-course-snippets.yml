@@ -8,7 +8,8 @@ name: sync-course-snippets
 # ldbl account with Contents read/write on ldbl/sre-course (that repo is
 # private and lives under another owner, so GITHUB_TOKEN cannot reach it).
 # The course-map.yml push to this repo uses GITHUB_TOKEN.
-# Both pushes are authored as ldbl on purpose: the owner wants a single contributor in every repo.
+# Commits are authored as "SafeOps Course Bot" (same idea as fluxcdbot); the e-mail is bound to no GitHub
+# account, so the bot is visible in the log but is not counted as a contributor.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -75,8 +76,8 @@ jobs:
       - name: Push snippet updates to sre-course
         run: |
           cd sre-course
-          git config user.name "ldbl"
-          git config user.email "stanfold@gmail.com"
+          git config user.name "SafeOps Course Bot"
+          git config user.email "safeops-course-bot@users.noreply.github.com"
           git add site/content/members/ site/content/course/
           git diff --cached --quiet && { echo "No snippet changes"; exit 0; }
           git commit -m "chore: sync code snippets from sre repo
@@ -87,8 +88,8 @@ jobs:
       - name: Push course-map.yml to sre
         run: |
           cd sre
-          git config user.name "ldbl"
-          git config user.email "stanfold@gmail.com"
+          git config user.name "SafeOps Course Bot"
+          git config user.email "safeops-course-bot@users.noreply.github.com"
           git add course-map.yml
           git diff --cached --quiet && { echo "No course-map changes"; exit 0; }
           git commit -m "chore: update course-map.yml
