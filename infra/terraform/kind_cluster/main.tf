@@ -216,6 +216,13 @@ resource "null_resource" "flux_instance" {
 
   triggers = {
     kubeconfig_path = local.kubeconfig_path
+    # Re-create the FluxInstance when its sync spec changes; before this only
+    # the kubeconfig path was tracked, so switching repo/branch/path/token
+    # after the first apply silently did nothing.
+    repo_url    = var.flux_git_repository_url
+    repo_branch = var.flux_git_repository_branch
+    repo_path   = var.flux_kustomization_path
+    pull_secret = local.flux_pull_secret_yaml
   }
 
   provisioner "local-exec" {
@@ -253,9 +260,12 @@ EOF
   }
 
   provisioner "local-exec" {
-    when        = destroy
-    on_failure  = continue
-    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=false"
+    when       = destroy
+    on_failure = continue
+    # Wait for the operator to finish uninstalling: with --wait=false a
+    # replacement (new FluxInstance applied while the old one is still
+    # terminating) gets deleted together with the old one.
+    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=true --timeout=5m"
     interpreter = ["/bin/bash", "-c"]
   }
 }
