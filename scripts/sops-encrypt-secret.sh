@@ -110,7 +110,10 @@ EOF
 
     # Encrypt with SOPS
     echo "🔐 Encrypting secret..."
-    sops --encrypt "${temp_file}" > "${output_file}"
+    # The template ends in .tmp, so sops would guess "binary" and emit JSON
+    # with the whole document in one blob - not a Secret manifest Flux can
+    # apply. Force YAML in and out.
+    sops --encrypt --input-type yaml --output-type yaml "${temp_file}" > "${output_file}"
 
     # Remove temp file
     rm "${temp_file}"
