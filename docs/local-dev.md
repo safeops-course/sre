@@ -83,7 +83,7 @@ scripts/lab-pod.sh -n develop -i curlimages/curl -l app=frontend -- curl -sf htt
 scripts/lab-pod.sh -n develop --daemon np-debug
 ```
 
-For pods that are *meant* to be non-compliant (Chapter 16 audit drills) use the `lab` namespace.
+For pods that are *meant* to be non-compliant (Chapter 15 audit drills) use the `lab` namespace.
 
 ## Verify the Cluster Is Green
 ```bash

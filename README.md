@@ -24,8 +24,8 @@ The course at [safeops.work](https://safeops.work/) teaches concepts; this repo 
 | 12 | Controlled Chaos | `flux/infrastructure/chaos/develop/` |
 | 13 | AI-Assisted SRE Guardian | `flux/` (full GitOps tree), `../k8s-ai-monitor/` |
 | 14 | 24/7 Production SRE | Cross-cutting — observability + alerting + runbooks |
-| 15 | Supply Chain Security | `flux/infrastructure/policy/packs/chapter-15-supply-chain/` |
-| 16 | Admission Policy Guardrails | `flux/infrastructure/policy/kyverno/`, `flux/infrastructure/policy/packs/chapter-16-admission-guardrails/` |
+| 15 | Admission Policy Guardrails | `flux/infrastructure/policy/kyverno/`, `flux/infrastructure/policy/packs/chapter-15-admission-guardrails/` |
+| 16 | Supply Chain Security | `flux/infrastructure/policy/packs/chapter-16-supply-chain/` |
 | 17 | Rollback & Data Migrations | `flux/infrastructure/data/cnpg-clusters/` |
 | Module | Progressive Delivery | `flux/infrastructure/progressive-delivery/` |
 

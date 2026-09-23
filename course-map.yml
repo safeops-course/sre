@@ -20,16 +20,13 @@
   - chapter-05-cicd-developer-guardrails
 
 .sops.yaml:
-  - chapter-03-secrets-management
+  - chapter-04-secrets-management
 
 docs/gitops-workflow.md:
-  - chapter-04-gitops
+  - chapter-03-gitops
 
 docs/local-dev.md:
   - appendix-local-dev
-
-flux:
-  - chapter-13-ai-assisted-sre-guardian
 
 flux/apps/backend/base/deployment.yaml:
   - chapter-07-security-context
@@ -39,11 +36,11 @@ flux/apps/backend/base/servicemonitor.yaml:
   - chapter-10-observability
 
 flux/apps/backend/develop:
-  - chapter-04-gitops
+  - chapter-03-gitops
   - chapter-09-availability-engineering
 
 flux/apps/backend/production:
-  - chapter-04-gitops
+  - chapter-03-gitops
 
 flux/apps/frontend/base/ingress.yaml:
   - appendix-dns-tls
@@ -54,47 +51,50 @@ flux/apps/frontend/overlays/develop:
 flux/bootstrap/infrastructure/base/namespaces.yaml:
   - chapter-07-security-context
 
-flux/bootstrap/infrastructure/image-automation:
-  - chapter-04-gitops
+flux/bootstrap/infrastructure/image-automation/backend-image-repo.yaml:
+  - chapter-03-gitops
 
 flux/infrastructure/chaos/develop:
+  - chapter-12-controlled-chaos
+
+flux/infrastructure/chaos/develop/cronjob.yaml:
   - chapter-12-controlled-chaos
 
 flux/infrastructure/data/cnpg-clusters:
   - chapter-11-backup-restore
   - chapter-17-rollback-data-migrations
 
-flux/infrastructure/network-policies/base:
-  - chapter-06-network-policies
-
 flux/infrastructure/network-policies/base/allow-backend-ingress.yaml:
   - chapter-06-network-policies
 
+flux/infrastructure/network-policies/base/allow-dns-egress.yaml:
+  - chapter-06-network-policies
+
+flux/infrastructure/observability/k8s-ai-monitor/clusterrole.yaml:
+  - chapter-13-ai-assisted-sre-guardian
+
 flux/infrastructure/observability/k8s-ai-monitor/deployment.yaml:
-  - chapter-10-observability
+  - chapter-13-ai-assisted-sre-guardian
 
 flux/infrastructure/observability/kube-prometheus-stack/monitoring/backend-alerts.yaml:
   - chapter-10-observability
 
-flux/infrastructure/policy/kyverno/release.yaml:
-  - chapter-16-admission-policy-guardrails
+flux/infrastructure/policy/packs/chapter-15-admission-guardrails/require-security-context.example.yaml:
+  - chapter-15-admission-policy-guardrails
 
-flux/infrastructure/policy/packs/chapter-15-supply-chain/verify-attestations.example.yaml:
-  - chapter-15-supply-chain-security
+flux/infrastructure/policy/packs/chapter-16-supply-chain/verify-attestations.example.yaml:
+  - chapter-16-supply-chain-security
 
-flux/infrastructure/policy/packs/chapter-15-supply-chain/verify-images.example.yaml:
-  - chapter-15-supply-chain-security
+flux/infrastructure/policy/packs/chapter-16-supply-chain/verify-images.example.yaml:
+  - chapter-16-supply-chain-security
 
-flux/infrastructure/policy/packs/chapter-16-admission-guardrails/require-requests-limits.example.yaml:
-  - chapter-16-admission-policy-guardrails
-
-flux/infrastructure/progressive-delivery/develop:
-  - module-progressive-delivery
-
-flux/infrastructure/progressive-delivery/flagger:
+flux/infrastructure/progressive-delivery/develop/canary-backend.yaml:
   - module-progressive-delivery
 
 flux/infrastructure/resource-management/develop:
+  - chapter-08-resource-management
+
+flux/infrastructure/resource-management/develop/resourcequota.yaml:
   - chapter-08-resource-management
 
 flux/infrastructure/security/dns-and-certificates:
@@ -111,14 +111,9 @@ infra/terraform/hcloud_cluster/main.tf:
 
 infra/terraform/kind_cluster:
   - appendix-local-dev
-  - chapter-02-iac
 
-scripts/guard-kube-context.sh:
-  - chapter-01-introduction
-
-scripts/guard-terraform-plan.sh:
-  - chapter-01-introduction
+infra/terraform/kind_cluster/main.tf:
   - chapter-02-iac
 
 scripts/sops-encrypt-secret.sh:
-  - chapter-03-secrets-management
+  - chapter-04-secrets-management
