@@ -3,16 +3,19 @@ SHELL := /bin/bash
 BIN_DIR := $(CURDIR)/bin
 export PATH := $(BIN_DIR):$(PATH)
 
-# Pinned toolchain versions (mirrored by scripts/bootstrap.sh)
+# Pinned toolchain versions (minimums are checked by scripts/check-tools.sh)
 TERRAFORM_VERSION := 1.13.3
 KUBECTL_VERSION := 1.34.1
 KIND_VERSION := 0.30.0
 FLUX_VERSION := 2.7.0
 
-.PHONY: help versions plan install-hooks pre-commit fmt validate smoke-test terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
+.PHONY: help check-tools versions plan install-hooks pre-commit fmt validate smoke-test terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+check-tools: ## Verify the workstation has every tool the labs need (Chapter 00)
+	@./scripts/check-tools.sh
 
 versions: ## Show pinned CLI versions
 	@echo "terraform\t$(TERRAFORM_VERSION)"
