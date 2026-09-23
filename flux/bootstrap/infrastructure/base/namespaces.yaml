@@ -18,6 +18,10 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  annotations:
+    # A Namespace must never be garbage-collected by Flux, even if another
+    # Kustomization once applied it (see the duplicate namespace.yaml files).
+    kustomize.toolkit.fluxcd.io/prune: Disabled
   name: develop
   labels:
     name: develop
@@ -31,6 +35,10 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  annotations:
+    # A Namespace must never be garbage-collected by Flux, even if another
+    # Kustomization once applied it (see the duplicate namespace.yaml files).
+    kustomize.toolkit.fluxcd.io/prune: Disabled
   name: staging
   labels:
     name: staging
@@ -44,6 +52,10 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  annotations:
+    # A Namespace must never be garbage-collected by Flux, even if another
+    # Kustomization once applied it (see the duplicate namespace.yaml files).
+    kustomize.toolkit.fluxcd.io/prune: Disabled
   name: production
   labels:
     name: production

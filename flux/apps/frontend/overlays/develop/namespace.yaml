@@ -1,4 +1,9 @@
 ---
+# Duplicate of the definition in flux/bootstrap/infrastructure/base/namespaces.yaml.
+# kustomize-controller applies everything with one field manager, so a second
+# copy of this Namespace with fewer labels strips the pod-security labels the
+# base set. Keep it identical until this file is removed (follow-up PR, after
+# the prune: Disabled annotation on the base is live everywhere).
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -7,3 +12,7 @@ metadata:
     name: develop
     environment: development
     managed-by: flux
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
