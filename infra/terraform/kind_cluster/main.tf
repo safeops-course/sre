@@ -135,7 +135,7 @@ output "kubeconfig_load_instructions" {
     kubectl get nodes
     # Optional: merge into your default kubeconfig
     ${path.module}/scripts/merge-kubeconfig.sh "${local.kubeconfig_path}"
-    kubectl config use-context sre-control-plane
+    kubectl config use-context kind-sre-control-plane
   EOT
 }
 

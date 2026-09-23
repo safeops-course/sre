@@ -58,9 +58,9 @@ The Terraform workflow creates the three-node topology (one control plane, two w
 Point kubectl to the generated kubeconfig and switch context:
 ```bash
 export KUBECONFIG="$(pwd)/infra/terraform/kind_cluster/kubeconfig.yaml"
-kubectl config use-context sre-control-plane
+kubectl config use-context kind-sre-control-plane
 ```
-Terraform automatically merges the kubeconfig into your default config (`~/.kube/config`) and ensures the context `sre-control-plane` is available.
+Terraform automatically merges the kubeconfig into your default config (`~/.kube/config`) and keeps kind's context name `kind-sre-control-plane`.
 
 ## Configure Local Registry (Optional but Recommended)
 Run a local container registry to speed up iterative image pushes:

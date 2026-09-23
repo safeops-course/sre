@@ -30,9 +30,9 @@ Terraform sets the `sync` block on `FluxInstance`; Flux then manages `GitReposit
 
 ## Verify Installation
 ```bash
-kubectl --context sre-control-plane -n flux-system get pods
+kubectl --context kind-sre-control-plane -n flux-system get pods
 # Optional, if flux CLI installed
-flux check --context sre-control-plane
+flux check --context kind-sre-control-plane
 ```
 Controllers may take up to a minute to settle in a fresh kind cluster.
 
