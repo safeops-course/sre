@@ -1,13 +1,15 @@
 ---
 # Duplicate of the definition in flux/bootstrap/infrastructure/base/namespaces.yaml.
 # kustomize-controller applies everything with one field manager, so a second
-# copy of this Namespace with fewer labels strips the pod-security labels the
-# base set. Keep it identical until this file is removed (follow-up PR, after
-# the prune: Disabled annotation on the base is live everywhere).
+# copy of this Namespace with fewer labels/annotations strips what the base set
+# (pod-security labels, the prune guard). Keep it identical until this file is
+# removed in a follow-up, once the prune: Disabled annotation is live everywhere.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: production
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: Disabled
   labels:
     name: production
     environment: production
