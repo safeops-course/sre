@@ -9,7 +9,8 @@ resources:
   - hpa.yaml
   - pdb.yaml
 images:
-  - name: ${image_registry}/frontend
+  - name: frontend
+    newName: ${image_registry}/frontend
     newTag: staging-v0.0.0-f71ece9-1773188532 # {"$imagepolicy": "staging:frontend:tag"}
 patches:
   - path: patches/deployment.yaml
