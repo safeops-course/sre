@@ -3,7 +3,6 @@ kind: Kustomization
 namespace: production
 resources:
   - ../../base
-  - namespace.yaml
   - image-policy.yaml
   - image-automation.yaml
   - hpa.yaml
