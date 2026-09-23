@@ -1,0 +1,187 @@
+name: Hetzner - end-to-end check
+
+# Creates the Hetzner cluster from main, waits for Flux, runs the smoke test,
+# and ALWAYS destroys the cluster again - also when a step fails or the run is
+# cancelled. Proves the Cloud track still works; costs a few cents per run
+# (hourly billing, 1 control plane + 1 worker + 1 load balancer).
+#
+# Manual start + manual approval. Required secrets: HCLOUD_TOKEN,
+# HCLOUD_SSH_PUBLIC_KEY, HCLOUD_SSH_PRIVATE_KEY, SOPS_AGE_KEY, R2_* (state and
+# CNPG backups, incl. R2_BUCKET). FLUX_GIT_TOKEN must be valid or unset - an
+# expired token makes Flux fail to read even the public repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_minutes:
+        description: "Minutes to keep the cluster after the smoke test (0 = destroy right away)"
+        required: false
+        default: "0"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+# Same group as the plan/apply workflow: never two runs against the same state.
+concurrency:
+  group: terraform-hcloud
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Required secrets are set
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          HCLOUD_SSH_PUBLIC_KEY: ${{ secrets.HCLOUD_SSH_PUBLIC_KEY }}
+          HCLOUD_SSH_PRIVATE_KEY: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          missing=0
+          for s in HCLOUD_TOKEN HCLOUD_SSH_PUBLIC_KEY HCLOUD_SSH_PRIVATE_KEY SOPS_AGE_KEY R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT; do
+            if [ -z "${!s}" ]; then
+              echo "::error::secret $s is not set"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+  approval:
+    runs-on: ubuntu-latest
+    needs: preflight
+    timeout-minutes: 60
+    steps:
+      - name: Manual approval gate
+        uses: pavlospt/manual-approval@v2
+        with:
+          secret: ${{ github.token }}
+          approvers: ldbl
+          minimum-approvals: 1
+          issue-title: "Hetzner e2e: create, test and destroy a cluster (${{ github.sha }})"
+          issue-body: |
+            This run creates a real Hetzner cluster from `main` (billed hourly), runs the smoke test
+            and destroys it again.
+
+            **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          exclude-workflow-initiator-as-approver: false
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: approval
+    timeout-minutes: 120
+
+    defaults:
+      run:
+        working-directory: infra/terraform/hcloud_cluster
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      TF_INPUT: "false"
+      TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+      TF_VAR_ssh_public_key: ${{ secrets.HCLOUD_SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_private_key: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+      TF_VAR_flux_git_repository_url: https://github.com/${{ github.repository }}.git
+      TF_VAR_flux_git_repository_branch: main
+      TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
+      TF_VAR_flux_git_token: ${{ secrets.FLUX_GIT_TOKEN }}
+      # The images are public: no registry credentials, so an expired GHCR token cannot break pulls.
+      TF_VAR_enable_ghcr: "false"
+      TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
+      TF_VAR_backup_s3_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+      TF_VAR_backup_s3_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      TF_VAR_backup_s3_bucket: ${{ secrets.R2_BUCKET }}
+      TF_VAR_backup_s3_endpoint: ${{ secrets.R2_ENDPOINT }}
+      TF_VAR_backup_s3_region: ${{ secrets.R2_REGION }}
+      KUBECONFIG: ${{ github.workspace }}/infra/terraform/hcloud_cluster/kubeconfig.yaml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Setup flux CLI
+        uses: fluxcd/flux2/action@v2.9.5
+        with:
+          version: 2.9.5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.5"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Refuse to run against an existing cluster
+        run: |
+          count=$(terraform state list 2>/dev/null | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "::error::the Terraform state already holds $count resources - this check only creates and destroys its own cluster"
+            exit 1
+          fi
+
+      - name: Create the cluster
+        id: apply
+        run: terraform apply -input=false -auto-approve -lock-timeout=5m
+
+      - name: Wait for Flux
+        run: |
+          kubectl -n flux-system wait kustomizations.kustomize.toolkit.fluxcd.io --all \
+            --for=condition=Ready --timeout=30m
+
+      - name: Smoke test
+        working-directory: ${{ github.workspace }}
+        run: make smoke-test
+
+      - name: Keep the cluster for inspection
+        if: inputs.keep_minutes != '0'
+        env:
+          KEEP_MINUTES: ${{ inputs.keep_minutes }}
+        run: sleep "$((KEEP_MINUTES * 60))"
+
+      - name: Report
+        if: always() && steps.apply.outcome != 'skipped'
+        run: |
+          {
+            echo "## Flux Kustomizations"
+            echo '```'
+            flux get kustomizations -A 2>&1 || true
+            echo '```'
+            echo "## Pods not Running/Completed"
+            echo '```'
+            kubectl get pods -A --no-headers 2>&1 | grep -vE 'Running|Completed' || echo "none"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Runs after success, failure and cancellation: the cluster must not outlive the run.
+      - name: Destroy the cluster
+        if: always()
+        working-directory: ${{ github.workspace }}
+        env:
+          TF_CLI_ARGS_destroy: "-auto-approve -lock-timeout=5m"
+        run: make terraform-hcloud-destroy
+
+      - name: Nothing left in the state
+        if: always()
+        run: |
+          left=$(terraform state list 2>/dev/null | wc -l)
+          if [ "$left" -gt 0 ]; then
+            echo "::error::$left resources still in the Terraform state after destroy - check the Hetzner console NOW, they are billed"
+            terraform state list
+            exit 1
+          fi
+          echo "State is empty."
