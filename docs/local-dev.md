@@ -42,7 +42,10 @@ GitOps reconciliation is on by default (course repo, local profile, anonymous HT
 export TF_VAR_flux_git_repository_url="https://github.com/<you>/sre.git"      # your fork
 export TF_VAR_flux_kustomization_path="./flux/bootstrap/flux-system"           # full platform (needs cloud secrets)
 export TF_VAR_local_profile=false                                              # skip the generated local secrets
-export TF_VAR_flux_git_token="<PAT with repo read>"                            # only for a private fork
+```
+A Git token is needed in two cases: the full platform profile (image automation pushes tag updates - PAT with Contents: write) and a private fork (Flux must read it - Contents: read). Prompt for it instead of typing it into the command line, so it never lands in shell history:
+```bash
+read -rs -p "GitHub PAT: " TF_VAR_flux_git_token && export TF_VAR_flux_git_token
 ```
 ```bash
 cd infra/terraform/kind_cluster
