@@ -17,12 +17,20 @@ MIN_KIND="0.30"
 MIN_KUBECTL="1.30"
 MIN_FLUX="2.4"
 
+# Resources Docker gives the kind nodes. Measured on the full local profile:
+# ~5.1 GiB used and ~0.4 cores busy at rest, ~2.7 cores requested. Labs add
+# more (Ch11 restores a second Postgres, Ch08 OOM drills), so 8 GB is the floor.
+MIN_DOCKER_CPUS=4
+MIN_DOCKER_MEM_GIB=7.5   # "8 GB" in Docker Desktop / OrbStack reports slightly less
+REC_DOCKER_MEM_GIB=12
+
 FAIL=0
 OS="$(uname -s)"
 
 ok()      { printf '  \033[0;32mOK\033[0m       %-12s %s\n' "$1" "$2"; }
 missing() { printf '  \033[0;31mMISSING\033[0m  %-12s %s\n' "$1" "$2"; FAIL=1; }
 too_old() { printf '  \033[0;33mTOO OLD\033[0m  %-12s %s (need >= %s)\n' "$1" "$2" "$3"; FAIL=1; }
+too_low() { printf '  \033[0;33mTOO LOW\033[0m  %-12s %s (need >= %s)\n' "$1" "$2" "$3"; FAIL=1; }
 
 # Install hint per OS. Official docs first, then the package manager one-liner.
 hint() {
@@ -94,6 +102,23 @@ check pre-commit ""               "pre-commit --version"
 if command -v docker >/dev/null 2>&1; then
   if docker info >/dev/null 2>&1; then
     ok "docker daemon" "running"
+    cpus="$(docker info --format '{{.NCPU}}' 2>/dev/null || echo 0)"
+    mem_bytes="$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)"
+    case "$cpus" in ''|*[!0-9]*) cpus=0 ;; esac
+    case "$mem_bytes" in ''|*[!0-9]*) mem_bytes=0 ;; esac
+    mem_gib="$(awk -v b="$mem_bytes" 'BEGIN { printf "%.1f", b / 1024 / 1024 / 1024 }')"
+    if [ "$cpus" -lt "$MIN_DOCKER_CPUS" ]; then
+      too_low "docker cpus" "$cpus" "$MIN_DOCKER_CPUS - raise it in Docker Desktop / OrbStack / Colima settings"
+    else
+      ok "docker cpus" "$cpus"
+    fi
+    if awk -v m="$mem_gib" -v min="$MIN_DOCKER_MEM_GIB" 'BEGIN { exit !(m < min) }'; then
+      too_low "docker memory" "${mem_gib} GiB" "8 GB - raise it in Docker Desktop / OrbStack / Colima settings"
+    elif awk -v m="$mem_gib" -v rec="$REC_DOCKER_MEM_GIB" 'BEGIN { exit !(m < rec) }'; then
+      ok "docker memory" "${mem_gib} GiB (enough; ${REC_DOCKER_MEM_GIB} GB recommended for the later labs)"
+    else
+      ok "docker memory" "${mem_gib} GiB"
+    fi
   else
     missing "docker daemon" "not running - start Docker Desktop / OrbStack / Colima, then re-run"
   fi

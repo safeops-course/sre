@@ -29,7 +29,7 @@ Runtime secrets the apps need (`backend-secrets`, `app-postgres-app`, `cnpg-back
 Images are pulled from `ghcr.io/safeops-course/*`; no registry credentials are needed as long as the packages are public.
 
 ## Prerequisites
-- Docker Engine running with adequate CPU/RAM for at least three nodes
+- Docker Engine with at least 4 CPUs and 8 GB of memory for the two-node kind cluster (12 GB recommended); `make check-tools` verifies it
 - `curl`, `tar`, and `unzip` available on your workstation
 - Go 1.24+ and Node.js 20+ with npm for backend/frontend development
 - `make` (GNU make recommended)
