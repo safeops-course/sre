@@ -54,7 +54,7 @@ provider "kubernetes" {
 locals {
   kubeconfig_path          = pathexpand("${path.module}/kubeconfig.yaml")
   flux_pull_secret_yaml    = var.flux_git_token != "" ? "    pullSecret: \"flux-system\"\n" : ""
-  backup_s3_secret_enabled = nonsensitive(var.r2_access_key_id != "" && var.r2_secret_access_key != "")
+  backup_s3_secret_enabled = nonsensitive(var.backup_s3_access_key_id != "" && var.backup_s3_secret_access_key != "")
   ghcr_secret_enabled      = var.enable_ghcr && nonsensitive(var.ghcr_token != "")
 }
 
@@ -451,7 +451,8 @@ resource "kubernetes_secret_v1" "sops_age" {
   }
 }
 
-# Create CNPG backup S3 secret in each environment namespace
+# CNPG backup credentials (Hetzner Object Storage) for the full platform profile
+# (local_profile = false). The local profile uses MinIO instead (local-profile.tf).
 resource "kubernetes_secret_v1" "cnpg_backup_s3" {
   for_each = local.backup_s3_secret_enabled ? toset(["develop", "staging", "production"]) : toset([])
 
@@ -464,12 +465,12 @@ resource "kubernetes_secret_v1" "cnpg_backup_s3" {
 
   data = merge(
     {
-      ACCESS_KEY_ID     = var.r2_access_key_id
-      ACCESS_SECRET_KEY = var.r2_secret_access_key
-      BUCKET            = var.r2_bucket
+      ACCESS_KEY_ID     = var.backup_s3_access_key_id
+      ACCESS_SECRET_KEY = var.backup_s3_secret_access_key
+      BUCKET            = var.backup_s3_bucket
     },
-    var.r2_endpoint != "" ? { ENDPOINT = var.r2_endpoint } : {},
-    var.r2_region != "" ? { REGION = var.r2_region } : {},
+    var.backup_s3_endpoint != "" ? { ENDPOINT = var.backup_s3_endpoint } : {},
+    var.backup_s3_region != "" ? { REGION = var.backup_s3_region } : {},
   )
 
   depends_on = [kubernetes_namespace_v1.bootstrap]

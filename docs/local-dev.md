@@ -18,7 +18,7 @@ Use Terraform to provision a local multi-node kind cluster. Terraform manages li
 | backend + frontend in develop/staging/production | Dex, Headlamp, OIDC RBAC |
 | kube-prometheus-stack (Prometheus, Grafana) | OpenTelemetry collector, Uptrace export |
 | CloudNativePG operator + one cluster per environment | k8s-ai-monitor (needs an LLM key) |
-| **MinIO** as the CNPG backup target (replaces R2) | Flux image automation (needs a git write token) |
+| **MinIO** as the CNPG backup target (replaces Hetzner Object Storage) | Flux image automation (needs a git write token) |
 | Kyverno + both policy packs (Audit) | `flux/secrets/*` encrypted for the platform key |
 | Flagger + canaries, Chaos Monkey | |
 | `secrets-local`: your own SOPS secrets under `flux/secrets/local/` | |

@@ -51,33 +51,33 @@ variable "sops_age_key" {
 }
 
 variable "backup_s3_access_key_id" {
-  description = "Optional S3/R2 access key for CNPG backups. Set together with backup_s3_secret_access_key and backup_s3_bucket."
+  description = "Optional S3 access key for CNPG and etcd backups (Hetzner Object Storage, BACKUP_S3). Set together with backup_s3_secret_access_key and backup_s3_bucket."
   type        = string
   default     = ""
   sensitive   = true
 }
 
 variable "backup_s3_secret_access_key" {
-  description = "Optional S3/R2 secret key for CNPG backups. Set together with backup_s3_access_key_id and backup_s3_bucket."
+  description = "Optional S3 secret key for CNPG and etcd backups (Hetzner Object Storage, BACKUP_S3). Set together with backup_s3_access_key_id and backup_s3_bucket."
   type        = string
   default     = ""
   sensitive   = true
 }
 
 variable "backup_s3_bucket" {
-  description = "Optional S3/R2 bucket name for CNPG backups. Set together with backup_s3_access_key_id and backup_s3_secret_access_key."
+  description = "Optional bucket for CNPG and etcd backups, for example safeops-sre-backups. Set together with backup_s3_access_key_id and backup_s3_secret_access_key."
   type        = string
   default     = ""
 }
 
 variable "backup_s3_endpoint" {
-  description = "Optional S3/R2 endpoint (for example https://<accountid>.r2.cloudflarestorage.com)."
+  description = "Optional S3 endpoint, for example https://nbg1.your-objectstorage.com."
   type        = string
   default     = ""
 }
 
 variable "backup_s3_region" {
-  description = "Optional S3 region (for AWS-compatible APIs)."
+  description = "Optional S3 region, for example nbg1."
   type        = string
   default     = ""
 }

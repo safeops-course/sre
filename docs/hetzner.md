@@ -18,15 +18,25 @@ Set these in: GitHub -> Settings -> Secrets and variables -> Actions.
 Secrets (really secret):
 - `HCLOUD_TOKEN` - Hetzner project token, Read & Write
 - `HCLOUD_SSH_PRIVATE_KEY` - a dedicated node key, never a key that unlocks anything else
-- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` - Terraform state and backups in R2
+- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` - Terraform state in Cloudflare R2 (CI only, never in
+  the cluster: the state holds the node SSH key and the kubeconfig)
+- `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Hetzner Object
+  Storage (Hetzner console -> Security -> S3 credentials); this key lives in the cluster
 - `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`
 
 Variables (not secret - visible in the settings and in logs):
 - `HCLOUD_SSH_PUBLIC_KEY` - the public half of the node key
-- `R2_ENDPOINT` - `https://<account-id>.r2.cloudflarestorage.com`
-- `R2_REGION` - `auto`
-- `R2_BUCKET` - `sre` (the same bucket as the Terraform state; CNPG backups and etcd snapshots use
-  their own prefixes)
+- `BACKUP_S3_ENDPOINT` - `https://nbg1.your-objectstorage.com` (the cluster location)
+- `BACKUP_S3_REGION` - `nbg1`
+- `BACKUP_S3_BUCKET` - a private bucket in the same Hetzner project (bucket names are global)
+
+The state bucket and endpoint are fixed in `infra/terraform/hcloud_cluster/backend.tf`. The backup
+bucket must also match `BACKUP_S3_BUCKET` in `flux/bootstrap/flux-system/infrastructure.yaml`,
+where Flux substitutes it into the CNPG clusters.
+
+Why two stores: the backup key has to live in the cluster, the state key must not. An S3 key is
+scoped to a whole bucket (R2) or a whole project (Hetzner), not to a prefix - with one bucket, a
+leaked backup key would read the state.
 
 Not needed: the repository and the container images are public, so Flux and the nodes need no Git
 or registry token (the former `FLUX_GIT_TOKEN`, `GHCR_USERNAME` and `GHCR_TOKEN`).

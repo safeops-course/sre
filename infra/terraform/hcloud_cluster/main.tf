@@ -51,7 +51,7 @@ locals {
     "end-time"    = var.kured_end_time
   } : {}
 
-  # etcd S3 backup — reuses the R2/S3 credentials already wired through load-env.sh.
+  # etcd S3 backup — the same Hetzner Object Storage bucket and key as the CNPG backups (BACKUP_S3).
   # k3s expects a bare hostname (no https:// prefix).
   etcd_s3_endpoint = var.backup_s3_endpoint != "" ? replace(var.backup_s3_endpoint, "https://", "") : ""
 
@@ -106,7 +106,7 @@ module "kube_hetzner" {
   # Kured
   kured_options = local.kured_options
 
-  # etcd backup to S3/R2
+  # etcd backup to Hetzner Object Storage
   etcd_s3_backup = local.etcd_s3_backup
 
   # OIDC / extra kube-apiserver flags

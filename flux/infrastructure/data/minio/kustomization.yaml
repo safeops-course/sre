@@ -1,5 +1,5 @@
 # MinIO: in-cluster S3-compatible object store for the local (kind) profile.
-# Replaces Cloudflare R2 as the CNPG backup target so the backup & restore
+# Replaces Hetzner Object Storage as the CNPG backup target so the backup & restore
 # and PITR exercises work without a cloud account.
 # Root credentials come from the `minio-credentials` secret created by
 # infra/terraform/kind_cluster (random per cluster, never committed).

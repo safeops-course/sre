@@ -104,7 +104,10 @@ spec:
   wait: false
   postBuild:
     substitute:
-      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+      # Hetzner Object Storage, next to the cluster (nbg1). Not secret; the keys come
+      # from the cnpg-backup-s3 Secret (Terraform, BACKUP_S3_* in GitHub).
+      BACKUP_S3_ENDPOINT: "https://nbg1.your-objectstorage.com"
+      BACKUP_S3_BUCKET: "safeops-sre-backups"
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-develop
@@ -158,7 +161,10 @@ spec:
   wait: false
   postBuild:
     substitute:
-      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+      # Hetzner Object Storage, next to the cluster (nbg1). Not secret; the keys come
+      # from the cnpg-backup-s3 Secret (Terraform, BACKUP_S3_* in GitHub).
+      BACKUP_S3_ENDPOINT: "https://nbg1.your-objectstorage.com"
+      BACKUP_S3_BUCKET: "safeops-sre-backups"
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-staging
@@ -212,7 +218,10 @@ spec:
   wait: false
   postBuild:
     substitute:
-      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+      # Hetzner Object Storage, next to the cluster (nbg1). Not secret; the keys come
+      # from the cnpg-backup-s3 Secret (Terraform, BACKUP_S3_* in GitHub).
+      BACKUP_S3_ENDPOINT: "https://nbg1.your-objectstorage.com"
+      BACKUP_S3_BUCKET: "safeops-sre-backups"
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-production

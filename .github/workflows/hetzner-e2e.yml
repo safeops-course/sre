@@ -6,10 +6,12 @@ name: Hetzner - end-to-end check
 # (hourly billing, 1 control plane + 1 worker + 1 load balancer).
 #
 # Manual start + manual approval. Required secrets: HCLOUD_TOKEN,
-# HCLOUD_SSH_PRIVATE_KEY, SOPS_AGE_KEY, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.
-# Required variables (not secret): HCLOUD_SSH_PUBLIC_KEY, R2_ENDPOINT, R2_REGION,
-# R2_BUCKET. The repository and the images are public, so Flux and the nodes need
-# no Git or registry token.
+# HCLOUD_SSH_PRIVATE_KEY, SOPS_AGE_KEY, R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY
+# (Terraform state in Cloudflare R2), BACKUP_S3_ACCESS_KEY_ID +
+# BACKUP_S3_SECRET_ACCESS_KEY (CNPG and etcd backups in Hetzner Object Storage).
+# Required variables (not secret): HCLOUD_SSH_PUBLIC_KEY, BACKUP_S3_ENDPOINT,
+# BACKUP_S3_REGION, BACKUP_S3_BUCKET. The repository and the images are public,
+# so Flux and the nodes need no Git or registry token.
 
 on:
   workflow_dispatch:
@@ -43,11 +45,14 @@ jobs:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ vars.R2_BUCKET }}
-          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          BACKUP_S3_ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_REGION: ${{ vars.BACKUP_S3_REGION }}
+          BACKUP_S3_BUCKET: ${{ vars.BACKUP_S3_BUCKET }}
         run: |
           missing=0
-          for s in HCLOUD_TOKEN HCLOUD_SSH_PUBLIC_KEY HCLOUD_SSH_PRIVATE_KEY SOPS_AGE_KEY R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT; do
+          for s in HCLOUD_TOKEN HCLOUD_SSH_PUBLIC_KEY HCLOUD_SSH_PRIVATE_KEY SOPS_AGE_KEY R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY BACKUP_S3_ACCESS_KEY_ID BACKUP_S3_SECRET_ACCESS_KEY BACKUP_S3_ENDPOINT BACKUP_S3_REGION BACKUP_S3_BUCKET; do
             if [ -z "${!s}" ]; then
               echo "::error::$s is not set (secret or variable)"
               missing=1
@@ -95,11 +100,11 @@ jobs:
       TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
       # The images are public: no registry credentials, so an expired GHCR token cannot break pulls.
       TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
-      TF_VAR_backup_s3_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
-      TF_VAR_backup_s3_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      TF_VAR_backup_s3_bucket: ${{ vars.R2_BUCKET }}
-      TF_VAR_backup_s3_endpoint: ${{ vars.R2_ENDPOINT }}
-      TF_VAR_backup_s3_region: ${{ vars.R2_REGION }}
+      TF_VAR_backup_s3_access_key_id: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+      TF_VAR_backup_s3_secret_access_key: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+      TF_VAR_backup_s3_bucket: ${{ vars.BACKUP_S3_BUCKET }}
+      TF_VAR_backup_s3_endpoint: ${{ vars.BACKUP_S3_ENDPOINT }}
+      TF_VAR_backup_s3_region: ${{ vars.BACKUP_S3_REGION }}
       KUBECONFIG: ${{ github.workspace }}/infra/terraform/hcloud_cluster/kubeconfig.yaml
 
     steps:

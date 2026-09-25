@@ -20,8 +20,8 @@ spec:
   backup:
     retentionPolicy: "7d"
     barmanObjectStore:
-      destinationPath: s3://sre/cnpg-backups/develop/app-postgres
-      endpointURL: ${R2_ENDPOINT_URL}
+      destinationPath: s3://${BACKUP_S3_BUCKET}/cnpg-backups/develop/app-postgres
+      endpointURL: ${BACKUP_S3_ENDPOINT}
       s3Credentials:
         accessKeyId:
           name: cnpg-backup-s3
