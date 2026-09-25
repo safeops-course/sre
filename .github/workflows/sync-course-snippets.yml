@@ -1,13 +1,19 @@
 name: sync-course-snippets
 
 # Triggered when files referenced by the course change.
-# Clones ldbl/sre-course, runs snippet extraction, updates course-map.yml,
-# and pushes changes to both repos.
+# Clones ldbl/sre-course, runs snippet extraction and opens (or updates) one
+# pull request there - it never pushes to main. A human merges it, after any
+# course PR that renames chapters or snippet paths.
+# It fails loudly if a snippet source is missing, instead of committing an
+# empty placeholder page.
+#
+# course-map.yml is not written from here: it depends on the course, so it is
+# regenerated in the course PR that changes chapters (scripts/generate-course-map.sh).
 #
 # Needs the repository secret COURSE_REPO_PAT: a fine-grained PAT from the
-# ldbl account with Contents read/write on ldbl/sre-course (that repo is
-# private and lives under another owner, so GITHUB_TOKEN cannot reach it).
-# The course-map.yml push to this repo uses GITHUB_TOKEN.
+# ldbl account on ldbl/sre-course with Contents: read/write and
+# Pull requests: read/write (that repo is private and lives under another
+# owner, so GITHUB_TOKEN cannot reach it).
 # Commits are authored as "SafeOps Course Bot" (same idea as fluxcdbot); the e-mail is bound to no GitHub
 # account, so the bot is visible in the log but is not counted as a contributor.
 
@@ -31,7 +37,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   sync-snippets:
@@ -42,7 +48,7 @@ jobs:
           COURSE_REPO_PAT: ${{ secrets.COURSE_REPO_PAT }}
         run: |
           if [[ -z "${COURSE_REPO_PAT}" ]]; then
-            echo "::error::secret COURSE_REPO_PAT is not set - add a fine-grained PAT (ldbl account, ldbl/sre-course, Contents: read/write) under Settings > Secrets and variables > Actions"
+            echo "::error::secret COURSE_REPO_PAT is not set - add a fine-grained PAT (ldbl account, ldbl/sre-course, Contents + Pull requests: read/write) under Settings > Secrets and variables > Actions"
             exit 1
           fi
 
@@ -63,36 +69,37 @@ jobs:
           cd sre-course
           ./scripts/sync-course-to-hugo.sh
 
-      - name: Run snippet extraction
+      - name: Run snippet extraction (fail on missing sources)
         run: |
+          set -o pipefail
           cd sre-course
-          ./scripts/inline-repo-snippets.sh "${{ github.workspace }}/sre"
+          ./scripts/inline-repo-snippets.sh "${{ github.workspace }}/sre" 2>&1 | tee snippets.log
+          if grep -q '\[missing\]' snippets.log; then
+            echo "::error::snippet sources not found in sre - a course PR probably still points at old paths:"
+            grep '\[missing\]' snippets.log
+            exit 1
+          fi
+          rm snippets.log
 
-      - name: Regenerate course-map.yml
-        run: |
-          cd sre-course
-          ./scripts/generate-course-map.sh "${{ github.workspace }}/sre/course-map.yml"
-
-      - name: Push snippet updates to sre-course
+      - name: Open or update the sync pull request in sre-course
+        env:
+          GH_TOKEN: ${{ secrets.COURSE_REPO_PAT }}
         run: |
           cd sre-course
           git config user.name "SafeOps Course Bot"
           git config user.email "safeops-course-bot@users.noreply.github.com"
           git add site/content/members/ site/content/course/
           git diff --cached --quiet && { echo "No snippet changes"; exit 0; }
+          branch="bot/sync-course-snippets"
+          git switch -c "${branch}"
           git commit -m "chore: sync code snippets from sre repo
 
           Triggered by ${{ github.repository }}@${{ github.sha }}"
-          git push
-
-      - name: Push course-map.yml to sre
-        run: |
-          cd sre
-          git config user.name "SafeOps Course Bot"
-          git config user.email "safeops-course-bot@users.noreply.github.com"
-          git add course-map.yml
-          git diff --cached --quiet && { echo "No course-map changes"; exit 0; }
-          git commit -m "chore: update course-map.yml
-
-          Auto-generated from sre-course chapter references."
-          git push
+          git push --force origin "${branch}"
+          if [[ "$(gh pr view "${branch}" --repo ldbl/sre-course --json state -q .state 2>/dev/null)" == "OPEN" ]]; then
+            echo "Updated the open pull request on ${branch}"
+          else
+            gh pr create --repo ldbl/sre-course --base main --head "${branch}" \
+              --title "chore: sync code snippets from sre" \
+              --body "Snippet pages regenerated from ${{ github.repository }}@${{ github.sha }}. Review the diff before merging: if a course PR renames chapters or snippet paths, merge that one first."
+          fi
