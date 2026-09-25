@@ -2,6 +2,8 @@
 
 This repository is the **production implementation** behind the [SafeOps SRE Course](https://safeops.work/). Every chapter in the course maps directly to real infrastructure, manifests, and scripts maintained here.
 
+The code and the course are free. If they saved you an incident, [buy me a coffee ☕](https://buymeacoffee.com/ldbl).
+
 The point is not "how to use AI" or "how to prompt". The point is how to build workflows where AI behaves like a fast, confident junior engineer (low context, no fear) while the surrounding system stays safe.
 
 ## Course ↔ Implementation Map
