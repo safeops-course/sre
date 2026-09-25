@@ -23,7 +23,7 @@
   - chapter-04-secrets-management
 
 docs/gitops-workflow.md:
-  - chapter-10-version-promotion
+  - chapter-03-gitops
 
 docs/local-dev.md:
   - appendix-local-dev
@@ -33,14 +33,14 @@ flux/apps/backend/base/deployment.yaml:
   - chapter-08-resource-management
 
 flux/apps/backend/base/servicemonitor.yaml:
-  - chapter-11-observability
+  - chapter-10-observability
 
 flux/apps/backend/develop:
+  - chapter-03-gitops
   - chapter-09-availability-engineering
-  - chapter-10-version-promotion
 
 flux/apps/backend/production:
-  - chapter-10-version-promotion
+  - chapter-03-gitops
 
 flux/apps/frontend/base/ingress.yaml:
   - appendix-dns-tls
@@ -48,27 +48,21 @@ flux/apps/frontend/base/ingress.yaml:
 flux/apps/frontend/overlays/develop:
   - chapter-09-availability-engineering
 
-flux/bootstrap/flux-system/gotk-sync.yaml:
-  - chapter-03-gitops
-
 flux/bootstrap/infrastructure/base/namespaces.yaml:
   - chapter-07-security-context
 
 flux/bootstrap/infrastructure/image-automation/backend-image-repo.yaml:
-  - chapter-10-version-promotion
-
-flux/bootstrap/profiles/local/secrets-local.yaml:
   - chapter-03-gitops
 
 flux/infrastructure/chaos/develop:
-  - chapter-13-controlled-chaos
+  - chapter-12-controlled-chaos
 
 flux/infrastructure/chaos/develop/cronjob.yaml:
-  - chapter-13-controlled-chaos
+  - chapter-12-controlled-chaos
 
 flux/infrastructure/data/cnpg-clusters:
-  - chapter-12-backup-restore
-  - chapter-18-rollback-data-migrations
+  - chapter-11-backup-restore
+  - chapter-17-rollback-data-migrations
 
 flux/infrastructure/network-policies/base/allow-backend-ingress.yaml:
   - chapter-06-network-policies
@@ -77,22 +71,22 @@ flux/infrastructure/network-policies/base/allow-dns-egress.yaml:
   - chapter-06-network-policies
 
 flux/infrastructure/observability/k8s-ai-monitor/clusterrole.yaml:
-  - chapter-14-ai-assisted-sre-guardian
+  - chapter-13-ai-assisted-sre-guardian
 
 flux/infrastructure/observability/k8s-ai-monitor/deployment.yaml:
-  - chapter-14-ai-assisted-sre-guardian
+  - chapter-13-ai-assisted-sre-guardian
 
 flux/infrastructure/observability/kube-prometheus-stack/monitoring/backend-alerts.yaml:
-  - chapter-11-observability
+  - chapter-10-observability
 
-flux/infrastructure/policy/packs/admission-guardrails/require-security-context.example.yaml:
-  - chapter-16-admission-policy-guardrails
+flux/infrastructure/policy/packs/chapter-15-admission-guardrails/require-security-context.example.yaml:
+  - chapter-15-admission-policy-guardrails
 
-flux/infrastructure/policy/packs/supply-chain/verify-attestations.example.yaml:
-  - chapter-17-supply-chain-security
+flux/infrastructure/policy/packs/chapter-16-supply-chain/verify-attestations.example.yaml:
+  - chapter-16-supply-chain-security
 
-flux/infrastructure/policy/packs/supply-chain/verify-images.example.yaml:
-  - chapter-17-supply-chain-security
+flux/infrastructure/policy/packs/chapter-16-supply-chain/verify-images.example.yaml:
+  - chapter-16-supply-chain-security
 
 flux/infrastructure/progressive-delivery/develop/canary-backend.yaml:
   - module-progressive-delivery
@@ -113,7 +107,7 @@ flux/infrastructure/security/dns-and-certificates/release-external-dns.yaml:
   - appendix-dns-tls
 
 infra/terraform/hcloud_cluster/main.tf:
-  - chapter-12-backup-restore
+  - chapter-11-backup-restore
 
 infra/terraform/kind_cluster:
   - appendix-local-dev
