@@ -348,7 +348,7 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./flux/infrastructure/policy/packs/chapter-16-supply-chain
+  path: ./flux/infrastructure/policy/packs/supply-chain
   prune: true
   wait: false
   postBuild:
@@ -368,7 +368,7 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  path: ./flux/infrastructure/policy/packs/chapter-15-admission-guardrails
+  path: ./flux/infrastructure/policy/packs/admission-guardrails
   prune: true
   wait: false
   postBuild:

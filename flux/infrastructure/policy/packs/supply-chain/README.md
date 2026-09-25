@@ -1,9 +1,9 @@
-# Chapter 16 Policy Pack (Supply Chain)
+# Policy Pack: Supply Chain
 
 This pack is intentionally inactive.
 
 It is the place for Kyverno `verifyImages` and attestation policies once you
-enable Chapter 16 enforcement.
+enable supply-chain enforcement.
 
 Suggested rollout:
 1. start with validationFailureAction: Audit in `develop`

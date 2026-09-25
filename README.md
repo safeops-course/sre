@@ -10,26 +10,29 @@ The point is not "how to use AI" or "how to prompt". The point is how to build w
 
 The course at [safeops.work](https://safeops.work/) teaches concepts; this repo contains the working code. See [`course-map.yml`](course-map.yml) for the full file-level mapping.
 
-| Chapter | Topic | Implementation in this repo |
-|---------|-------|-----------------------------|
-| 01 | Introduction | `scripts/guard-kube-context.sh`, `scripts/guard-terraform-plan.sh` |
-| 02 | Infrastructure as Code | `infra/terraform/kind_cluster/`, `.pre-commit-config.yaml` |
-| 03 | Secrets Management | `.sops.yaml`, `scripts/sops-encrypt-secret.sh`, `flux/secrets/` |
-| 04 | GitOps (FluxCD) | `flux/apps/backend/{develop,production}/`, `flux/bootstrap/infrastructure/image-automation/` |
-| 05 | CI/CD & Developer Guardrails | `.github/workflows/`, `.coderabbit.yml`, `.pre-commit-config.yaml` |
-| 06 | Network Policies | `flux/infrastructure/network-policies/` |
-| 07 | Security Context | `flux/apps/backend/base/deployment.yaml`, `flux/bootstrap/infrastructure/base/namespaces.yaml` |
-| 08 | Resource Management | `flux/apps/backend/base/deployment.yaml`, `flux/infrastructure/resource-management/` |
-| 09 | Availability Engineering | `flux/apps/backend/develop/`, `flux/apps/frontend/overlays/develop/` |
-| 10 | Observability | `flux/infrastructure/observability/`, `flux/apps/backend/base/servicemonitor.yaml` |
-| 11 | Backup & Restore | `flux/infrastructure/data/cnpg-clusters/`, `infra/terraform/hcloud_cluster/main.tf` |
-| 12 | Controlled Chaos | `flux/infrastructure/chaos/develop/` |
-| 13 | AI-Assisted SRE Guardian | `flux/` (full GitOps tree), `../k8s-ai-monitor/` |
-| 14 | 24/7 Production SRE | Cross-cutting — observability + alerting + runbooks |
-| 15 | Admission Policy Guardrails | `flux/infrastructure/policy/kyverno/`, `flux/infrastructure/policy/packs/chapter-15-admission-guardrails/` |
-| 16 | Supply Chain Security | `flux/infrastructure/policy/packs/chapter-16-supply-chain/` |
-| 17 | Rollback & Data Migrations | `flux/infrastructure/data/cnpg-clusters/` |
-| Module | Progressive Delivery | `flux/infrastructure/progressive-delivery/` |
+Topics are listed in course order. Chapter numbers live only in the course, so they can change without touching this repo.
+
+| Topic | Implementation in this repo |
+|-------|-----------------------------|
+| Blast radius & the four rules | `scripts/guard-kube-context.sh`, `scripts/guard-terraform-plan.sh` |
+| Infrastructure as Code | `infra/terraform/kind_cluster/`, `.pre-commit-config.yaml` |
+| GitOps with Flux | `flux/bootstrap/`, `flux/apps/`, `flux/infrastructure/` |
+| Secrets Management | `.sops.yaml`, `scripts/sops-encrypt-secret.sh`, `flux/secrets/` |
+| CI/CD & Developer Guardrails | `.github/workflows/`, `.coderabbit.yml`, `.pre-commit-config.yaml` |
+| Network Policies | `flux/infrastructure/network-policies/` |
+| Security Context | `flux/apps/backend/base/deployment.yaml`, `flux/bootstrap/infrastructure/base/namespaces.yaml` |
+| Resource Management | `flux/apps/backend/base/deployment.yaml`, `flux/infrastructure/resource-management/` |
+| Availability Engineering | `flux/apps/backend/develop/`, `flux/apps/frontend/overlays/develop/` |
+| Version Promotion | `flux/apps/backend/{develop,staging,production}/`, `flux/bootstrap/infrastructure/image-automation/` |
+| Observability | `flux/infrastructure/observability/`, `flux/apps/backend/base/servicemonitor.yaml` |
+| Backup & Restore | `flux/infrastructure/data/cnpg-clusters/`, `infra/terraform/hcloud_cluster/main.tf` |
+| Controlled Chaos | `flux/infrastructure/chaos/develop/` |
+| AI-Assisted SRE Guardian | `flux/` (full GitOps tree), `../k8s-ai-monitor/` |
+| 24/7 Production SRE | Cross-cutting - observability + alerting + runbooks |
+| Admission Policy Guardrails (advanced) | `flux/infrastructure/policy/kyverno/`, `flux/infrastructure/policy/packs/admission-guardrails/` |
+| Supply Chain Security (advanced) | `flux/infrastructure/policy/packs/supply-chain/` |
+| Rollback & Data Migrations (advanced) | `flux/infrastructure/data/cnpg-clusters/` |
+| Progressive Delivery (advanced module) | `flux/infrastructure/progressive-delivery/` |
 
 ## Repository Layout
 

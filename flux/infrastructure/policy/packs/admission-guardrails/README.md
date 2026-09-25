@@ -1,4 +1,4 @@
-# Chapter 15 Policy Pack (Admission Guardrails)
+# Policy Pack: Admission Guardrails
 
 This pack is intentionally inactive.
 
