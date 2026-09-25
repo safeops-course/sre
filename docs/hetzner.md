@@ -23,6 +23,9 @@ Secrets (really secret):
 - `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Hetzner Object
   Storage (Hetzner console -> Security -> S3 credentials); this key lives in the cluster
 - `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`
+- `TFPLAN_PASSPHRASE` - encrypts the saved Terraform plan between the plan and the apply job. The
+  plan file contains every input variable in plain text, and artifacts of a public repository are
+  downloadable by anyone; only the encrypted file is uploaded (`terraform-hcloud.yml`)
 
 Variables (not secret - visible in the settings and in logs):
 - `HCLOUD_SSH_PUBLIC_KEY` - the public half of the node key
