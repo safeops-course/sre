@@ -8,6 +8,9 @@ spec:
   interval: 1m0s
   ref:
     branch: main
+  # Pushes image tag updates back to main. Auth: a repo deploy key with write access
+  # (SOPS: flux/secrets/flux-system) - not tied to a person, does not expire. The repo is
+  # public, so the main flux-system GitRepository needs no credentials at all.
   secretRef:
-    name: flux-system
-  url: https://github.com/${git_owner}/sre.git
+    name: flux-image-automation-deploy-key
+  url: ssh://git@github.com/${git_owner}/sre.git

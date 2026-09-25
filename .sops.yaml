@@ -1,36 +1,43 @@
 # SOPS configuration for encrypting Kubernetes secrets with age
+# Platform key rotated 2026-09-26 (the previous key leaked in a CI artifact); the private key is the
+# GitHub secret SOPS_AGE_KEY, the Secret flux-system/sops-age in the cluster, and the owner's vault.
 # See: https://fluxcd.io/flux/guides/mozilla-sops/
 
 creation_rules:
+  # Flux image automation deploy key (git push to this repo)
+  - path_regex: flux/secrets/flux-system/.*\.yaml
+    encrypted_regex: ^(data|stringData)$
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
+
   # Cloudflare API token (cert-manager + external-dns)
   - path_regex: flux/secrets/cloudflare/.*\.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
 
   # Auth secrets (Dex OIDC)
   - path_regex: flux/secrets/auth/.*\.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
 
   # Observability secrets (shared)
   - path_regex: flux/secrets/observability/.*\.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
 
   # Development environment secrets
   - path_regex: flux/secrets/develop/.*\.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
 
   # Staging environment secrets
   - path_regex: flux/secrets/staging/.*\.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
 
   # Production environment secrets
   - path_regex: flux/secrets/production/.*\.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1730wxdzhzpwjmf04rdf9tdz5zndr7xjq2mqk5ydkme5s27vaha7s2xnjxl
+    age: age1ykac8h2lhgvppswhutsmsqu6cw0ht30wfjw9k7ghl6p8t5542y8s43zthp
 
   # Local (kind) profile - the learner's own key. Placeholder until
   # `scripts/sops-setup.sh --local` writes your public key here.
