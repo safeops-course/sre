@@ -8,6 +8,11 @@ __pycache__/
 *.tfstate
 *.tfstate.backup
 terraform.tfstate.d/
+# Saved plans can hold secret values in plain text - never commit them
+tfplan
+tfplan.meta
+tfplan.meta.bak
+*.tfplan
 infra/terraform/kind_cluster/kubeconfig.yaml
 site/content/course/
 site/public/
