@@ -1,5 +1,5 @@
 variable "flux_git_repository_url" {
-  description = "Git repository URL to sync with Flux. Defaults to the SafeOps course repo; point it at your fork once you start committing (Chapter 03+). Set to \"\" to skip GitOps bootstrap."
+  description = "Git repository URL to sync with Flux. Defaults to the SafeOps course repo; point it at your fork once you start committing (GitOps chapter onward). Set to \"\" to skip GitOps bootstrap."
   type        = string
   default     = "https://github.com/safeops-course/sre.git"
 }

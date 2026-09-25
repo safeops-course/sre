@@ -14,7 +14,7 @@ FLUX_VERSION := 2.7.0
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-check-tools: ## Verify the workstation has every tool the labs need (Chapter 00)
+check-tools: ## Verify the workstation has every tool the labs need (lab setup)
 	@./scripts/check-tools.sh
 
 versions: ## Show pinned CLI versions
