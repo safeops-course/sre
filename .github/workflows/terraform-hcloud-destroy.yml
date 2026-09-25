@@ -84,11 +84,11 @@ jobs:
           TF_VAR_flux_git_repository_branch: main
           TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
           TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
-          TF_VAR_backup_s3_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          TF_VAR_backup_s3_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          TF_VAR_backup_s3_bucket: ${{ vars.R2_BUCKET }}
-          TF_VAR_backup_s3_endpoint: ${{ vars.R2_ENDPOINT }}
-          TF_VAR_backup_s3_region: ${{ vars.R2_REGION }}
+          TF_VAR_backup_s3_access_key_id: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          TF_VAR_backup_s3_secret_access_key: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          TF_VAR_backup_s3_bucket: ${{ vars.BACKUP_S3_BUCKET }}
+          TF_VAR_backup_s3_endpoint: ${{ vars.BACKUP_S3_ENDPOINT }}
+          TF_VAR_backup_s3_region: ${{ vars.BACKUP_S3_REGION }}
           TF_INPUT: "false"
           TF_CLI_ARGS_destroy: "-auto-approve -lock-timeout=5m"
         run: make terraform-hcloud-destroy

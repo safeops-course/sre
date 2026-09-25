@@ -51,7 +51,7 @@ locals {
     "end-time"    = var.kured_end_time
   } : {}
 
-  # etcd S3 backup — reuses the R2/S3 credentials already wired through load-env.sh.
+  # etcd S3 backup — the same Hetzner Object Storage bucket and key as the CNPG backups (BACKUP_S3).
   # k3s expects a bare hostname (no https:// prefix).
   etcd_s3_endpoint = var.backup_s3_endpoint != "" ? replace(var.backup_s3_endpoint, "https://", "") : ""
 
@@ -106,7 +106,7 @@ module "kube_hetzner" {
   # Kured
   kured_options = local.kured_options
 
-  # etcd backup to S3/R2
+  # etcd backup to Hetzner Object Storage
   etcd_s3_backup = local.etcd_s3_backup
 
   # OIDC / extra kube-apiserver flags
@@ -361,6 +361,24 @@ resource "kubernetes_secret_v1" "sops_age" {
   }
 
   type = "Opaque"
+
+  depends_on = [kubernetes_namespace_v1.bootstrap]
+}
+
+# Non-secret backup target for Flux. The cnpg-cluster-<env> Kustomizations read
+# BACKUP_S3_ENDPOINT and BACKUP_S3_BUCKET from this ConfigMap (postBuild.substituteFrom),
+# so etcd snapshots, the cnpg-backup-s3 Secret and the CNPG clusters all use the same
+# Terraform inputs - there is no second copy of these values in Git.
+resource "kubernetes_config_map_v1" "backup_s3" {
+  metadata {
+    name      = "backup-s3"
+    namespace = "flux-system"
+  }
+
+  data = {
+    BACKUP_S3_ENDPOINT = var.backup_s3_endpoint
+    BACKUP_S3_BUCKET   = var.backup_s3_bucket
+  }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]
 }

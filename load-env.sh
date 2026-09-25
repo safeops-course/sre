@@ -45,8 +45,11 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   echo "  HCLOUD_TOKEN=<your-hcloud-token>"
   echo "  FLUX_GIT_TOKEN=github_pat_..."
   echo "  GHCR_TOKEN=ghp_..."
-  echo "  R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com"
-  echo "  R2_REGION=auto"
+  echo "  BACKUP_S3_ACCESS_KEY_ID=<hetzner-object-storage-access-key>"
+  echo "  BACKUP_S3_SECRET_ACCESS_KEY=<hetzner-object-storage-secret-key>"
+  echo "  BACKUP_S3_ENDPOINT=https://nbg1.your-objectstorage.com"
+  echo "  BACKUP_S3_REGION=nbg1"
+  echo "  BACKUP_S3_BUCKET=<your-backup-bucket>"
   die "Aborting: ${ENV_FILE} not found."
 fi
 
@@ -60,18 +63,16 @@ export TF_VAR_ghcr_token="${GHCR_TOKEN:-}"
 export TF_VAR_ghcr_username="${GHCR_USERNAME:-}"
 export TF_VAR_flux_git_token="${FLUX_GIT_TOKEN:-}"
 export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
-export TF_VAR_r2_access_key_id="${R2_ACCESS_KEY_ID:-}"
-export TF_VAR_r2_secret_access_key="${R2_SECRET_ACCESS_KEY:-}"
-export TF_VAR_r2_endpoint="${R2_ENDPOINT:-}"
+# Terraform state backend (Cloudflare R2) - the only use of the R2 keys
 export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
 export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
 
-# Backup S3/R2 credentials for hcloud_cluster (CNPG backups)
-export TF_VAR_backup_s3_access_key_id="${R2_ACCESS_KEY_ID:-}"
-export TF_VAR_backup_s3_secret_access_key="${R2_SECRET_ACCESS_KEY:-}"
-export TF_VAR_backup_s3_bucket="${R2_BUCKET:-sre}"
-export TF_VAR_backup_s3_endpoint="${R2_ENDPOINT:-}"
-export TF_VAR_backup_s3_region="${R2_REGION:-auto}"
+# CNPG and etcd backups (Hetzner Object Storage) - separate key, never the state key
+export TF_VAR_backup_s3_access_key_id="${BACKUP_S3_ACCESS_KEY_ID:-}"
+export TF_VAR_backup_s3_secret_access_key="${BACKUP_S3_SECRET_ACCESS_KEY:-}"
+export TF_VAR_backup_s3_bucket="${BACKUP_S3_BUCKET:-}"
+export TF_VAR_backup_s3_endpoint="${BACKUP_S3_ENDPOINT:-}"
+export TF_VAR_backup_s3_region="${BACKUP_S3_REGION:-}"
 export TF_VAR_enable_ghcr=true
 export TF_VAR_flux_git_repository_url="https://github.com/safeops-course/sre.git"
 export TF_VAR_uptrace_dsn="${UPTRACE_DSN:-}"

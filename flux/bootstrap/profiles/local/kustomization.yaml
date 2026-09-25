@@ -7,7 +7,7 @@
 #   - image-automation                                                (needs git write token)
 #   - secrets-*                                                       (encrypted for the platform key)
 # What is added:
-#   - minio          S3-compatible target for CNPG backups instead of R2
+#   - minio          S3-compatible target for CNPG backups instead of Hetzner Object Storage
 #   - secrets-local  the learner's own SOPS-encrypted secrets (secrets chapter)
 #   - lab            scratch namespace with Pod Security warn/audit (admission-policy drills)
 # Runtime secrets the apps need (JWT, Postgres owner, MinIO creds, sops-age)
@@ -107,12 +107,11 @@ patches:
         value:
           - name: infrastructure
 
-  # --- CNPG clusters: back up to MinIO, secrets come from Terraform ---------
+  # --- CNPG clusters: wait for MinIO ---------------------------------------
+  # Endpoint, bucket and keys point at MinIO already: Terraform writes them
+  # (ConfigMap flux-system/backup-s3, Secret cnpg-backup-s3).
   - target: { kind: Kustomization, name: cnpg-cluster-develop }
     patch: |-
-      - op: replace
-        path: /spec/postBuild/substitute/R2_ENDPOINT_URL
-        value: http://minio.minio.svc.cluster.local:9000
       - op: replace
         path: /spec/dependsOn
         value:
@@ -123,9 +122,6 @@ patches:
   - target: { kind: Kustomization, name: cnpg-cluster-staging }
     patch: |-
       - op: replace
-        path: /spec/postBuild/substitute/R2_ENDPOINT_URL
-        value: http://minio.minio.svc.cluster.local:9000
-      - op: replace
         path: /spec/dependsOn
         value:
           - name: cnpg-operator
@@ -134,9 +130,6 @@ patches:
           - name: minio
   - target: { kind: Kustomization, name: cnpg-cluster-production }
     patch: |-
-      - op: replace
-        path: /spec/postBuild/substitute/R2_ENDPOINT_URL
-        value: http://minio.minio.svc.cluster.local:9000
       - op: replace
         path: /spec/dependsOn
         value:

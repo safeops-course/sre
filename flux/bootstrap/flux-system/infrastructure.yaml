@@ -103,8 +103,11 @@ spec:
   prune: true
   wait: false
   postBuild:
-    substitute:
-      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+    # BACKUP_S3_ENDPOINT / BACKUP_S3_BUCKET: written by Terraform from the same inputs
+    # as the cnpg-backup-s3 Secret and the etcd snapshots (BACKUP_S3_* in GitHub).
+    substituteFrom:
+      - kind: ConfigMap
+        name: backup-s3
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-develop
@@ -157,8 +160,11 @@ spec:
   prune: true
   wait: false
   postBuild:
-    substitute:
-      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+    # BACKUP_S3_ENDPOINT / BACKUP_S3_BUCKET: written by Terraform from the same inputs
+    # as the cnpg-backup-s3 Secret and the etcd snapshots (BACKUP_S3_* in GitHub).
+    substituteFrom:
+      - kind: ConfigMap
+        name: backup-s3
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-staging
@@ -211,8 +217,11 @@ spec:
   prune: true
   wait: false
   postBuild:
-    substitute:
-      R2_ENDPOINT_URL: "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+    # BACKUP_S3_ENDPOINT / BACKUP_S3_BUCKET: written by Terraform from the same inputs
+    # as the cnpg-backup-s3 Secret and the etcd snapshots (BACKUP_S3_* in GitHub).
+    substituteFrom:
+      - kind: ConfigMap
+        name: backup-s3
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-production

@@ -73,36 +73,36 @@ variable "sops_age_key" {
   sensitive   = true
 }
 
-variable "r2_access_key_id" {
-  description = "Cloudflare R2 access key ID for CNPG backup storage."
+variable "backup_s3_access_key_id" {
+  description = "S3 access key for CNPG backups (Hetzner Object Storage, BACKUP_S3). Only for local_profile = false."
   type        = string
   default     = ""
   sensitive   = true
 }
 
-variable "r2_secret_access_key" {
-  description = "Cloudflare R2 secret access key for CNPG backup storage."
+variable "backup_s3_secret_access_key" {
+  description = "S3 secret key for CNPG backups (Hetzner Object Storage, BACKUP_S3). Only for local_profile = false."
   type        = string
   default     = ""
   sensitive   = true
 }
 
-variable "r2_bucket" {
-  description = "R2 bucket name for CNPG backups."
+variable "backup_s3_bucket" {
+  description = "Bucket for CNPG backups, for example safeops-sre-backups."
   type        = string
-  default     = "sre"
+  default     = ""
 }
 
-variable "r2_endpoint" {
-  description = "R2 S3-compatible endpoint URL."
+variable "backup_s3_endpoint" {
+  description = "S3 endpoint for CNPG backups, for example https://nbg1.your-objectstorage.com."
   type        = string
-  default     = "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+  default     = ""
 }
 
-variable "r2_region" {
-  description = "R2 region for backup storage."
+variable "backup_s3_region" {
+  description = "S3 region for CNPG backups, for example nbg1."
   type        = string
-  default     = "auto"
+  default     = ""
 }
 
 variable "uptrace_dsn" {
