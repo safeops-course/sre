@@ -1,7 +1,7 @@
 name: sync-course-snippets
 
 # Triggered when files referenced by the course change.
-# Clones ldbl/sre-course, runs snippet extraction and opens (or updates) one
+# Clones safeops-course/sre-course, runs snippet extraction and opens (or updates) one
 # pull request there - it never pushes to main. A human merges it, after any
 # course PR that renames chapters or snippet paths.
 # It fails loudly if a snippet source is missing, instead of committing an
@@ -10,10 +10,10 @@ name: sync-course-snippets
 # course-map.yml is not written from here: it depends on the course, so it is
 # regenerated in the course PR that changes chapters (scripts/generate-course-map.sh).
 #
-# Needs the repository secret COURSE_REPO_PAT: a fine-grained PAT from the
-# ldbl account on ldbl/sre-course with Contents: read/write and
-# Pull requests: read/write (that repo is private and lives under another
-# owner, so GITHUB_TOKEN cannot reach it).
+# Needs the repository secret COURSE_REPO_PAT: a fine-grained PAT with resource
+# owner safeops-course, repository sre-course only, Contents: read/write and
+# Pull requests: read/write. GITHUB_TOKEN is scoped to this repository and
+# cannot write to another one, even in the same organization.
 # Commits are authored as "SafeOps Course Bot" (same idea as fluxcdbot); the e-mail is bound to no GitHub
 # account, so the bot is visible in the log but is not counted as a contributor.
 
@@ -48,7 +48,7 @@ jobs:
           COURSE_REPO_PAT: ${{ secrets.COURSE_REPO_PAT }}
         run: |
           if [[ -z "${COURSE_REPO_PAT}" ]]; then
-            echo "::error::secret COURSE_REPO_PAT is not set - add a fine-grained PAT (ldbl account, ldbl/sre-course, Contents + Pull requests: read/write) under Settings > Secrets and variables > Actions"
+            echo "::error::secret COURSE_REPO_PAT is not set - add a fine-grained PAT (resource owner safeops-course, repo sre-course, Contents + Pull requests: read/write) under Settings > Secrets and variables > Actions"
             exit 1
           fi
 
@@ -60,7 +60,7 @@ jobs:
       - name: Checkout sre-course repo
         uses: actions/checkout@v5
         with:
-          repository: ldbl/sre-course
+          repository: safeops-course/sre-course
           token: ${{ secrets.COURSE_REPO_PAT }}
           path: sre-course
 
@@ -96,10 +96,10 @@ jobs:
 
           Triggered by ${{ github.repository }}@${{ github.sha }}"
           git push --force origin "${branch}"
-          if [[ "$(gh pr view "${branch}" --repo ldbl/sre-course --json state -q .state 2>/dev/null)" == "OPEN" ]]; then
+          if [[ "$(gh pr view "${branch}" --repo safeops-course/sre-course --json state -q .state 2>/dev/null)" == "OPEN" ]]; then
             echo "Updated the open pull request on ${branch}"
           else
-            gh pr create --repo ldbl/sre-course --base main --head "${branch}" \
+            gh pr create --repo safeops-course/sre-course --base main --head "${branch}" \
               --title "chore: sync code snippets from sre" \
               --body "Snippet pages regenerated from ${{ github.repository }}@${{ github.sha }}. Review the diff before merging: if a course PR renames chapters or snippet paths, merge that one first."
           fi
