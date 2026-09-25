@@ -1,16 +1,18 @@
 terraform {
+  required_version = ">= 1.10.1"
+
   required_providers {
     kind = {
       source  = "tehcyx/kind"
-      version = "0.9.0"
+      version = "~> 0.11"
     }
     helm = {
       source  = "hashicorp/helm"
-      version = "~> 2.12"
+      version = "~> 3.3"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = "~> 2.25"
+      version = "~> 3.2"
     }
     null = {
       source  = "hashicorp/null"
@@ -18,11 +20,15 @@ terraform {
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.6"
+      version = "~> 3.9"
     }
     local = {
       source  = "hashicorp/local"
-      version = "~> 2.5"
+      version = "~> 2.9"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.14"
     }
   }
 }
@@ -30,7 +36,7 @@ terraform {
 provider "kind" {}
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     host                   = kind_cluster.sre.endpoint
     client_certificate     = kind_cluster.sre.client_certificate
     client_key             = kind_cluster.sre.client_key
@@ -56,6 +62,7 @@ resource "kind_cluster" "sre" {
   name            = "sre-control-plane"
   wait_for_ready  = true
   kubeconfig_path = local.kubeconfig_path
+  node_image      = var.kind_node_image
 
   kind_config {
     api_version = "kind.x-k8s.io/v1alpha4"
@@ -116,11 +123,23 @@ resource "null_resource" "merge_kubeconfig" {
     command     = "${path.module}/scripts/merge-kubeconfig.sh \"${local.kubeconfig_path}\""
     interpreter = ["/bin/bash", "-c"]
   }
+
+  # A new kind cluster (for example a new node_image) needs this step again;
+  # without it the replaced cluster came up without Flux.
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
+  }
 }
 
 resource "time_sleep" "wait_for_cluster" {
   depends_on      = [null_resource.merge_kubeconfig]
   create_duration = "30s"
+
+  # A new kind cluster (for example a new node_image) needs this step again;
+  # without it the replaced cluster came up without Flux.
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
+  }
 }
 
 output "kubeconfig" {
@@ -139,7 +158,7 @@ output "kubeconfig_load_instructions" {
   EOT
 }
 
-resource "kubernetes_namespace" "traefik" {
+resource "kubernetes_namespace_v1" "traefik" {
   metadata { name = "traefik" }
   depends_on = [time_sleep.wait_for_cluster]
 }
@@ -149,30 +168,32 @@ resource "helm_release" "traefik" {
   repository = "https://traefik.github.io/charts"
   chart      = "traefik"
   namespace  = "traefik"
-  version    = "34.5.0"
+  version    = var.traefik_chart_version
 
-  depends_on = [kubernetes_namespace.traefik]
+  depends_on = [kubernetes_namespace_v1.traefik]
 
-  set {
-    name  = "service.type"
-    value = "NodePort"
-  }
-  set {
-    name  = "ports.web.nodePort"
-    value = "30080"
-  }
-  set {
-    name  = "ports.websecure.nodePort"
-    value = "30443"
-  }
-  set {
-    name  = "providers.kubernetesIngress.enabled"
-    value = "true"
-  }
-  set {
-    name  = "providers.kubernetesCRD.enabled"
-    value = "true"
-  }
+  set = [
+    {
+      name  = "service.spec.type"
+      value = "NodePort"
+    },
+    {
+      name  = "ports.web.nodePort"
+      value = "30080"
+    },
+    {
+      name  = "ports.websecure.nodePort"
+      value = "30443"
+    },
+    {
+      name  = "providers.kubernetesIngress.enabled"
+      value = "true"
+    },
+    {
+      name  = "providers.kubernetesCRD.enabled"
+      value = "true"
+    },
+  ]
 }
 
 resource "helm_release" "metrics_server" {
@@ -180,14 +201,16 @@ resource "helm_release" "metrics_server" {
   repository = "https://kubernetes-sigs.github.io/metrics-server/"
   chart      = "metrics-server"
   namespace  = "kube-system"
-  version    = "3.12.2"
+  version    = var.metrics_server_chart_version
 
   depends_on = [time_sleep.wait_for_cluster]
 
-  set {
-    name  = "args[0]"
-    value = "--kubelet-insecure-tls"
-  }
+  set = [
+    {
+      name  = "args[0]"
+      value = "--kubelet-insecure-tls"
+    },
+  ]
 }
 
 resource "null_resource" "flux_operator_install" {
@@ -199,19 +222,27 @@ resource "null_resource" "flux_operator_install" {
     repo_branch     = var.flux_git_repository_branch
     repo_path       = var.flux_kustomization_path
     provider        = "github"
+    # reinstall when the pinned Flux Operator release changes
+    operator_version = var.flux_operator_version
   }
 
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/latest/download/install.yaml"
+    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/download/v${var.flux_operator_version}/install.yaml"
+  }
+
+  # A new kind cluster (for example a new node_image) needs this step again;
+  # without it the replaced cluster came up without Flux.
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
   }
 }
 
 resource "null_resource" "flux_instance" {
   depends_on = [
     null_resource.flux_operator_install,
-    kubernetes_secret.flux_git_auth
+    kubernetes_secret_v1.flux_git_auth
   ]
 
   triggers = {
@@ -223,6 +254,8 @@ resource "null_resource" "flux_instance" {
     repo_branch = var.flux_git_repository_branch
     repo_path   = var.flux_kustomization_path
     pull_secret = local.flux_pull_secret_yaml
+    # re-apply the FluxInstance when the pinned Flux version changes
+    flux_version = var.flux_version
   }
 
   provisioner "local-exec" {
@@ -268,13 +301,19 @@ EOF
     command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=true --timeout=5m"
     interpreter = ["/bin/bash", "-c"]
   }
+
+  # A new kind cluster (for example a new node_image) needs this step again;
+  # without it the replaced cluster came up without Flux.
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
+  }
 }
 
 resource "null_resource" "flux_pre_destroy" {
   depends_on = [
     kind_cluster.sre,
-    kubernetes_namespace.traefik,
-    kubernetes_namespace.bootstrap,
+    kubernetes_namespace_v1.traefik,
+    kubernetes_namespace_v1.bootstrap,
     null_resource.flux_instance,
   ]
 
@@ -289,10 +328,16 @@ resource "null_resource" "flux_pre_destroy" {
     command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.triggers.kubeconfig_path}\" \"${self.triggers.namespaces}\""
     interpreter = ["/bin/bash", "-c"]
   }
+
+  # A new kind cluster (for example a new node_image) needs this step again;
+  # without it the replaced cluster came up without Flux.
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
+  }
 }
 
 # Create PAT secret for Flux git authentication
-resource "kubernetes_secret" "flux_git_auth" {
+resource "kubernetes_secret_v1" "flux_git_auth" {
   count      = var.flux_git_token != "" ? 1 : 0
   depends_on = [null_resource.flux_operator_install]
 
@@ -310,7 +355,7 @@ resource "kubernetes_secret" "flux_git_auth" {
 }
 
 # Cluster-level config consumed by Flux postBuild substitutions.
-resource "kubernetes_config_map" "cluster_config" {
+resource "kubernetes_config_map_v1" "cluster_config" {
   metadata {
     name      = "cluster-config"
     namespace = "flux-system"
@@ -327,7 +372,7 @@ resource "kubernetes_config_map" "cluster_config" {
 }
 
 # Sensitive config consumed by Flux postBuild substitutions (via substituteFrom Secret).
-resource "kubernetes_secret" "cluster_secrets" {
+resource "kubernetes_secret_v1" "cluster_secrets" {
   metadata {
     name      = "cluster-secrets"
     namespace = "flux-system"
@@ -343,7 +388,7 @@ resource "kubernetes_secret" "cluster_secrets" {
 }
 
 # Bootstrap namespaces early so Terraform can safely create cross-namespace secrets.
-resource "kubernetes_namespace" "bootstrap" {
+resource "kubernetes_namespace_v1" "bootstrap" {
   for_each = toset(["develop", "staging", "production", "observability"])
 
   metadata {
@@ -364,9 +409,9 @@ resource "kubernetes_namespace" "bootstrap" {
 }
 
 # Create imagePullSecret for GHCR in each namespace
-resource "kubernetes_secret" "ghcr_credentials" {
+resource "kubernetes_secret_v1" "ghcr_credentials" {
   for_each   = local.ghcr_secret_enabled ? toset(["flux-system", "develop", "staging", "production", "observability"]) : toset([])
-  depends_on = [null_resource.flux_instance, kubernetes_namespace.bootstrap]
+  depends_on = [null_resource.flux_instance, kubernetes_namespace_v1.bootstrap]
 
   metadata {
     name      = "ghcr-credentials-docker"
@@ -390,7 +435,7 @@ resource "kubernetes_secret" "ghcr_credentials" {
 
 
 # Create SOPS age secret for Flux decryption
-resource "kubernetes_secret" "sops_age" {
+resource "kubernetes_secret_v1" "sops_age" {
   count      = var.sops_age_key != "" || var.local_profile ? 1 : 0
   depends_on = [null_resource.flux_instance, null_resource.age_key]
 
@@ -407,7 +452,7 @@ resource "kubernetes_secret" "sops_age" {
 }
 
 # Create CNPG backup S3 secret in each environment namespace
-resource "kubernetes_secret" "cnpg_backup_s3" {
+resource "kubernetes_secret_v1" "cnpg_backup_s3" {
   for_each = local.backup_s3_secret_enabled ? toset(["develop", "staging", "production"]) : toset([])
 
   metadata {
@@ -427,7 +472,7 @@ resource "kubernetes_secret" "cnpg_backup_s3" {
     var.r2_region != "" ? { REGION = var.r2_region } : {},
   )
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
 output "flux_operator_installed" {

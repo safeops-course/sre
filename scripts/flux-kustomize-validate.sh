@@ -7,7 +7,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FLUX_ROOT="${REPO_ROOT}/flux"
 
-SCHEMA_URL="${FLUX_VALIDATE_SCHEMA_URL:-https://github.com/fluxcd/flux2/releases/latest/download/crd-schemas.tar.gz}"
+SCHEMA_URL="${FLUX_VALIDATE_SCHEMA_URL:-https://github.com/fluxcd/flux2/releases/download/v2.9.5/crd-schemas.tar.gz}"
 SCHEMA_ROOT="${FLUX_VALIDATE_SCHEMA_ROOT:-/tmp/flux-crd-schemas}"
 SCHEMA_VARIANT="${FLUX_VALIDATE_SCHEMA_VARIANT:-master-standalone-strict}"
 SCHEMA_DIR="${SCHEMA_ROOT}/${SCHEMA_VARIANT}"

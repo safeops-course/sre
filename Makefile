@@ -4,10 +4,10 @@ BIN_DIR := $(CURDIR)/bin
 export PATH := $(BIN_DIR):$(PATH)
 
 # Pinned toolchain versions (minimums are checked by scripts/check-tools.sh)
-TERRAFORM_VERSION := 1.13.3
-KUBECTL_VERSION := 1.34.1
-KIND_VERSION := 0.30.0
-FLUX_VERSION := 2.7.0
+TERRAFORM_VERSION := 1.16.4
+KUBECTL_VERSION := 1.36.5
+KIND_VERSION := 0.33.0
+FLUX_VERSION := 2.9.5
 
 .PHONY: help check-tools versions plan install-hooks pre-commit fmt validate smoke-test terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
 

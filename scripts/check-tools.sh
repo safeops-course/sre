@@ -12,9 +12,9 @@
 set -Eeuo pipefail
 
 # Minimum versions (major.minor[.patch]); "" = any version.
-MIN_TERRAFORM="1.5"
+MIN_TERRAFORM="1.10"
 MIN_KIND="0.30"
-MIN_KUBECTL="1.30"
+MIN_KUBECTL="1.35"
 MIN_FLUX="2.4"
 
 # Resources Docker gives the kind nodes. Measured on the full local profile:

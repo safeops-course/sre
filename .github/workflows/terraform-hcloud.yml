@@ -42,13 +42,13 @@ jobs:
 
       - name: Setup kubectl
         run: |
-          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          curl -sLO "https://dl.k8s.io/release/v1.36.5/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.14.5"
+          terraform_version: "1.16.4"
           terraform_wrapper: false
 
       - name: Terraform fmt
@@ -147,13 +147,13 @@ jobs:
 
       - name: Setup kubectl
         run: |
-          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          curl -sLO "https://dl.k8s.io/release/v1.36.5/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.14.5"
+          terraform_version: "1.16.4"
 
       - name: Terraform init
         env:
