@@ -30,9 +30,10 @@ Variables (not secret - visible in the settings and in logs):
 - `BACKUP_S3_REGION` - `nbg1`
 - `BACKUP_S3_BUCKET` - a private bucket in the same Hetzner project (bucket names are global)
 
-The state bucket and endpoint are fixed in `infra/terraform/hcloud_cluster/backend.tf`. The backup
-bucket must also match `BACKUP_S3_BUCKET` in `flux/bootstrap/flux-system/infrastructure.yaml`,
-where Flux substitutes it into the CNPG clusters.
+The state bucket and endpoint are fixed in `infra/terraform/hcloud_cluster/backend.tf`. The three
+`BACKUP_S3_*` variables have one consumer, Terraform: it configures the etcd snapshots, writes the
+`cnpg-backup-s3` Secret, and writes the ConfigMap `flux-system/backup-s3` that Flux substitutes into
+the CNPG clusters (`postBuild.substituteFrom`). Change them in GitHub only.
 
 Why two stores: the backup key has to live in the cluster, the state key must not. An S3 key is
 scoped to a whole bucket (R2) or a whole project (Hetzner), not to a prefix - with one bucket, a

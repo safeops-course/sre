@@ -107,15 +107,11 @@ patches:
         value:
           - name: infrastructure
 
-  # --- CNPG clusters: back up to MinIO, secrets come from Terraform ---------
+  # --- CNPG clusters: wait for MinIO ---------------------------------------
+  # Endpoint, bucket and keys point at MinIO already: Terraform writes them
+  # (ConfigMap flux-system/backup-s3, Secret cnpg-backup-s3).
   - target: { kind: Kustomization, name: cnpg-cluster-develop }
     patch: |-
-      - op: replace
-        path: /spec/postBuild/substitute/BACKUP_S3_ENDPOINT
-        value: http://minio.minio.svc.cluster.local:9000
-      - op: replace
-        path: /spec/postBuild/substitute/BACKUP_S3_BUCKET
-        value: sre
       - op: replace
         path: /spec/dependsOn
         value:
@@ -126,12 +122,6 @@ patches:
   - target: { kind: Kustomization, name: cnpg-cluster-staging }
     patch: |-
       - op: replace
-        path: /spec/postBuild/substitute/BACKUP_S3_ENDPOINT
-        value: http://minio.minio.svc.cluster.local:9000
-      - op: replace
-        path: /spec/postBuild/substitute/BACKUP_S3_BUCKET
-        value: sre
-      - op: replace
         path: /spec/dependsOn
         value:
           - name: cnpg-operator
@@ -140,12 +130,6 @@ patches:
           - name: minio
   - target: { kind: Kustomization, name: cnpg-cluster-production }
     patch: |-
-      - op: replace
-        path: /spec/postBuild/substitute/BACKUP_S3_ENDPOINT
-        value: http://minio.minio.svc.cluster.local:9000
-      - op: replace
-        path: /spec/postBuild/substitute/BACKUP_S3_BUCKET
-        value: sre
       - op: replace
         path: /spec/dependsOn
         value:

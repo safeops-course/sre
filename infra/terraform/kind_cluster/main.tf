@@ -451,6 +451,28 @@ resource "kubernetes_secret_v1" "sops_age" {
   }
 }
 
+# Non-secret backup target for Flux. The cnpg-cluster-<env> Kustomizations read
+# BACKUP_S3_ENDPOINT and BACKUP_S3_BUCKET from this ConfigMap (postBuild.substituteFrom),
+# so etcd snapshots, the cnpg-backup-s3 Secret and the CNPG clusters all use the same
+# Terraform inputs - there is no second copy of these values in Git.
+# Local profile: the in-cluster MinIO (bucket sre, created by flux/infrastructure/data/minio).
+resource "kubernetes_config_map_v1" "backup_s3" {
+  depends_on = [null_resource.flux_instance]
+
+  metadata {
+    name      = "backup-s3"
+    namespace = "flux-system"
+  }
+
+  data = var.local_profile ? {
+    BACKUP_S3_ENDPOINT = "http://minio.minio.svc.cluster.local:9000"
+    BACKUP_S3_BUCKET   = "sre"
+    } : {
+    BACKUP_S3_ENDPOINT = var.backup_s3_endpoint
+    BACKUP_S3_BUCKET   = var.backup_s3_bucket
+  }
+}
+
 # CNPG backup credentials (Hetzner Object Storage) for the full platform profile
 # (local_profile = false). The local profile uses MinIO instead (local-profile.tf).
 resource "kubernetes_secret_v1" "cnpg_backup_s3" {

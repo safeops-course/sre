@@ -365,6 +365,24 @@ resource "kubernetes_secret_v1" "sops_age" {
   depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
+# Non-secret backup target for Flux. The cnpg-cluster-<env> Kustomizations read
+# BACKUP_S3_ENDPOINT and BACKUP_S3_BUCKET from this ConfigMap (postBuild.substituteFrom),
+# so etcd snapshots, the cnpg-backup-s3 Secret and the CNPG clusters all use the same
+# Terraform inputs - there is no second copy of these values in Git.
+resource "kubernetes_config_map_v1" "backup_s3" {
+  metadata {
+    name      = "backup-s3"
+    namespace = "flux-system"
+  }
+
+  data = {
+    BACKUP_S3_ENDPOINT = var.backup_s3_endpoint
+    BACKUP_S3_BUCKET   = var.backup_s3_bucket
+  }
+
+  depends_on = [kubernetes_namespace_v1.bootstrap]
+}
+
 # Optional: backup object-store credentials for CloudNativePG.
 resource "kubernetes_secret_v1" "cnpg_backup_s3" {
   for_each = local.backup_s3_secret_enabled ? toset(["develop", "staging", "production"]) : toset([])

@@ -103,11 +103,11 @@ spec:
   prune: true
   wait: false
   postBuild:
-    substitute:
-      # Hetzner Object Storage, next to the cluster (nbg1). Not secret; the keys come
-      # from the cnpg-backup-s3 Secret (Terraform, BACKUP_S3_* in GitHub).
-      BACKUP_S3_ENDPOINT: "https://nbg1.your-objectstorage.com"
-      BACKUP_S3_BUCKET: "safeops-sre-backups"
+    # BACKUP_S3_ENDPOINT / BACKUP_S3_BUCKET: written by Terraform from the same inputs
+    # as the cnpg-backup-s3 Secret and the etcd snapshots (BACKUP_S3_* in GitHub).
+    substituteFrom:
+      - kind: ConfigMap
+        name: backup-s3
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-develop
@@ -160,11 +160,11 @@ spec:
   prune: true
   wait: false
   postBuild:
-    substitute:
-      # Hetzner Object Storage, next to the cluster (nbg1). Not secret; the keys come
-      # from the cnpg-backup-s3 Secret (Terraform, BACKUP_S3_* in GitHub).
-      BACKUP_S3_ENDPOINT: "https://nbg1.your-objectstorage.com"
-      BACKUP_S3_BUCKET: "safeops-sre-backups"
+    # BACKUP_S3_ENDPOINT / BACKUP_S3_BUCKET: written by Terraform from the same inputs
+    # as the cnpg-backup-s3 Secret and the etcd snapshots (BACKUP_S3_* in GitHub).
+    substituteFrom:
+      - kind: ConfigMap
+        name: backup-s3
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-staging
@@ -217,11 +217,11 @@ spec:
   prune: true
   wait: false
   postBuild:
-    substitute:
-      # Hetzner Object Storage, next to the cluster (nbg1). Not secret; the keys come
-      # from the cnpg-backup-s3 Secret (Terraform, BACKUP_S3_* in GitHub).
-      BACKUP_S3_ENDPOINT: "https://nbg1.your-objectstorage.com"
-      BACKUP_S3_BUCKET: "safeops-sre-backups"
+    # BACKUP_S3_ENDPOINT / BACKUP_S3_BUCKET: written by Terraform from the same inputs
+    # as the cnpg-backup-s3 Secret and the etcd snapshots (BACKUP_S3_* in GitHub).
+    substituteFrom:
+      - kind: ConfigMap
+        name: backup-s3
   dependsOn:
     - name: cnpg-operator
     - name: network-policies-production
