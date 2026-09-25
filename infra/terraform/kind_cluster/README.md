@@ -4,8 +4,8 @@ This Terraform configuration creates a local Kubernetes cluster using [kind](htt
 
 ## Architecture
 
-- **Kind Cluster**: 1 control-plane node + 2 worker nodes
-- **Flux Operator**: Installed via Helm chart
+- **Kind Cluster**: 1 control-plane node + 1 worker node
+- **Flux Operator**: Installed with `kubectl apply` from the Flux Operator release manifest
 - **FluxInstance**: Deploys all Flux controllers (source, kustomize, helm, notification, image-reflector, image-automation)
 - **Optional GitOps Bootstrap**: Automatically connects to your Git repository
 
