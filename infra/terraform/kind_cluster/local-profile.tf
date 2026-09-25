@@ -33,9 +33,9 @@ resource "random_password" "minio_root" {
   special = false
 }
 
-resource "kubernetes_secret" "local_backend_secrets" {
+resource "kubernetes_secret_v1" "local_backend_secrets" {
   for_each   = local.local_envs
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 
   metadata {
     name      = "backend-secrets"
@@ -52,9 +52,9 @@ resource "kubernetes_secret" "local_backend_secrets" {
 }
 
 # CNPG bootstrap.initdb.secret expects a kubernetes.io/basic-auth secret.
-resource "kubernetes_secret" "local_postgres_app" {
+resource "kubernetes_secret_v1" "local_postgres_app" {
   for_each   = local.local_envs
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 
   metadata {
     name      = "app-postgres-app"
@@ -78,7 +78,7 @@ resource "kubernetes_secret" "local_postgres_app" {
   }
 }
 
-resource "kubernetes_namespace" "minio" {
+resource "kubernetes_namespace_v1" "minio" {
   count      = var.local_profile ? 1 : 0
   depends_on = [time_sleep.wait_for_cluster]
 
@@ -91,9 +91,9 @@ resource "kubernetes_namespace" "minio" {
   }
 }
 
-resource "kubernetes_secret" "minio_credentials" {
+resource "kubernetes_secret_v1" "minio_credentials" {
   count      = var.local_profile ? 1 : 0
-  depends_on = [kubernetes_namespace.minio]
+  depends_on = [kubernetes_namespace_v1.minio]
 
   metadata {
     name      = "minio-credentials"
@@ -109,9 +109,9 @@ resource "kubernetes_secret" "minio_credentials" {
 }
 
 # Same secret name/keys the CNPG clusters reference for R2, pointed at MinIO.
-resource "kubernetes_secret" "local_cnpg_backup" {
+resource "kubernetes_secret_v1" "local_cnpg_backup" {
   for_each   = local.local_envs
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 
   metadata {
     name      = "cnpg-backup-s3"

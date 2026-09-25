@@ -26,9 +26,10 @@ workers_count       = 1
 # autoscaling_max_nodes = 5
 
 # ─── K3s & OS Upgrades ──────────────────────────────────────────────────────
-k3s_channel = "v1.34"
-# k3s_version    = ""           # pin exact version (overrides channel)
-auto_upgrade_k3s = true
+k3s_channel = "stable"
+k3s_version = "v1.36.4+k3s1" # pinned: the same Kubernetes as the kind cluster
+# a pinned version must not move by itself; OS updates stay automatic (kured)
+auto_upgrade_k3s = false
 auto_upgrade_os  = true
 
 # ─── Kured (Kubernetes Reboot Daemon) ───────────────────────────────────────
@@ -48,7 +49,7 @@ flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
 flux_kustomization_path    = "./flux/bootstrap/flux-system"
 # flux_version             = "2.x"
-# flux_operator_version    = "0.30.0"
+# flux_operator_version    = "0.60.0"
 
 # ─── Image Registry ────────────────────────────────────────────────────────────
 # Change these if you fork the repos to your own GitHub account.

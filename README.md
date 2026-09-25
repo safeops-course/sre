@@ -67,7 +67,7 @@ Companion repos in this workspace:
 ### Local kind (Optional)
 
 1. Install system prerequisites: Docker (running), `curl`, `tar`, `unzip`.
-2. Install the Kubernetes/IaC CLIs manually (recommended versions): Terraform 1.13.3, kubectl 1.34.1, kind 0.30.0, flux 2.7.0.
+2. Install the Kubernetes/IaC CLIs manually (recommended versions): Terraform 1.16.4, kubectl 1.36.5, kind 0.33.0, flux 2.9.5.
 3. Provision the local kind cluster via Terraform (`infra/terraform/kind_cluster`) -- this installs Flux and reconciles the **local profile** (`flux/bootstrap/profiles/local`): the platform without its cloud-only parts, with MinIO standing in for R2 and Terraform-generated runtime secrets. `flux get kustomizations -A` should be all green.
 4. Follow `docs/local-dev.md` for what the local profile includes, how to point it at your fork, and the verification commands.
 

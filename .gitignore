@@ -7,6 +7,8 @@
 __pycache__/
 *.tfstate
 *.tfstate.backup
+# terraform state rm / apply backups: terraform.tfstate.<timestamp>.backup - they hold secrets
+*.tfstate.*
 terraform.tfstate.d/
 # Saved plans can hold secret values in plain text - never commit them
 tfplan

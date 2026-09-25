@@ -159,13 +159,13 @@ variable "autoscaling_max_nodes" {
 variable "k3s_channel" {
   description = "K3s release channel (e.g. v1.34, stable). Used when k3s_version is empty."
   type        = string
-  default     = "v1.34"
+  default     = "stable"
 }
 
 variable "k3s_version" {
   description = "Pin an exact K3s version (e.g. v1.34.0+k3s1). Overrides k3s_channel when set."
   type        = string
-  default     = ""
+  default     = "v1.36.4+k3s1"
 }
 
 variable "auto_upgrade_k3s" {
@@ -229,15 +229,15 @@ variable "traefik_autoscaling" {
 # ─── Flux ────────────────────────────────────────────────────────────────────
 
 variable "flux_operator_version" {
-  description = "Flux Operator Helm chart version."
+  description = "Flux Operator release to install (install.yaml from its GitHub release)."
   type        = string
-  default     = "0.30.0"
+  default     = "0.60.0"
 }
 
 variable "flux_version" {
-  description = "Flux version to install (e.g., '2.x', '2.4.x', 'v2.4.0')."
+  description = "Flux version the FluxInstance installs. Pinned, so a rebuild gets the same Flux."
   type        = string
-  default     = "2.x"
+  default     = "2.9.5"
 }
 
 variable "flux_git_repository_url" {

@@ -11,23 +11,25 @@ This runbook is the authoritative path for provisioning and validating the Hetzn
 - Flux Git auth model (MVP): **public GitHub repo over HTTPS** (no Git token required by default).
 - Demo ingress strategy (MVP): HTTP + Host header (`backend.local`, `frontend.local`) against LB IP.
 
-## Required GitHub Actions Secrets
+## Required GitHub Actions Secrets and Variables
 
 Set these in: GitHub -> Settings -> Secrets and variables -> Actions.
 
-Required:
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `HCLOUD_TOKEN`
-- `HCLOUD_SSH_PUBLIC_KEY`
-- `HCLOUD_SSH_PRIVATE_KEY`
+Secrets (really secret):
+- `HCLOUD_TOKEN` - Hetzner project token, Read & Write
+- `HCLOUD_SSH_PRIVATE_KEY` - a dedicated node key, never a key that unlocks anything else
+- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` - Terraform state and backups in R2
+- `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`
 
-Optional (only when needed):
-- `SOPS_AGE_KEY`: needed when using encrypted manifests under `flux/secrets/**`.
-- `GHCR_USERNAME` / `GHCR_TOKEN`: needed when GHCR images are private.
-- `FLUX_GIT_TOKEN`: not required for the default public-repo MVP path.
-- `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` / `BACKUP_S3_BUCKET`: needed when creating CNPG backup object-store secret via Terraform.
-- `BACKUP_S3_ENDPOINT` / `BACKUP_S3_REGION`: optional, for AWS-compatible providers (for example R2/S3 endpoint tuning).
+Variables (not secret - visible in the settings and in logs):
+- `HCLOUD_SSH_PUBLIC_KEY` - the public half of the node key
+- `R2_ENDPOINT` - `https://<account-id>.r2.cloudflarestorage.com`
+- `R2_REGION` - `auto`
+- `R2_BUCKET` - `sre` (the same bucket as the Terraform state; CNPG backups and etcd snapshots use
+  their own prefixes)
+
+Not needed: the repository and the container images are public, so Flux and the nodes need no Git
+or registry token (the former `FLUX_GIT_TOKEN`, `GHCR_USERNAME` and `GHCR_TOKEN`).
 
 ## Preflight Checklist
 

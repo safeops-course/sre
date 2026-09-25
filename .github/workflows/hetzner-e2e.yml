@@ -6,9 +6,10 @@ name: Hetzner - end-to-end check
 # (hourly billing, 1 control plane + 1 worker + 1 load balancer).
 #
 # Manual start + manual approval. Required secrets: HCLOUD_TOKEN,
-# HCLOUD_SSH_PUBLIC_KEY, HCLOUD_SSH_PRIVATE_KEY, SOPS_AGE_KEY, R2_* (state and
-# CNPG backups, incl. R2_BUCKET). FLUX_GIT_TOKEN must be valid or unset - an
-# expired token makes Flux fail to read even the public repository.
+# HCLOUD_SSH_PRIVATE_KEY, SOPS_AGE_KEY, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.
+# Required variables (not secret): HCLOUD_SSH_PUBLIC_KEY, R2_ENDPOINT, R2_REGION,
+# R2_BUCKET. The repository and the images are public, so Flux and the nodes need
+# no Git or registry token.
 
 on:
   workflow_dispatch:
@@ -34,21 +35,21 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     steps:
-      - name: Required secrets are set
+      - name: Required secrets and variables are set
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
-          HCLOUD_SSH_PUBLIC_KEY: ${{ secrets.HCLOUD_SSH_PUBLIC_KEY }}
+          HCLOUD_SSH_PUBLIC_KEY: ${{ vars.HCLOUD_SSH_PUBLIC_KEY }}
           HCLOUD_SSH_PRIVATE_KEY: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
         run: |
           missing=0
           for s in HCLOUD_TOKEN HCLOUD_SSH_PUBLIC_KEY HCLOUD_SSH_PRIVATE_KEY SOPS_AGE_KEY R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET R2_ENDPOINT; do
             if [ -z "${!s}" ]; then
-              echo "::error::secret $s is not set"
+              echo "::error::$s is not set (secret or variable)"
               missing=1
             fi
           done
@@ -87,20 +88,18 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       TF_INPUT: "false"
       TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-      TF_VAR_ssh_public_key: ${{ secrets.HCLOUD_SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_public_key: ${{ vars.HCLOUD_SSH_PUBLIC_KEY }}
       TF_VAR_ssh_private_key: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
       TF_VAR_flux_git_repository_url: https://github.com/${{ github.repository }}.git
       TF_VAR_flux_git_repository_branch: main
       TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
-      TF_VAR_flux_git_token: ${{ secrets.FLUX_GIT_TOKEN }}
       # The images are public: no registry credentials, so an expired GHCR token cannot break pulls.
-      TF_VAR_enable_ghcr: "false"
       TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
       TF_VAR_backup_s3_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
       TF_VAR_backup_s3_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      TF_VAR_backup_s3_bucket: ${{ secrets.R2_BUCKET }}
-      TF_VAR_backup_s3_endpoint: ${{ secrets.R2_ENDPOINT }}
-      TF_VAR_backup_s3_region: ${{ secrets.R2_REGION }}
+      TF_VAR_backup_s3_bucket: ${{ vars.R2_BUCKET }}
+      TF_VAR_backup_s3_endpoint: ${{ vars.R2_ENDPOINT }}
+      TF_VAR_backup_s3_region: ${{ vars.R2_REGION }}
       KUBECONFIG: ${{ github.workspace }}/infra/terraform/hcloud_cluster/kubeconfig.yaml
 
     steps:
@@ -109,7 +108,7 @@ jobs:
 
       - name: Setup kubectl
         run: |
-          curl -sLO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
+          curl -sLO "https://dl.k8s.io/release/v1.36.5/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
       - name: Setup flux CLI
@@ -120,7 +119,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.14.5"
+          terraform_version: "1.16.4"
           terraform_wrapper: false
 
       - name: Terraform init

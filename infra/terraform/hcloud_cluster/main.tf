@@ -66,8 +66,8 @@ locals {
 }
 
 module "kube_hetzner" {
-  # kube-hetzner v2.19.0
-  source = "git::https://github.com/kube-hetzner/terraform-hcloud-kube-hetzner.git?ref=a52d120bfb9f67d6c1d01add5d202609543df3ab"
+  source  = "kube-hetzner/kube-hetzner/hcloud"
+  version = "3.2.1"
   providers = {
     hcloud = hcloud
   }
@@ -85,9 +85,9 @@ module "kube_hetzner" {
   allow_scheduling_on_control_plane = var.allow_scheduling_on_control_plane
 
   # Load balancer
-  load_balancer_type         = var.load_balancer_type
-  load_balancer_location     = var.location
-  load_balancer_disable_ipv6 = true
+  load_balancer_type        = var.load_balancer_type
+  load_balancer_location    = var.location
+  load_balancer_enable_ipv6 = false
 
   # Ingress
   ingress_controller        = var.ingress_controller
@@ -95,10 +95,10 @@ module "kube_hetzner" {
   traefik_autoscaling       = var.traefik_autoscaling
 
   # K3s versioning
-  initial_k3s_channel       = var.k3s_channel
-  install_k3s_version       = var.k3s_version
-  automatically_upgrade_k3s = var.auto_upgrade_k3s
-  automatically_upgrade_os  = var.auto_upgrade_os
+  k3s_channel                      = var.k3s_channel
+  k3s_version                      = var.k3s_version
+  automatically_upgrade_kubernetes = var.auto_upgrade_k3s
+  automatically_upgrade_os         = var.auto_upgrade_os
 
   # cert-manager is managed by Flux, not kube-hetzner
   enable_cert_manager = false
@@ -110,7 +110,7 @@ module "kube_hetzner" {
   etcd_s3_backup = local.etcd_s3_backup
 
   # OIDC / extra kube-apiserver flags
-  k3s_exec_server_args = var.k3s_exec_server_args
+  control_plane_exec_args = var.k3s_exec_server_args
 }
 
 locals {
@@ -135,7 +135,7 @@ resource "local_sensitive_file" "kubeconfig" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     host                   = module.kube_hetzner.kubeconfig_data.host
     client_certificate     = module.kube_hetzner.kubeconfig_data.client_certificate
     client_key             = module.kube_hetzner.kubeconfig_data.client_key
@@ -150,7 +150,7 @@ provider "kubernetes" {
   cluster_ca_certificate = module.kube_hetzner.kubeconfig_data.cluster_ca_certificate
 }
 
-resource "kubernetes_namespace" "bootstrap" {
+resource "kubernetes_namespace_v1" "bootstrap" {
   for_each = toset([
     "flux-system",
     "develop",
@@ -178,7 +178,7 @@ resource "kubernetes_namespace" "bootstrap" {
 }
 
 # Cluster-level config consumed by Flux postBuild substitutions.
-resource "kubernetes_config_map" "cluster_config" {
+resource "kubernetes_config_map_v1" "cluster_config" {
   metadata {
     name      = "cluster-config"
     namespace = "flux-system"
@@ -191,11 +191,11 @@ resource "kubernetes_config_map" "cluster_config" {
     git_owner          = var.git_owner
   }
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
 # Sensitive config consumed by Flux postBuild substitutions (via substituteFrom Secret).
-resource "kubernetes_secret" "cluster_secrets" {
+resource "kubernetes_secret_v1" "cluster_secrets" {
   metadata {
     name      = "cluster-secrets"
     namespace = "flux-system"
@@ -207,11 +207,11 @@ resource "kubernetes_secret" "cluster_secrets" {
     uptrace_dsn = var.uptrace_dsn
   }
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
 # Optional: credentials for syncing a private Git repository over HTTPS.
-resource "kubernetes_secret" "flux_git_credentials" {
+resource "kubernetes_secret_v1" "flux_git_credentials" {
   count = local.flux_git_secret_enabled ? 1 : 0
 
   metadata {
@@ -226,11 +226,11 @@ resource "kubernetes_secret" "flux_git_credentials" {
     password = var.flux_git_token
   }
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
 resource "null_resource" "flux_operator_install" {
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 
   triggers = {
     kubeconfig_path = local.kubeconfig_path
@@ -239,14 +239,14 @@ resource "null_resource" "flux_operator_install" {
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/latest/download/install.yaml"
+    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/download/v${var.flux_operator_version}/install.yaml"
   }
 }
 
 resource "null_resource" "flux_instance" {
   depends_on = [
     null_resource.flux_operator_install,
-    kubernetes_secret.flux_git_credentials,
+    kubernetes_secret_v1.flux_git_credentials,
   ]
 
   triggers = {
@@ -303,7 +303,7 @@ EOF
 resource "null_resource" "flux_pre_destroy" {
   depends_on = [
     local_sensitive_file.kubeconfig,
-    kubernetes_namespace.bootstrap,
+    kubernetes_namespace_v1.bootstrap,
     null_resource.flux_instance,
   ]
 
@@ -321,7 +321,7 @@ resource "null_resource" "flux_pre_destroy" {
 }
 
 # Optional: GHCR imagePullSecret in every namespace used by workloads.
-resource "kubernetes_secret" "ghcr_credentials" {
+resource "kubernetes_secret_v1" "ghcr_credentials" {
   for_each = var.enable_ghcr ? toset(["flux-system", "develop", "staging", "production", "observability", "auth"]) : toset([])
 
   metadata {
@@ -343,12 +343,12 @@ resource "kubernetes_secret" "ghcr_credentials" {
     })
   }
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
 
 # Optional: age private key for Flux SOPS decryption.
-resource "kubernetes_secret" "sops_age" {
+resource "kubernetes_secret_v1" "sops_age" {
   count = local.sops_age_secret_enabled ? 1 : 0
 
   metadata {
@@ -362,11 +362,11 @@ resource "kubernetes_secret" "sops_age" {
 
   type = "Opaque"
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
 # Optional: backup object-store credentials for CloudNativePG.
-resource "kubernetes_secret" "cnpg_backup_s3" {
+resource "kubernetes_secret_v1" "cnpg_backup_s3" {
   for_each = local.backup_s3_secret_enabled ? toset(["develop", "staging", "production"]) : toset([])
 
   metadata {
@@ -386,5 +386,5 @@ resource "kubernetes_secret" "cnpg_backup_s3" {
     var.backup_s3_region != "" ? { REGION = var.backup_s3_region } : {},
   )
 
-  depends_on = [kubernetes_namespace.bootstrap]
+  depends_on = [kubernetes_namespace_v1.bootstrap]
 }

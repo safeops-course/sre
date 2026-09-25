@@ -29,15 +29,15 @@ variable "flux_kustomization_name" {
 }
 
 variable "flux_operator_version" {
-  description = "Version of the Flux Operator Helm chart to install."
+  description = "Flux Operator release to install (install.yaml from its GitHub release)."
   type        = string
-  default     = "0.30.0"
+  default     = "0.60.0"
 }
 
 variable "flux_version" {
-  description = "Version of Flux to install (e.g., '2.x', '2.4.x', 'v2.4.0'). Using '2.x' will install the latest 2.x version."
+  description = "Flux version the FluxInstance installs. Pinned, so a rebuild gets the same Flux."
   type        = string
-  default     = "2.x"
+  default     = "2.9.5"
 }
 
 variable "ghcr_token" {
@@ -134,4 +134,22 @@ variable "age_key_file" {
   description = "Path to the age private key used for SOPS (generated with age-keygen if missing when local_profile is true). Never committed."
   type        = string
   default     = "../../../age.agekey"
+}
+
+variable "kind_node_image" {
+  description = "kindest/node image, pinned by digest. Kubernetes v1.36.4, the same minor as k3s on the Hetzner track."
+  type        = string
+  default     = "kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed"
+}
+
+variable "traefik_chart_version" {
+  description = "Traefik Helm chart version."
+  type        = string
+  default     = "41.6.0"
+}
+
+variable "metrics_server_chart_version" {
+  description = "metrics-server Helm chart version."
+  type        = string
+  default     = "3.14.0"
 }
