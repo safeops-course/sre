@@ -475,6 +475,43 @@ resource "kubernetes_config_map_v1" "backup_s3" {
 
 # CNPG backup credentials (Hetzner Object Storage) for the full platform profile
 # (local_profile = false). The local profile uses MinIO instead (local-profile.tf).
+# Full platform profile only (local_profile = false; local-profile.tf seeds all three
+# envs for the local profile). CNPG owner credentials for production (bootstrap.initdb.secret, and DATABASE_* of the
+# backend). Generated per cluster and never written to Git - the plain Secret that used
+# to live in flux/infrastructure/data/cnpg-clusters/production made the production
+# database password public. develop/staging still come from SOPS (flux/secrets/<env>).
+resource "random_password" "postgres_app_production" {
+  count   = var.local_profile ? 0 : 1
+  length  = 32
+  special = false
+}
+
+resource "kubernetes_secret_v1" "postgres_app_production" {
+  count = var.local_profile ? 0 : 1
+
+  metadata {
+    name      = "app-postgres-app"
+    namespace = "production"
+    labels = {
+      "cnpg.io/reload" = "true"
+    }
+  }
+
+  type = "kubernetes.io/basic-auth"
+
+  data = {
+    username = "app"
+    password = random_password.postgres_app_production[0].result
+  }
+
+  # CNPG adopts the Secret and adds connection keys and labels; Terraform only seeds it.
+  lifecycle {
+    ignore_changes = [data, metadata[0].labels, metadata[0].annotations]
+  }
+
+  depends_on = [kubernetes_namespace_v1.bootstrap]
+}
+
 resource "kubernetes_secret_v1" "cnpg_backup_s3" {
   for_each = local.backup_s3_secret_enabled ? toset(["develop", "staging", "production"]) : toset([])
 
