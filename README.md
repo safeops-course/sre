@@ -32,7 +32,7 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 | Admission Policy Guardrails (advanced) | `flux/infrastructure/policy/kyverno/`, `flux/infrastructure/policy/packs/admission-guardrails/` |
 | Supply Chain Security (advanced) | `flux/infrastructure/policy/packs/supply-chain/` |
 | Rollback & Data Migrations (advanced) | `flux/infrastructure/data/cnpg-clusters/` |
-| Progressive Delivery (advanced module) | `flux/infrastructure/progressive-delivery/` |
+| Progressive Delivery (advanced) | `flux/infrastructure/progressive-delivery/` |
 
 ## Repository Layout
 
