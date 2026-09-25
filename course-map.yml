@@ -95,7 +95,7 @@ flux/infrastructure/policy/packs/supply-chain/verify-images.example.yaml:
   - chapter-17-supply-chain-security
 
 flux/infrastructure/progressive-delivery/develop/canary-backend.yaml:
-  - module-progressive-delivery
+  - chapter-19-progressive-delivery
 
 flux/infrastructure/resource-management/develop:
   - chapter-08-resource-management
