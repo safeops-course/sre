@@ -70,7 +70,7 @@ repos:
         entry: scripts/block-secrets.sh
         language: script
         # The file NAME, not the whole path: scripts/merge-kubeconfig.sh is not a kubeconfig.
-        files: (^|/)(kubeconfig(\.ya?ml)?|[^/]+\.(key|pem)|credentials(\.[^/]+)?|[^/]*\.env(\.[^/]+)?)$
+        files: (^|/)(kubeconfig(\.ya?ml)?|[^/]+\.(key|pem)|credentials[^/]*|[^/]*\.env(\.[^/]+)?)$
         exclude: \.example$
         stages: [pre-commit]
 

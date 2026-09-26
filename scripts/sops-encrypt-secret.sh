@@ -78,8 +78,10 @@ create_and_encrypt() {
     encrypted_tmp="${output_file}.enc.tmp"
     trap 'rm -f "${temp_file}" "${encrypted_tmp}"' EXIT
 
-    # Create template
+    # Create template. umask only applies to NEW files - remove a stale template first, so a leftover
+    # with loose permissions is never reused for the plaintext.
     umask 077
+    rm -f "${temp_file}"
     cat > "${temp_file}" <<EOF
 apiVersion: v1
 kind: Secret

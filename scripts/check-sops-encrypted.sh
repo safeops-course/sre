@@ -45,7 +45,13 @@ for f in "${files[@]}"; do
 
   # Leaf values under the top-level data:/stringData: blocks must all be ENC[...].
   plain=$(awk '
-    /^[^[:space:]#]/ { in_block = ($0 ~ /^(data|stringData):/) ; next }
+    /^[^[:space:]#]/ {
+      in_block = ($0 ~ /^(data|stringData):/)
+      # sops never writes an inline value here (`stringData: {token: x}`) - anything after the colon
+      # other than a comment is plaintext the block scan below would not see.
+      if (in_block) { rest = $0; sub(/^[^:]+:[[:space:]]*/, "", rest); if (rest != "" && rest !~ /^#/) print "(inline " $1 " " rest ")" }
+      next
+    }
     in_block && /^[[:space:]]+[^[:space:]#][^:]*:/ {
       value = $0
       sub(/^[[:space:]]+[^:]+:[[:space:]]*/, "", value)

@@ -19,7 +19,7 @@ private key: whoever gets the key can open every version of every file, includin
 | `develop/`, `staging/`, `production/` | `secrets-develop` / `-staging` / `-production` | platform key | the environment's namespace |
 | `local/` | `secrets-local` (kind local profile only) | **your** key | `develop` |
 
-The recipients are set per path in `/.sops.yaml`. The platform Kustomizations are defined in
+The recipients are set per path in `.sops.yaml` at the repository root. The platform Kustomizations are defined in
 `flux/bootstrap/flux-system/secrets.yaml`, the local one in `flux/bootstrap/profiles/local/secrets-local.yaml`.
 Each has `decryption: {provider: sops, secretRef: {name: sops-age}}`: the kustomize-controller decrypts
 in memory with the private key from the Secret `flux-system/sops-age` and applies the result.
@@ -48,7 +48,7 @@ environment only isolate anything when each environment has its own cluster.
 | Check | Where | Stops |
 |---|---|---|
 | `sops-encrypted` (`scripts/check-sops-encrypted.sh`) | pre-commit + CI | a file under `flux/secrets/` without SOPS metadata, or with a plaintext value added by hand |
-| `no-secrets` (`scripts/block-secrets.sh`) | pre-commit + CI | kubeconfigs, `*.key`, `*.pem`, `credentials*`, `*.env*` files anywhere in the repository |
+| `no-secrets` (`scripts/block-secrets.sh`) | pre-commit + CI | files named `kubeconfig` / `kubeconfig.yaml`, `*.key`, `*.pem`, `credentials*` (name starts with `credentials`), `*.env` / `*.env.*` - anywhere in the repository, `*.example` excepted |
 
 CI (`.github/workflows/secrets-guard.yml`) runs both on every pull request and push to `main`,
 because `git commit --no-verify` skips the local hooks.
