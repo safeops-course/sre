@@ -434,9 +434,10 @@ resource "kubernetes_secret_v1" "ghcr_credentials" {
 }
 
 
-# Create SOPS age secret for Flux decryption
+# SOPS age secret for Flux decryption. Write-only (data_wo): sops_age_key never reaches the plan
+# or the state (the generated local-profile key is a throwaway dev key read by data.local_file).
+# After rotating sops_age_key, bump sops_age_key_revision so Terraform re-sends it.
 resource "kubernetes_secret_v1" "sops_age" {
-  count      = var.sops_age_key != "" || var.local_profile ? 1 : 0
   depends_on = [null_resource.flux_instance, null_resource.age_key]
 
   metadata {
@@ -446,9 +447,16 @@ resource "kubernetes_secret_v1" "sops_age" {
 
   type = "Opaque"
 
-  data = {
+  data_wo = {
     "age.agekey" = var.sops_age_key != "" ? var.sops_age_key : data.local_file.age_key[0].content
   }
+  data_wo_revision = var.sops_age_key_revision
+}
+
+# The secret used to be optional (count); keep the existing object instead of recreating it.
+moved {
+  from = kubernetes_secret_v1.sops_age[0]
+  to   = kubernetes_secret_v1.sops_age
 }
 
 # Non-secret backup target for Flux. The cnpg-cluster-<env> Kustomizations read

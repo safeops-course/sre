@@ -51,6 +51,6 @@ Reference services are maintained as companion repos (`backend/`, `frontend/`) i
 
 ## Secrets and Security Model
 - Secrets are committed as SOPS-encrypted manifests under `flux/secrets/**`.
-- Flux decryption uses `sops-age` secret in `flux-system` when provided by Terraform (`TF_VAR_sops_age_key`).
+- Flux decryption uses the `sops-age` secret in `flux-system`, written by Terraform from the ephemeral `TF_VAR_sops_age_key` (`data_wo`: never in the plan or the state).
 - GHCR pull credentials are optional and created by Terraform when enabled.
 - Guardrails and AI operating rules are defined in `docs/ai-code-of-conduct.md`.

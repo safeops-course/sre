@@ -11,11 +11,8 @@ variable "ssh_public_key" {
   type        = string
 }
 
-variable "ssh_private_key" {
-  description = "SSH private key for cluster nodes (ed25519). Used by the module to bootstrap nodes."
-  type        = string
-  sensitive   = true
-}
+# No ssh_private_key: Terraform reaches the nodes through ssh-agent (ssh-add the key that
+# matches ssh_public_key before plan/apply), so the private key is never a Terraform value.
 
 variable "flux_git_token" {
   description = "Optional token for private repo sync. For GitHub, a fine-grained token with Contents:Read (or classic token with repo scope). Leave empty for public repos."
@@ -44,10 +41,21 @@ variable "enable_ghcr" {
 }
 
 variable "sops_age_key" {
-  description = "Optional age private key (contents of age.agekey) for SOPS decryption in Flux. Leave empty to skip creation of the sops-age secret."
+  description = "age private key (AGE-SECRET-KEY-...) for SOPS decryption in Flux. Ephemeral: needed for every plan and apply, never stored in the plan or the state."
   type        = string
-  default     = ""
   sensitive   = true
+  ephemeral   = true
+
+  validation {
+    condition     = startswith(var.sops_age_key, "AGE-SECRET-KEY-")
+    error_message = "sops_age_key must be an age private key (AGE-SECRET-KEY-...): Flux cannot decrypt flux/secrets/** without it."
+  }
+}
+
+variable "sops_age_key_revision" {
+  description = "Bump after rotating sops_age_key: the key is write-only, so Terraform re-sends it only when this number changes."
+  type        = number
+  default     = 1
 }
 
 variable "backup_s3_access_key_id" {

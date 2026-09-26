@@ -67,10 +67,22 @@ variable "flux_git_token" {
 }
 
 variable "sops_age_key" {
-  description = "Age private key contents for SOPS decryption in Flux. Leave empty to skip sops-age secret creation."
+  description = "age private key (AGE-SECRET-KEY-...) for SOPS decryption in Flux. Empty = the key generated for the local profile. Ephemeral: never stored in the plan or the state."
   type        = string
   default     = ""
   sensitive   = true
+  ephemeral   = true
+
+  validation {
+    condition     = var.sops_age_key != "" || var.local_profile
+    error_message = "sops_age_key is required when local_profile = false: only the local profile generates its own age key."
+  }
+}
+
+variable "sops_age_key_revision" {
+  description = "Bump after rotating sops_age_key: the key is write-only, so Terraform re-sends it only when this number changes."
+  type        = number
+  default     = 1
 }
 
 variable "backup_s3_access_key_id" {

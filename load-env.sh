@@ -96,10 +96,12 @@ else
   echo "Missing SSH public key at ${SSH_PUB_PATH}"
 fi
 
+# The node private key is never a Terraform variable (it would land in the plan and the state):
+# kube-hetzner signs in through ssh-agent, so load the key there once.
 if [[ -f "${SSH_PRIV_PATH}" ]]; then
-  HCLOUD_SSH_PRIVATE_KEY="$(cat "${SSH_PRIV_PATH}")"
-  export HCLOUD_SSH_PRIVATE_KEY
-  export TF_VAR_ssh_private_key="${HCLOUD_SSH_PRIVATE_KEY}"
+  if ! ssh-add -l 2>/dev/null | grep -qF "$(ssh-keygen -lf "${SSH_PUB_PATH}" | awk '{print $2}')"; then
+    ssh-add "${SSH_PRIV_PATH}" || echo "Could not add ${SSH_PRIV_PATH} to ssh-agent - Terraform cannot reach the nodes"
+  fi
 else
   echo "Missing SSH private key at ${SSH_PRIV_PATH}"
 fi
