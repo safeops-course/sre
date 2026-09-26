@@ -15,10 +15,24 @@ if [[ -z "${token}" ]]; then
   exit 2
 fi
 
+# The header comes from a process substitution (printf is a shell builtin), so the token never
+# appears in curl's arguments - other accounts on the machine could read those with ps.
+list_names() {
+  local kind="$1"
+  curl -fsS --connect-timeout 10 --max-time 30 \
+    -H @<(printf 'Authorization: Bearer %s\n' "${token}") \
+    "https://api.hetzner.cloud/v1/${kind}?per_page=50" \
+    | jq -r --arg k "${kind}" \
+      'if (.[$k] | type) == "array" then .[$k][].name else error("no \($k) array in the API response") end'
+}
+
 left=0
 for kind in servers volumes load_balancers primary_ips floating_ips networks firewalls placement_groups; do
-  names=$(curl -fsS -H "Authorization: Bearer ${token}" "https://api.hetzner.cloud/v1/${kind}?per_page=50" \
-    | jq -r --arg k "${kind}" '.[$k][] | .name')
+  # An API error or an unexpected response is not "nothing left" - stop.
+  if ! names=$(list_names "${kind}"); then
+    echo "::error::hcloud-leftovers: could not list ${kind} - the project is NOT verified empty" >&2
+    exit 2
+  fi
   if [[ -n "${names}" ]]; then
     echo "LEFT: ${kind}: $(echo "${names}" | tr '\n' ' ')"
     left=1

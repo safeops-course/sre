@@ -38,13 +38,17 @@ api_exists() {
   kc api-resources -o name 2>/dev/null | grep -qx "$1"
 }
 
-# Wait until "$@" (a kubectl get ... -o name) prints nothing, or the timeout (seconds) passes.
+# Wait until "$@" (a kubectl get ... -o name) succeeds AND prints nothing, or the timeout (seconds)
+# passes. A failed call (API unreachable) is not "empty" - keep waiting.
 wait_until_empty() {
   local timeout="$1"
   shift
   local deadline=$((SECONDS + timeout))
+  local out
   while (( SECONDS < deadline )); do
-    [[ -z "$(kc "$@" 2>/dev/null || true)" ]] && return 0
+    if out=$(kc "$@" 2>/dev/null) && [[ -z "${out}" ]]; then
+      return 0
+    fi
     sleep 5
   done
   return 1
@@ -126,9 +130,15 @@ unblock_namespace() {
           kc -n "${ns}" patch "${resource}" "${object#*/}" --type=merge -p '{"metadata":{"finalizers":[]}}' >/dev/null 2>&1 || true
         done
   done < <(kc api-resources --verbs=list --namespaced -o name 2>/dev/null || true)
-  kc get namespace "${ns}" -o json 2>/dev/null \
+  if ! command -v jq >/dev/null 2>&1; then
+    warn "jq not found - cannot clear spec.finalizers of namespace ${ns}"
+    return 0
+  fi
+  if ! kc get namespace "${ns}" -o json \
     | jq '.spec.finalizers = []' \
-    | kc replace --raw "/api/v1/namespaces/${ns}/finalize" -f - >/dev/null 2>&1 || true
+    | kc replace --raw "/api/v1/namespaces/${ns}/finalize" -f - >/dev/null; then
+    warn "could not clear spec.finalizers of namespace ${ns} - it may stay Terminating"
+  fi
 }
 
 if ! command -v kubectl >/dev/null 2>&1; then
