@@ -65,6 +65,8 @@ spec:
       className: traefik
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
+        # external-dns only publishes Ingresses that opt in (--annotation-filter=cloudflare-proxied=enabled)
+        cloudflare-proxied: "enabled"
       hosts:
         - host: dex.safeops.work
           paths:
