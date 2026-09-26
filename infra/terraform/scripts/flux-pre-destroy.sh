@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # Runs before `terraform destroy` removes the nodes (null_resource.flux_pre_destroy, hcloud and kind).
 # While the cluster is still alive, let it clean up what Terraform does not know about:
-#   1. suspend Flux, so it does not recreate what we delete; stop Kyverno and remove all admission
-#      webhooks - teardown needs none, and a webhook without a running backend (failurePolicy
-#      Fail) blocks every delete in the namespaces;
-#   2. delete the target namespaces - with them go the workloads, CNPG clusters and their PVCs,
-#      so no controller recreates a PVC; then every other PVC in the cluster;
+#   1. suspend Flux, so it does not recreate what we delete - but keep its controllers running: they
+#      remove their own finalizers (HelmRelease, ImagePolicy, ...) when those objects are deleted;
+#      stop Kyverno and remove all admission webhooks - teardown needs none, and a webhook without a
+#      running backend (failurePolicy Fail) blocks every delete in the namespaces;
+#   2. delete the target namespaces except flux-system - with them go the workloads, CNPG clusters
+#      and their PVCs, so no controller recreates a PVC; then every other PVC in the cluster;
 #   3. wait until the PersistentVolumes are gone - volumes with reclaimPolicy Delete (hcloud-volumes)
 #      are removed by the CSI driver only while it runs; after the nodes are gone they stay, billed;
-#   4. wait for the namespaces; only for what is still stuck, clear the finalizers on the objects
-#      that actually have them (not every object - that took hundreds of API calls per namespace).
+#   4. wait for those namespaces; only for what is still stuck, clear the finalizers on the objects
+#      that actually have them (not every object - that took hundreds of API calls per namespace);
+#   5. only then remove Flux itself: the FluxInstance (the operator uninstalls the controllers) and
+#      the flux-system namespace. Removing Flux first left every Flux object's finalizer unprocessed.
 # Everything left over is reported loudly. Terraform continues either way (on_failure = continue),
 # so the log lines here are the only warning.
 
@@ -69,9 +72,18 @@ suspend_flux() {
           kc -n "${ns}" patch "${resource}" "${name}" --type=merge -p '{"spec":{"suspend":true}}' >/dev/null 2>&1 || true
         done
   done
+}
+
+# Last: the FluxInstance (flux-operator uninstalls the controllers on its deletion), then flux-system.
+remove_flux() {
   if api_exists fluxinstances.fluxcd.controlplane.io; then
+    log "removing the FluxInstance"
     kc -n flux-system delete fluxinstance flux --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    wait_until_empty 120 -n flux-system get fluxinstances -o name \
+      || warn "FluxInstance still present after 120s - its finalizer is cleared with the namespace"
   fi
+  delete_namespaces flux-system
+  wait_for_namespaces flux-system
 }
 
 remove_admission_webhooks() {
@@ -95,21 +107,21 @@ delete_volumes() {
   fi
 }
 
-delete_namespaces() {
+delete_namespaces() {  # namespace...
   local ns
-  for ns in "${namespaces[@]}"; do
+  for ns in "$@"; do
     log "deleting namespace ${ns}"
     kc delete namespace "${ns}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
   done
 }
 
-wait_for_namespaces() {
+wait_for_namespaces() {  # namespace...
   local ns
-  if wait_until_empty "${NS_TIMEOUT}" get namespace "${namespaces[@]}" -o name --ignore-not-found=true; then
-    log "target namespaces deleted"
+  if wait_until_empty "${NS_TIMEOUT}" get namespace "$@" -o name --ignore-not-found=true; then
+    log "namespaces deleted: $*"
     return 0
   fi
-  for ns in "${namespaces[@]}"; do
+  for ns in "$@"; do
     kc get namespace "${ns}" >/dev/null 2>&1 || continue
     unblock_namespace "${ns}"
   done
@@ -130,6 +142,12 @@ unblock_namespace() {
           kc -n "${ns}" patch "${resource}" "${object#*/}" --type=merge -p '{"metadata":{"finalizers":[]}}' >/dev/null 2>&1 || true
         done
   done < <(kc api-resources --verbs=list --namespaced -o name 2>/dev/null || true)
+  # Clearing the object finalizers often lets the namespace finish on its own.
+  sleep 5
+  if [[ -z "$(kc get namespace "${ns}" --ignore-not-found -o name 2>/dev/null)" ]]; then
+    log "namespace ${ns} deleted"
+    return 0
+  fi
   if ! command -v jq >/dev/null 2>&1; then
     warn "jq not found - cannot clear spec.finalizers of namespace ${ns}"
     return 0
@@ -177,14 +195,24 @@ for ns in "${requested[@]}"; do
   esac
 done
 
+# flux-system is removed last (remove_flux), after everything its controllers have to clean up.
+app_namespaces=()
+flux_namespace=false
+for ns in ${namespaces[@]+"${namespaces[@]}"}; do
+  if [[ "${ns}" == flux-system ]]; then flux_namespace=true; else app_namespaces+=("${ns}"); fi
+done
+
 suspend_flux
 remove_admission_webhooks
-if (( ${#namespaces[@]} > 0 )); then
-  delete_namespaces
+if (( ${#app_namespaces[@]} > 0 )); then
+  delete_namespaces "${app_namespaces[@]}"
 fi
 delete_volumes
-if (( ${#namespaces[@]} > 0 )); then
-  wait_for_namespaces
+if (( ${#app_namespaces[@]} > 0 )); then
+  wait_for_namespaces "${app_namespaces[@]}"
+fi
+if [[ "${flux_namespace}" == true ]]; then
+  remove_flux
 fi
 
 log "pre-destroy cleanup finished"
