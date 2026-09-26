@@ -10,3 +10,9 @@ resources:
   - service.yaml
   - image-policy.yaml
   - image-automation.yaml
+# Same pattern as backend/frontend: the setter updates only the tag, the registry stays a Flux
+# substitution. A ":tag" marker on the full "image:" line would replace it with the bare tag.
+images:
+  - name: k8s-ai-monitor
+    newName: ${image_registry}/k8s-ai-monitor
+    newTag: main-v0.0.1-cb6c582-1790430914 # {"$imagepolicy": "observability:k8s-ai-monitor:tag"}
