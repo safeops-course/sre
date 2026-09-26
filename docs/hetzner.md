@@ -25,7 +25,9 @@ Secrets (really secret):
 - `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`
 - `TFPLAN_PASSPHRASE` - encrypts the saved Terraform plan between the plan and the apply job. The
   plan file contains every input variable in plain text, and artifacts of a public repository are
-  downloadable by anyone; only the encrypted file is uploaded (`terraform-hcloud.yml`)
+  downloadable by anyone. The artifact holds `tfplan.enc` (the encrypted plan) and `plan.txt` (the
+  human-readable plan, where sensitive variables already show as `(sensitive value)`); the plain
+  `tfplan` never leaves the plan job (`terraform-hcloud.yml`)
 
 Variables (not secret - visible in the settings and in logs):
 - `HCLOUD_SSH_PUBLIC_KEY` - the public half of the node key
