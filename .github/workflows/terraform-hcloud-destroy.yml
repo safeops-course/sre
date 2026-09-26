@@ -34,9 +34,9 @@ jobs:
   destroy:
     runs-on: ubuntu-latest
     needs: guard
-    # Approval: the "hetzner" environment requires a reviewer (Settings > Environments). The job
+    # Approval: the "production" environment requires a reviewer (Settings > Environments). The job
     # waits in the run page ("Review deployments") - no issue, no third-party action with a token.
-    environment: hetzner
+    environment: production
 
     steps:
       - name: Checkout
