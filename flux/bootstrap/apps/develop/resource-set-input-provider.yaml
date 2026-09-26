@@ -9,8 +9,6 @@ metadata:
 spec:
   type: OCIArtifactTag
   url: oci://${image_registry}/backend
-  secretRef:
-    name: ghcr-credentials-docker
   filter:
     includeTag: "develop"
     limit: 1

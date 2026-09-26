@@ -7,5 +7,3 @@ metadata:
 spec:
   image: ${image_registry}/k8s-ai-monitor
   interval: 1m0s
-  secretRef:
-    name: ghcr-credentials-docker

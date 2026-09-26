@@ -17,8 +17,6 @@ spec:
       serviceAccountName: k8s-ai-monitor
       securityContext:
         fsGroup: 1000
-      imagePullSecrets:
-        - name: ghcr-credentials-docker
       terminationGracePeriodSeconds: 30
       containers:
         - name: k8s-ai-monitor
