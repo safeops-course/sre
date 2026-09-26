@@ -78,10 +78,11 @@ create_and_encrypt() {
     encrypted_tmp="${output_file}.enc.tmp"
     trap 'rm -f "${temp_file}" "${encrypted_tmp}"' EXIT
 
-    # Create template. umask only applies to NEW files - remove a stale template first, so a leftover
-    # with loose permissions is never reused for the plaintext.
+    # Create template. umask only applies to NEW files: remove a stale template first, then create it
+    # exclusively (noclobber) - if anything appears there in between, fail instead of reusing it.
     umask 077
     rm -f "${temp_file}"
+    set -o noclobber
     cat > "${temp_file}" <<EOF
 apiVersion: v1
 kind: Secret
@@ -99,6 +100,7 @@ stringData:
   # TODO: Replace with actual secret values
   example-key: "example-value"
 EOF
+    set +o noclobber
 
     echo "📝 Created template: ${temp_file}"
     echo "   Opening in editor..."
