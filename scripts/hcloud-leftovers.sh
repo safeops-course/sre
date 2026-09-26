@@ -40,7 +40,7 @@ for kind in servers volumes load_balancers primary_ips floating_ips networks fir
 done
 
 if (( left )); then
-  echo "::error::Hetzner resources left after destroy - they are billed. Delete them in the Hetzner console (project SafeOps) or with the hcloud CLI." >&2
+  echo "::error::Hetzner resources left after destroy (servers, volumes, load balancers and IPs are billed; networks, firewalls and placement groups are not, but block a clean state). Re-run the destroy - a transient Hetzner API error is the usual cause - or delete them in the Hetzner console / with the hcloud CLI." >&2
   exit 1
 fi
 echo "Hetzner project is empty."
