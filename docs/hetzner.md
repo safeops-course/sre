@@ -17,12 +17,16 @@ Set these in: GitHub -> Settings -> Secrets and variables -> Actions.
 
 Secrets (really secret):
 - `HCLOUD_TOKEN` - Hetzner project token, Read & Write
-- `HCLOUD_SSH_PRIVATE_KEY` - a dedicated node key, never a key that unlocks anything else
+- `HCLOUD_SSH_PRIVATE_KEY` - a dedicated node key, never a key that unlocks anything else. The
+  workflows load it into ssh-agent; it is not a Terraform variable, so it is neither in the saved
+  plan nor in the state
 - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` - Terraform state in Cloudflare R2 (CI only, never in
-  the cluster: the state holds the node SSH key and the kubeconfig)
+  the cluster: the state holds the admin kubeconfig)
 - `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Hetzner Object
   Storage (Hetzner console -> Security -> S3 credentials); this key lives in the cluster
-- `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`
+- `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`. An ephemeral Terraform
+  variable written through `data_wo`: never in the plan or the state, so every plan and apply needs
+  it. After rotating it, bump `sops_age_key_revision`, otherwise Terraform does not re-send it
 - `TFPLAN_PASSPHRASE` - encrypts the saved Terraform plan between the plan and the apply job. The
   plan file contains every input variable in plain text, and artifacts of a public repository are
   downloadable by anyone. The artifact holds `tfplan.enc` (the encrypted plan) and `plan.txt` (the

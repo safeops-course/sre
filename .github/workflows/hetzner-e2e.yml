@@ -94,7 +94,6 @@ jobs:
       TF_INPUT: "false"
       TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
       TF_VAR_ssh_public_key: ${{ vars.HCLOUD_SSH_PUBLIC_KEY }}
-      TF_VAR_ssh_private_key: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
       TF_VAR_flux_git_repository_url: https://github.com/${{ github.repository }}.git
       TF_VAR_flux_git_repository_branch: main
       TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
@@ -126,6 +125,17 @@ jobs:
         with:
           terraform_version: "1.16.4"
           terraform_wrapper: false
+
+      - name: Load the node SSH key into ssh-agent
+        env:
+          NODE_SSH_KEY: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+        run: |
+          # kube-hetzner signs in to the nodes through ssh-agent (ssh_private_key = null), so the
+          # private key is never a Terraform variable - neither in the saved plan nor in the state.
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$NODE_SSH_KEY" | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
       - name: Terraform init
         run: terraform init -input=false

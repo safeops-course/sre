@@ -73,10 +73,12 @@ module "kube_hetzner" {
   }
 
   # Core
-  hcloud_token    = var.hcloud_token
-  cluster_name    = var.cluster_name
-  ssh_public_key  = var.ssh_public_key
-  ssh_private_key = var.ssh_private_key
+  hcloud_token   = var.hcloud_token
+  cluster_name   = var.cluster_name
+  ssh_public_key = var.ssh_public_key
+  # null = kube-hetzner signs in through ssh-agent (the key matching ssh_public_key). A private key
+  # passed as a variable would land in the saved plan and in the state (terraform_data inputs).
+  ssh_private_key = null
 
   # Node pools
   control_plane_nodepools           = local.control_plane_nodepools
@@ -153,7 +155,6 @@ locals {
   flux_pull_secret_yaml = var.flux_git_token != "" ? "    pullSecret: flux-system\n" : ""
 
   flux_git_secret_enabled = var.flux_git_token != ""
-  sops_age_secret_enabled = var.sops_age_key != ""
   backup_s3_secret_enabled = nonsensitive(
     var.backup_s3_access_key_id != "" &&
     var.backup_s3_secret_access_key != "" &&
@@ -380,18 +381,19 @@ resource "kubernetes_secret_v1" "ghcr_credentials" {
 }
 
 
-# Optional: age private key for Flux SOPS decryption.
+# age private key for Flux SOPS decryption. Write-only (data_wo): the key is sent to the cluster
+# but never stored in the plan or the state. Terraform cannot see a change in a write-only value,
+# so after a key rotation bump sops_age_key_revision.
 resource "kubernetes_secret_v1" "sops_age" {
-  count = local.sops_age_secret_enabled ? 1 : 0
-
   metadata {
     name      = "sops-age"
     namespace = "flux-system"
   }
 
-  data = {
+  data_wo = {
     "age.agekey" = var.sops_age_key
   }
+  data_wo_revision = var.sops_age_key_revision
 
   type = "Opaque"
 
@@ -471,4 +473,10 @@ resource "kubernetes_secret_v1" "cnpg_backup_s3" {
   )
 
   depends_on = [kubernetes_namespace_v1.bootstrap]
+}
+
+# The secret used to be optional (count); keep the existing object instead of recreating it.
+moved {
+  from = kubernetes_secret_v1.sops_age[0]
+  to   = kubernetes_secret_v1.sops_age
 }

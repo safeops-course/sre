@@ -54,6 +54,17 @@ jobs:
       - name: Terraform fmt
         run: terraform fmt -check -recursive
 
+      - name: Load the node SSH key into ssh-agent
+        env:
+          NODE_SSH_KEY: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+        run: |
+          # kube-hetzner signs in to the nodes through ssh-agent (ssh_private_key = null), so the
+          # private key is never a Terraform variable - neither in the saved plan nor in the state.
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$NODE_SSH_KEY" | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
       - name: Terraform init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -70,7 +81,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
           TF_VAR_ssh_public_key: ${{ vars.HCLOUD_SSH_PUBLIC_KEY }}
-          TF_VAR_ssh_private_key: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
           TF_VAR_flux_git_repository_url: https://github.com/${{ github.repository }}.git
           TF_VAR_flux_git_repository_branch: main
           TF_VAR_flux_kustomization_path: ./flux/bootstrap/flux-system
@@ -96,10 +106,10 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # A saved plan holds the value of every input variable in plain text - the Hetzner
-      # token, the node SSH private key, the SOPS age key, the backup keys - and artifacts
-      # of a public repository can be downloaded by any GitHub user. Only the encrypted
-      # file leaves this job; the apply job decrypts it and replays the reviewed plan.
+      # A saved plan holds every non-ephemeral input variable in plain text - the Hetzner token
+      # and the backup keys (the SOPS age key is ephemeral, the node SSH key goes through
+      # ssh-agent) - and artifacts of a public repository can be downloaded by any GitHub user.
+      # Only the encrypted file leaves this job; the apply job decrypts it and replays the plan.
       - name: Encrypt tfplan
         if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
         env:
@@ -168,6 +178,17 @@ jobs:
         with:
           terraform_version: "1.16.4"
 
+      - name: Load the node SSH key into ssh-agent
+        env:
+          NODE_SSH_KEY: ${{ secrets.HCLOUD_SSH_PRIVATE_KEY }}
+        run: |
+          # kube-hetzner signs in to the nodes through ssh-agent (ssh_private_key = null), so the
+          # private key is never a Terraform variable - neither in the saved plan nor in the state.
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$NODE_SSH_KEY" | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
       - name: Terraform init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -191,4 +212,6 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          # ephemeral: not in the saved plan, so the apply must be given it again
+          TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
         run: terraform apply -input=false -lock-timeout=5m tfplan

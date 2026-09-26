@@ -1,6 +1,6 @@
 # ─── Secrets ──────────────────────────────────────────────────────────────────
 # These are set via TF_VAR_* from load-env.sh — no need to put them here.
-#   hcloud_token, ssh_public_key, ssh_private_key,
+#   hcloud_token, ssh_public_key (the private key goes through ssh-agent),
 #   flux_git_token, ghcr_username, ghcr_token, enable_ghcr, sops_age_key,
 #   backup_s3_access_key_id, backup_s3_secret_access_key, backup_s3_bucket,
 #   backup_s3_endpoint, backup_s3_region
