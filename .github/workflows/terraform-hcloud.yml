@@ -96,14 +96,31 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload tfplan artifact
+      # A saved plan holds the value of every input variable in plain text - the Hetzner
+      # token, the node SSH private key, the SOPS age key, the backup keys - and artifacts
+      # of a public repository can be downloaded by any GitHub user. Only the encrypted
+      # file leaves this job; the apply job decrypts it and replays the reviewed plan.
+      - name: Encrypt tfplan
+        if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
+        env:
+          TFPLAN_PASSPHRASE: ${{ secrets.TFPLAN_PASSPHRASE }}
+        run: |
+          if [ -z "$TFPLAN_PASSPHRASE" ]; then
+            echo "::error::secret TFPLAN_PASSPHRASE is not set - the plan is never uploaded unencrypted"
+            exit 1
+          fi
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:TFPLAN_PASSPHRASE -in tfplan -out tfplan.enc
+          rm -f tfplan
+
+      - name: Upload encrypted tfplan
         if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-hcloud-tfplan
           path: |
-            infra/terraform/hcloud_cluster/tfplan
+            infra/terraform/hcloud_cluster/tfplan.enc
             infra/terraform/hcloud_cluster/plan.txt
+          if-no-files-found: error
           retention-days: 1
 
   approval:
@@ -162,6 +179,13 @@ jobs:
         with:
           name: terraform-hcloud-tfplan
           path: infra/terraform/hcloud_cluster
+
+      - name: Decrypt tfplan
+        env:
+          TFPLAN_PASSPHRASE: ${{ secrets.TFPLAN_PASSPHRASE }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:TFPLAN_PASSPHRASE -in tfplan.enc -out tfplan
+          rm -f tfplan.enc
 
       - name: Terraform apply
         env:
