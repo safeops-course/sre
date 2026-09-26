@@ -1,8 +1,8 @@
 name: Terraform - Hetzner
 
-# Plans on PRs that touch the Hetzner Terraform; applies (after approval) when such a
-# change reaches main. Changes under flux/ are delivered by Flux itself and no longer
-# trigger a Terraform apply request. End-to-end check: hetzner-e2e.yml.
+# Plans on PRs that touch the Hetzner Terraform; applies (after approval in the environment
+# "production") when such a change reaches main. Changes under flux/ are delivered by Flux itself
+# and no longer trigger a Terraform apply request. End-to-end check: hetzner-e2e.yml.
 
 on:
   pull_request:
@@ -14,6 +14,8 @@ on:
     paths:
       - "infra/terraform/hcloud_cluster/**"
       - ".github/workflows/terraform-hcloud*.yml"
+  # Manual plan + apply from main, e.g. to recreate the cluster after a destroy.
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -24,7 +26,6 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   plan:
@@ -111,7 +112,7 @@ jobs:
       # ssh-agent) - and artifacts of a public repository can be downloaded by any GitHub user.
       # Only the encrypted file leaves this job; the apply job decrypts it and replays the plan.
       - name: Encrypt tfplan
-        if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
+        if: github.event_name != 'pull_request' && steps.plan.outputs.has_changes == 'true'
         env:
           TFPLAN_PASSPHRASE: ${{ secrets.TFPLAN_PASSPHRASE }}
         run: |
@@ -123,7 +124,7 @@ jobs:
           rm -f tfplan
 
       - name: Upload encrypted tfplan
-        if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
+        if: github.event_name != 'pull_request' && steps.plan.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-hcloud-tfplan
@@ -133,32 +134,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  approval:
-    runs-on: ubuntu-latest
-    needs: plan
-    if: github.event_name == 'push' && needs.plan.outputs.has_changes == 'true'
-    timeout-minutes: 60
-    steps:
-      - name: Manual approval gate
-        uses: pavlospt/manual-approval@v2
-        with:
-          secret: ${{ github.token }}
-          approvers: ldbl
-          minimum-approvals: 1
-          issue-title: "Terraform apply — ${{ github.sha }}"
-          issue-body: |
-            Terraform plan detected infrastructure changes on `main`.
-
-            **Commit:** ${{ github.sha }}
-            **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Approve or deny this apply.
-          exclude-workflow-initiator-as-approver: false
-
   apply:
     runs-on: ubuntu-latest
-    needs: [plan, approval]
-    if: github.event_name == 'push' && needs.plan.outputs.has_changes == 'true' && needs.approval.result == 'success'
+    needs: plan
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.plan.outputs.has_changes == 'true'
+    # Approval: the "production" environment requires a reviewer (Settings > Environments). The job
+    # waits in the run page ("Review deployments") - no issue, no third-party action with a token.
+    environment: production
 
     defaults:
       run:

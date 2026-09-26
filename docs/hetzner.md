@@ -56,7 +56,11 @@ or registry token (the former `FLUX_GIT_TOKEN`, `GHCR_USERNAME` and `GHCR_TOKEN`
 1. Confirm repo owner/repo references are correct for your fork/org:
    - `scripts/configure-repo.sh --github-owner <owner> --github-repo <repo>`
 2. Confirm `infra/terraform/hcloud_cluster/main.tf` validates with your module version.
-3. Confirm GitHub Environment `hcloud` exists and has manual approval policy.
+3. Confirm the GitHub Environment `production` exists **before** any workflow runs (Settings ->
+   Environments): required reviewer = the platform owner, deployment branches = `main` only.
+   The apply, destroy and e2e jobs use `environment: production`, and GitHub creates a missing
+   environment on first use **without** protection - the job would then run unapproved.
+   Required reviewers work on the Free plan only for public repositories.
 4. Confirm Hetzner project has required MicroOS snapshots for `kube-hetzner`.
 
 ## Provisioning Workflow
