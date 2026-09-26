@@ -32,6 +32,8 @@ spec:
         name: cluster-config
   dependsOn:
     - name: infrastructure
+    # the deploy key the automation pushes with (flux/secrets/flux-system)
+    - name: secrets-flux-system
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

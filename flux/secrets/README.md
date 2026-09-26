@@ -62,7 +62,7 @@ wget https://github.com/getsops/sops/releases/download/v3.9.3/sops-v3.9.3.linux.
 The repository already has an age key configured in `.sops.yaml`. The public key is:
 
 ```
-age160c2nksz88e50qtaywm0qu3x4ms9lxzyt4ym9tv8n803fl979gdsruuy0s
+age1<platform-public-key>
 ```
 
 **⚠️ For new environments or production use, generate a new key pair:**
@@ -160,7 +160,7 @@ git push
 ```bash
 # Create encrypted secret directly
 sops --encrypt --encrypted-regex '^(data|stringData)$' \
-  --age age160c2nksz88e50qtaywm0qu3x4ms9lxzyt4ym9tv8n803fl979gdsruuy0s \
+  --age age1<platform-public-key> \
   flux/secrets/develop/backend-secrets.yaml <<EOF
 apiVersion: v1
 kind: Secret
@@ -272,7 +272,7 @@ sops:
     azure_kv: []
     hc_vault: []
     age:
-        - recipient: age160c2nksz88e50qtaywm0qu3x4ms9lxzyt4ym9tv8n803fl979gdsruuy0s
+        - recipient: age1<platform-public-key>
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
