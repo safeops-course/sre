@@ -15,6 +15,15 @@ metadata:
     name: cert-manager
     managed-by: flux
 ---
+# external-dns is its own tool (DNS records for Ingresses), not part of cert-manager (TLS).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-dns
+  labels:
+    name: external-dns
+    managed-by: flux
+---
 apiVersion: v1
 kind: Namespace
 metadata:

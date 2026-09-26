@@ -14,7 +14,9 @@ spec:
         kind: HelmRepository
         name: external-dns
         namespace: flux-system
-  targetNamespace: cert-manager
+  # Own namespace and a plain release name; before, it ran as cert-manager/cert-manager-external-dns.
+  targetNamespace: external-dns
+  releaseName: external-dns
   install:
     createNamespace: false
     remediation:
