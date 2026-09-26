@@ -14,6 +14,8 @@ on:
     paths:
       - "infra/terraform/hcloud_cluster/**"
       - ".github/workflows/terraform-hcloud*.yml"
+  # Manual plan + apply from main, e.g. to recreate the cluster after a destroy.
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -100,7 +102,7 @@ jobs:
       # of a public repository can be downloaded by any GitHub user. Only the encrypted
       # file leaves this job; the apply job decrypts it and replays the reviewed plan.
       - name: Encrypt tfplan
-        if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
+        if: github.event_name != 'pull_request' && steps.plan.outputs.has_changes == 'true'
         env:
           TFPLAN_PASSPHRASE: ${{ secrets.TFPLAN_PASSPHRASE }}
         run: |
@@ -112,7 +114,7 @@ jobs:
           rm -f tfplan
 
       - name: Upload encrypted tfplan
-        if: github.event_name == 'push' && steps.plan.outputs.has_changes == 'true'
+        if: github.event_name != 'pull_request' && steps.plan.outputs.has_changes == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-hcloud-tfplan
@@ -125,7 +127,7 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     needs: plan
-    if: github.event_name == 'push' && needs.plan.outputs.has_changes == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.plan.outputs.has_changes == 'true'
     # Approval: the "hetzner" environment requires a reviewer (Settings > Environments). The job
     # waits in the run page ("Review deployments") - no issue, no third-party action with a token.
     environment: hetzner
