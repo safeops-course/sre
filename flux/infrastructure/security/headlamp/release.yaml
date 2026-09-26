@@ -9,7 +9,7 @@ spec:
   chart:
     spec:
       chart: headlamp
-      version: "0.28.0"
+      version: "0.45.0"
       sourceRef:
         kind: HelmRepository
         name: headlamp
@@ -30,6 +30,9 @@ spec:
         clientSecret: ""
         issuerURL: https://dex.safeops.work
         scopes: "openid,profile,email,groups"
+    # The client secret comes from dex-secrets (single source, shared with Dex). Headlamp reads
+    # HEADLAMP_CONFIG_OIDC_CLIENT_SECRET itself; env[].valueFrom needs chart >= 0.29 (0.28.0's
+    # values schema rejected it and the install failed).
     env:
       - name: HEADLAMP_CONFIG_OIDC_CLIENT_SECRET
         valueFrom:
@@ -47,7 +50,7 @@ spec:
         - host: headlamp.safeops.work
           paths:
             - path: /
-              pathType: Prefix
+              type: Prefix
       tls:
         - secretName: headlamp-tls
           hosts:
