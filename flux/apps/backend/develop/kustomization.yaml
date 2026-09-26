@@ -17,7 +17,7 @@ resources:
 images:
   - name: backend
     newName: ${image_registry}/backend
-    newTag: develop-v0.0.0-66c44a2-1773188532 # {"$imagepolicy": "develop:backend:tag"}
+    newTag: develop-v0.0.0-cc80741-1790436267 # {"$imagepolicy": "develop:backend:tag"}
 patches:
   - patch: |-
       - op: replace
