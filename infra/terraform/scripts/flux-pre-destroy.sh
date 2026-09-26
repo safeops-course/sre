@@ -144,10 +144,11 @@ unblock_namespace() {
   done < <(kc api-resources --verbs=list --namespaced -o name 2>/dev/null || true)
   # Clearing the object finalizers often lets the namespace finish on its own.
   sleep 5
-  if [[ -z "$(kc get namespace "${ns}" --ignore-not-found -o name 2>/dev/null)" ]]; then
-    log "namespace ${ns} deleted"
-    return 0
-  fi
+  # Gone only when the API says so; if it cannot be checked, still try the finalize below.
+  case "$(namespace_state "${ns}")" in
+    absent) log "namespace ${ns} deleted"; return 0 ;;
+    unknown) warn "could not check namespace ${ns} - trying to finalize it anyway" ;;
+  esac
   if ! command -v jq >/dev/null 2>&1; then
     warn "jq not found - cannot clear spec.finalizers of namespace ${ns}"
     return 0

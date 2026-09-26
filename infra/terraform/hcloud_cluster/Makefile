@@ -19,6 +19,7 @@ apply: ## Terraform apply
 DESTROY_ATTEMPTS ?= 3
 
 destroy: ## Destroy cluster (run Flux/Kubernetes pre-destroy cleanup, then infra)
+	@case "$(DESTROY_ATTEMPTS)" in ''|*[!0-9]*|0) echo "DESTROY_ATTEMPTS must be a positive integer, got '$(DESTROY_ATTEMPTS)'" >&2; exit 2 ;; esac
 	@echo "==> Running Flux/Kubernetes pre-destroy cleanup..."
 	@$(TF) destroy -target='null_resource.flux_pre_destroy' -auto-approve
 	@echo "==> Removing Flux resources from state (pre-destroy hook already ran)..."
