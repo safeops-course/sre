@@ -106,6 +106,7 @@ case "${MODE}" in
     # shellcheck disable=SC1090
     source "${META_PATH}"
     NOW_EPOCH="$(date +%s)"
+    # shellcheck disable=SC2154  # created_at_epoch comes from the sourced plan metadata
     AGE_SECONDS="$((NOW_EPOCH - created_at_epoch))"
     AGE_MINUTES="$((AGE_SECONDS / 60))"
 

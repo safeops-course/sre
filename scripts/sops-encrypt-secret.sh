@@ -50,7 +50,8 @@ create_and_encrypt() {
     [[ "${env}" == "local" && -z "${3:-}" ]] && namespace="develop"
     local secrets_dir="${REPO_ROOT}/flux/secrets/${env}"
     local output_file="${secrets_dir}/${secret_name}.yaml"
-    local temp_file="${secrets_dir}/${secret_name}.yaml.tmp"
+    # Global, not local: the EXIT trap below runs after this function has returned.
+    temp_file="${secrets_dir}/${secret_name}.yaml.tmp"
 
     # Validate environment
     if [[ ! -d "${secrets_dir}" ]]; then
@@ -73,7 +74,12 @@ create_and_encrypt() {
         fi
     fi
 
+    # The plaintext template must never outlive this script - also on Ctrl-C or a failed encrypt.
+    encrypted_tmp="${output_file}.enc.tmp"
+    trap 'rm -f "${temp_file}" "${encrypted_tmp}"' EXIT
+
     # Create template
+    umask 077
     cat > "${temp_file}" <<EOF
 apiVersion: v1
 kind: Secret
@@ -104,7 +110,6 @@ EOF
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "❌ Cancelled"
-        rm "${temp_file}"
         exit 1
     fi
 
@@ -113,10 +118,12 @@ EOF
     # The template ends in .tmp, so sops would guess "binary" and emit JSON
     # with the whole document in one blob - not a Secret manifest Flux can
     # apply. Force YAML in and out.
-    sops --encrypt --input-type yaml --output-type yaml "${temp_file}" > "${output_file}"
-
-    # Remove temp file
-    rm "${temp_file}"
+    # Write to a temp name first: a failed encrypt must not leave an empty ${secret_name}.yaml behind.
+    if ! sops --encrypt --input-type yaml --output-type yaml "${temp_file}" > "${encrypted_tmp}"; then
+        echo "❌ Encryption failed - nothing written. Is your public key in .sops.yaml? (scripts/sops-setup.sh --local)"
+        exit 1
+    fi
+    mv "${encrypted_tmp}" "${output_file}"
 
     echo "✅ Encrypted secret created: ${output_file}"
     echo

@@ -1,388 +1,109 @@
-# Secrets Management with SOPS and age
+# Secrets (SOPS + age)
 
-This directory contains encrypted Kubernetes secrets managed with [Mozilla SOPS](https://github.com/getsops/sops) and [age](https://github.com/FiloSottile/age) encryption.
+Every Kubernetes Secret that Flux applies from Git lives here, encrypted with
+[SOPS](https://github.com/getsops/sops) (a CNCF project) for an [age](https://github.com/FiloSottile/age)
+key. Only the values are encrypted (`encrypted_regex: ^(data|stringData)$`); `kind`, `metadata` and
+the names of the keys stay readable, so a diff still shows *what* changed.
 
-## Overview
+The encrypted files are public and stay in the Git history forever. They are exactly as safe as the
+private key: whoever gets the key can open every version of every file, including old commits.
 
-Flux has native support for decrypting SOPS-encrypted secrets during deployment. This allows you to:
+## What lives where
 
-- ✅ Store encrypted secrets safely in Git
-- ✅ Use GitOps workflows for secret management
-- ✅ Audit secret changes via Git history
-- ✅ No external secret management service required
-- ✅ Simple age key-based encryption
+| Directory | Flux Kustomization | Encrypted for | Lands in |
+|---|---|---|---|
+| `flux-system/` | `secrets-flux-system` | platform key | `flux-system` (image automation deploy key) |
+| `auth/` | `secrets-auth` | platform key | `auth` (Dex) |
+| `cloudflare/` | `secrets-cloudflare` | platform key | `cert-manager`, `external-dns` |
+| `observability/` | `secrets-observability` | platform key | `observability` |
+| `develop/`, `staging/`, `production/` | `secrets-develop` / `-staging` / `-production` | platform key | the environment's namespace |
+| `local/` | `secrets-local` (kind local profile only) | **your** key | `develop` |
 
-## Architecture
+The recipients are set per path in `/.sops.yaml`. The platform Kustomizations are defined in
+`flux/bootstrap/flux-system/secrets.yaml`, the local one in `flux/bootstrap/profiles/local/secrets-local.yaml`.
+Each has `decryption: {provider: sops, secretRef: {name: sops-age}}`: the kustomize-controller decrypts
+in memory with the private key from the Secret `flux-system/sops-age` and applies the result.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Developer Workflow                        │
-│                                                              │
-│  1. Create secret     2. Encrypt with    3. Commit to Git  │
-│     (plaintext)          SOPS + age         (encrypted)     │
-│                                                              │
-│  kubectl create secret → sops -e → git commit               │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          │ Git Push
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Flux Reconciliation                       │
-│                                                              │
-│  1. Detect changes    2. Decrypt with    3. Apply to K8s   │
-│     in Git repo          age private key    cluster         │
-│                                                              │
-│  GitRepository → Kustomization (decryption) → Secret        │
-│                       (via age key in                        │
-│                        sops-age secret)                      │
-└─────────────────────────────────────────────────────────────┘
-```
+`*.example` files are plaintext templates with placeholder values - never real ones.
 
-## Prerequisites
+**One platform key for all environments.** develop, staging and production run in the same cluster,
+and one kustomize-controller decrypts all of them - it would hold every key anyway. Separate keys per
+environment only isolate anything when each environment has its own cluster.
 
-Install required tools:
+## Where the private key lives
 
-```bash
-# Install age (encryption tool)
-brew install age  # macOS
-# or
-apt install age   # Debian/Ubuntu
+- **Platform key:** the GitHub organization secret `SOPS_AGE_KEY` (visible to the `sre` repository
+  only) and the owner's password vault. Terraform receives it as the **ephemeral** variable
+  `sops_age_key` and writes it into `flux-system/sops-age` through a write-only attribute (`data_wo`),
+  so it is never stored in a Terraform plan or state. Never create or edit `sops-age` with `kubectl`
+  on a Terraform-managed cluster - the next apply would not know about it.
+- **Your key (kind):** `age.agekey` at the repository root, git-ignored. The kind module's local
+  profile generates it on the first apply; `scripts/sops-setup.sh --local` writes its public half into
+  the `flux/secrets/local/` rule of `.sops.yaml`. Terraform reads this generated key from the file, so
+  it **is** in the local Terraform state - acceptable for a throwaway development key. For a key that
+  protects anything real, pass it as `TF_VAR_sops_age_key` instead.
 
-# Install SOPS (encryption tool)
-brew install sops  # macOS
-# or
-wget https://github.com/getsops/sops/releases/download/v3.9.3/sops-v3.9.3.linux.amd64 \
-  -O /usr/local/bin/sops && chmod +x /usr/local/bin/sops
-```
+## Guardrails
 
-## Initial Setup
+| Check | Where | Stops |
+|---|---|---|
+| `sops-encrypted` (`scripts/check-sops-encrypted.sh`) | pre-commit + CI | a file under `flux/secrets/` without SOPS metadata, or with a plaintext value added by hand |
+| `no-secrets` (`scripts/block-secrets.sh`) | pre-commit + CI | kubeconfigs, `*.key`, `*.pem`, `credentials*`, `*.env*` files anywhere in the repository |
 
-### 1. Generate age Key Pair (ALREADY DONE)
+CI (`.github/workflows/secrets-guard.yml`) runs both on every pull request and push to `main`,
+because `git commit --no-verify` skips the local hooks.
 
-The repository already has an age key configured in `.sops.yaml`. The public key is:
-
-```
-age1<platform-public-key>
-```
-
-**⚠️ For new environments or production use, generate a new key pair:**
+## Create, edit, view
 
 ```bash
-# Generate new age key pair
-age-keygen -o age.agekey
+# New secret: opens a plaintext template in $EDITOR, encrypts it, deletes the plaintext
+scripts/sops-encrypt-secret.sh develop backend-secrets      # platform directory
+scripts/sops-encrypt-secret.sh local lab-secret             # kind: your key, lands in develop
+# then add the file to the directory's kustomization.yaml
 
-# Output will show:
-# Public key: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# (save this in .sops.yaml)
+# Edit an encrypted file in place (decrypts into $EDITOR, re-encrypts on save) - needs the private key
+sops edit flux/secrets/develop/backend-secrets.yaml
 
-# The private key is saved in age.agekey
-# ⚠️ KEEP THIS PRIVATE! DO NOT COMMIT TO GIT!
-```
-
-### 2. Store age Private Key in Flux
-
-The private key must be stored as a Kubernetes Secret for Flux to decrypt secrets:
-
-```bash
-# Create sops-age secret in flux-system namespace
-cat age.agekey | kubectl create secret generic sops-age \
-  --namespace=flux-system \
-  --from-file=age.agekey=/dev/stdin
-
-# Verify
-kubectl get secret sops-age -n flux-system
-```
-
-**⚠️ Alternative for Terraform-managed clusters:**
-
-Add to `infra/terraform/kind_cluster/main.tf`:
-
-```hcl
-resource "kubernetes_secret" "sops_age" {
-  metadata {
-    name      = "sops-age"
-    namespace = "flux-system"
-  }
-
-  data = {
-    "age.agekey" = file("${path.module}/age.agekey")
-  }
-}
-```
-
-### 3. Configure Kustomization to Decrypt Secrets
-
-Each Flux Kustomization must reference the `sops-age` secret:
-
-```yaml
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: backend-develop
-  namespace: flux-system
-spec:
-  interval: 10m
-  path: ./flux/secrets/develop
-  prune: true
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-age
-```
-
-## Usage
-
-### Creating Encrypted Secrets
-
-#### Method 1: Encrypt Existing Secret
-
-```bash
-# Create a plain Kubernetes Secret YAML
-kubectl create secret generic backend-secrets \
-  --from-literal=api-key="my-secret-api-key" \
-  --from-literal=jwt-secret="change-me" \
-  --dry-run=client -o yaml > flux/secrets/develop/backend-secrets.yaml
-
-# Encrypt with SOPS
-sops --encrypt --in-place flux/secrets/develop/backend-secrets.yaml
-
-# Commit encrypted file
-git add flux/secrets/develop/backend-secrets.yaml
-git commit -m "Add encrypted backend secrets for develop"
-git push
-```
-
-#### Method 2: Create and Encrypt in One Step
-
-```bash
-# Create encrypted secret directly
-sops --encrypt --encrypted-regex '^(data|stringData)$' \
-  --age age1<platform-public-key> \
-  flux/secrets/develop/backend-secrets.yaml <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backend-secrets
-  namespace: develop
-type: Opaque
-stringData:
-  api-key: "my-secret-api-key"
-  jwt-secret: "change-me"
-EOF
-```
-
-### Viewing Encrypted Secrets
-
-```bash
-# View encrypted file (shows encrypted data)
-cat flux/secrets/develop/backend-secrets.yaml
-
-# Decrypt and view (requires age private key)
+# Read it (needs the private key)
 sops --decrypt flux/secrets/develop/backend-secrets.yaml
-
-# Edit encrypted secret (decrypts, opens editor, re-encrypts on save)
-sops flux/secrets/develop/backend-secrets.yaml
 ```
 
-### Updating Encrypted Secrets
+Never add a value to an encrypted file with a plain text editor: sops then refuses to decrypt the file
+at all, and the `sops-encrypted` check rejects it. Delete the line and add the value with `sops edit`.
+
+**A changed Secret does not restart anything.** Flux updates the Secret object; pods that read it as
+environment variables keep the old value until they restart:
 
 ```bash
-# Edit with SOPS (automatically decrypts/encrypts)
-sops flux/secrets/develop/backend-secrets.yaml
-
-# Make changes in your editor, save and quit
-# SOPS will automatically re-encrypt the file
-
-# Commit changes
-git add flux/secrets/develop/backend-secrets.yaml
-git commit -m "Update backend secrets"
-git push
+kubectl -n develop rollout restart deployment/backend
 ```
-
-### Using Secrets in Deployments
-
-Reference the encrypted secret in your Deployment:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-spec:
-  template:
-    spec:
-      containers:
-        - name: backend
-          env:
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: app-postgres-app
-                  key: username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: app-postgres-app
-                  key: password
-            - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@app-postgres-rw:5432/app?sslmode=disable"
-            - name: API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: backend-secrets
-                  key: api-key
-```
-
-## Directory Structure
-
-```
-flux/secrets/
-├── README.md (this file)
-├── develop/
-│   ├── kustomization.yaml
-│   └── backend-secrets.yaml (encrypted)
-├── staging/
-│   ├── kustomization.yaml
-│   └── backend-secrets.yaml (encrypted)
-└── production/
-    ├── kustomization.yaml
-    └── backend-secrets.yaml (encrypted)
-```
-
-## Example Encrypted Secret
-
-After encryption, a secret looks like this:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-    name: backend-secrets
-    namespace: develop
-type: Opaque
-data:
-    api-key: ENC[AES256_GCM,data:xxxxx,iv:xxxxx,tag:xxxxx,type:str]
-    jwt-secret: ENC[AES256_GCM,data:xxxxx,iv:xxxxx,tag:xxxxx,type:str]
-sops:
-    kms: []
-    gcp_kms: []
-    azure_kv: []
-    hc_vault: []
-    age:
-        - recipient: age1<platform-public-key>
-          enc: |
-            -----BEGIN AGE ENCRYPTED FILE-----
-            xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-            -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2025-01-08T12:00:00Z"
-    mac: ENC[AES256_GCM,data:xxxxx,iv:xxxxx,tag:xxxxx,type:str]
-    pgp: []
-    encrypted_regex: ^(data|stringData)$
-    version: 3.9.3
-```
-
-## Security Best Practices
-
-### ✅ DO:
-
-- ✅ Keep age private key (`age.agekey`) secure and backed up
-- ✅ Use different age keys for different environments (dev/staging/prod)
-- ✅ Rotate age keys periodically (re-encrypt all secrets with new key)
-- ✅ Use `encrypted_regex: ^(data|stringData)$` to encrypt only secret values
-- ✅ Commit encrypted secrets to Git
-- ✅ Review secret changes in Git diffs (metadata is visible)
-- ✅ Use separate namespaces for environment isolation
-
-### ❌ DON'T:
-
-- ❌ Commit age private key to Git
-- ❌ Share age private key via insecure channels (email, Slack)
-- ❌ Use the same age key for all environments
-- ❌ Encrypt the entire YAML file (use `encrypted_regex`)
-- ❌ Store plaintext secrets in Git
-- ❌ Forget to backup age private key (lost key = lost secrets!)
 
 ## Troubleshooting
 
-### Secret not appearing in cluster
+`flux get kustomizations -A` shows the failing `secrets-*` Kustomization; its message carries the
+sops error:
 
-1. Check Kustomization status:
-```bash
-kubectl get kustomization -n flux-system
-```
+| Error | Meaning | Fix |
+|---|---|---|
+| `Failed to get the data key required to decrypt the SOPS file` | the file is encrypted for a key the cluster does not hold | encrypt for the key of that path in `.sops.yaml` (`sops updatekeys`), or give the cluster the right key |
+| `sops metadata not found` | the file is not encrypted at all | encrypt it; the `sops-encrypted` check should have stopped it |
+| `cannot get sops decryption Secret 'flux-system/sops-age'` | the cluster has no private key | apply Terraform (`sops_age_key`) - kind: the local profile creates it |
 
-2. Check if sops-age secret exists:
-```bash
-kubectl get secret sops-age -n flux-system
-```
+## Key rotation
 
-3. Check Flux logs:
-```bash
-kubectl logs -n flux-system deployment/kustomize-controller
-```
+**Routine rotation** - the old key is not known to be compromised:
 
-### SOPS decryption failed
+1. `age-keygen -o age-new.agekey` and store the private half where the old one lives (vault, the
+   GitHub secret `SOPS_AGE_KEY`).
+2. Give the cluster **both** keys for the transition: an age key file may hold several
+   `AGE-SECRET-KEY-...` lines. Pass both as `sops_age_key`, raise `sops_age_key_revision` (write-only
+   values are only re-sent when the revision changes), apply.
+3. Put the new public key into `.sops.yaml`, then re-encrypt every file for it:
+   `sops updatekeys -y <file>` (`sops rotate` only renews the data key; it does not change recipients).
+4. Commit, push, wait until every `secrets-*` Kustomization is Ready.
+5. Remove the old key from `sops_age_key`, raise the revision again, apply.
 
-Error: `failed to decrypt secret: no age private key found`
-
-**Solution:** Ensure `sops-age` secret exists in `flux-system` namespace:
-
-```bash
-cat age.agekey | kubectl create secret generic sops-age \
-  --namespace=flux-system \
-  --from-file=age.agekey=/dev/stdin
-```
-
-### Wrong age key used
-
-Error: `sops metadata section not found`
-
-**Solution:** The secret was encrypted with a different age public key. Re-encrypt with correct key:
-
-```bash
-# Decrypt with old key
-sops --decrypt secret.yaml > secret-plain.yaml
-
-# Re-encrypt with new key
-sops --encrypt --age age1NEW_PUBLIC_KEY secret-plain.yaml > secret.yaml
-
-# Remove plaintext file
-rm secret-plain.yaml
-```
-
-## Key Rotation
-
-To rotate age keys:
-
-1. **Generate new age key:**
-```bash
-age-keygen -o age-new.agekey
-```
-
-2. **Update `.sops.yaml` with new public key**
-
-3. **Re-encrypt all secrets:**
-```bash
-# For each encrypted secret file
-sops rotate --in-place flux/secrets/develop/backend-secrets.yaml
-```
-
-4. **Update sops-age secret in cluster:**
-```bash
-kubectl delete secret sops-age -n flux-system
-cat age-new.agekey | kubectl create secret generic sops-age \
-  --namespace=flux-system \
-  --from-file=age.agekey=/dev/stdin
-```
-
-5. **Backup old key (for disaster recovery)**
-
-## Resources
-
-- [Flux SOPS Guide](https://fluxcd.io/flux/guides/mozilla-sops/)
-- [SOPS Documentation](https://github.com/getsops/sops)
-- [age Documentation](https://github.com/FiloSottile/age)
-- [Flux Kustomization Decryption](https://fluxcd.io/flux/components/kustomize/kustomizations/#decryption)
+**After a leak** of the private key, re-encrypting is not enough: anyone with the old key can still
+open every encrypted file already in the Git history. Rotate the key as above **and replace every value
+it protected** at its source (API tokens, passwords, deploy keys), then encrypt the new values. The
+platform key was rotated this way on 2026-09-26, after it leaked through a CI artifact.
