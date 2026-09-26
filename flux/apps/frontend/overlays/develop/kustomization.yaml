@@ -10,7 +10,7 @@ resources:
 images:
   - name: frontend
     newName: ${image_registry}/frontend
-    newTag: develop-v0.0.0-f71ece9-1773188532 # {"$imagepolicy": "develop:frontend:tag"}
+    newTag: develop-v0.0.0-e5c5eb0-1790436213 # {"$imagepolicy": "develop:frontend:tag"}
 patches:
   - path: patches/deployment.yaml
   - path: patches/ingress.yaml
