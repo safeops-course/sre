@@ -10,7 +10,7 @@ Fails fast with actionable output if context/namespace checks do not pass.
 
 Examples:
   scripts/guard-kube-context.sh --context kind-sre-control-plane --namespace develop
-  scripts/guard-kube-context.sh --context sre-control-plane --namespace production --kubeconfig ./kubeconfig.yaml
+  scripts/guard-kube-context.sh --context hetzner-sre-control-plane --namespace production --kubeconfig ./kubeconfig.yaml
 EOF
 }
 

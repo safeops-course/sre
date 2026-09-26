@@ -24,3 +24,5 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# kube-hetzner writes a local copy of its kustomization on apply (not source)
+*_kustomization_backup.yaml
