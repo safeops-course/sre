@@ -50,8 +50,6 @@ create_and_encrypt() {
     [[ "${env}" == "local" && -z "${3:-}" ]] && namespace="develop"
     local secrets_dir="${REPO_ROOT}/flux/secrets/${env}"
     local output_file="${secrets_dir}/${secret_name}.yaml"
-    # Global, not local: the EXIT trap below runs after this function has returned.
-    temp_file="${secrets_dir}/${secret_name}.yaml.tmp"
 
     # Validate environment
     if [[ ! -d "${secrets_dir}" ]]; then
@@ -66,7 +64,7 @@ create_and_encrypt() {
         read -p "   Edit existing secret with SOPS? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            sops "${output_file}"
+            sops --config "${REPO_ROOT}/.sops.yaml" edit "${output_file}"
             echo "✅ Secret updated"
             exit 0
         else
@@ -74,15 +72,15 @@ create_and_encrypt() {
         fi
     fi
 
-    # The plaintext template must never outlive this script - also on Ctrl-C or a failed encrypt.
-    encrypted_tmp="${output_file}.enc.tmp"
-    trap 'rm -f "${temp_file}" "${encrypted_tmp}"' EXIT
+    # The plaintext never touches the repository: a private directory (mode 0700) per run, outside the
+    # working copy, removed on every exit (Ctrl-C, cancel, failed encrypt). Global, not local: the
+    # EXIT trap runs after this function has returned.
+    work_dir="$(mktemp -d)"
+    trap 'rm -rf "${work_dir}"' EXIT
+    local temp_file="${work_dir}/${secret_name}.yaml"
+    local encrypted_tmp="${work_dir}/${secret_name}.enc.yaml"
 
-    # Create template. umask only applies to NEW files: remove a stale template first, then create it
-    # exclusively (noclobber) - if anything appears there in between, fail instead of reusing it.
     umask 077
-    rm -f "${temp_file}"
-    set -o noclobber
     cat > "${temp_file}" <<EOF
 apiVersion: v1
 kind: Secret
@@ -100,7 +98,6 @@ stringData:
   # TODO: Replace with actual secret values
   example-key: "example-value"
 EOF
-    set +o noclobber
 
     echo "📝 Created template: ${temp_file}"
     echo "   Opening in editor..."
@@ -119,11 +116,13 @@ EOF
 
     # Encrypt with SOPS
     echo "🔐 Encrypting secret..."
-    # The template ends in .tmp, so sops would guess "binary" and emit JSON
-    # with the whole document in one blob - not a Secret manifest Flux can
-    # apply. Force YAML in and out.
+    # --filename-override: the plaintext lives outside the repository, so tell sops which path it is
+    # for - that picks the creation rule (and key) of flux/secrets/<env>/ in .sops.yaml.
     # Write to a temp name first: a failed encrypt must not leave an empty ${secret_name}.yaml behind.
-    if ! sops --encrypt --input-type yaml --output-type yaml "${temp_file}" > "${encrypted_tmp}"; then
+    # --config: sops looks for .sops.yaml from the current directory; the script may run from anywhere.
+    if ! sops --config "${REPO_ROOT}/.sops.yaml" --encrypt --filename-override "${output_file#"${REPO_ROOT}"/}" \
+        --input-type yaml --output-type yaml \
+        "${temp_file}" > "${encrypted_tmp}"; then
         echo "❌ Encryption failed - nothing written. Is your public key in .sops.yaml? (scripts/sops-setup.sh --local)"
         exit 1
     fi
