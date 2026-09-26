@@ -97,7 +97,8 @@ scripts/             # Pre-commit hooks, automation scripts
 - Environments: develop, staging, production — each has its own namespace and overlays
 - Kustomize overlays pattern: `base/` + `overlays/{develop,staging,production}/patches/`
 - SOPS secrets go in `flux/secrets/` with `.sops.yaml` rules per directory
-- cert-manager and external-dns share `cert-manager` namespace (single Cloudflare token)
+- cert-manager (namespace `cert-manager`) and external-dns (namespace `external-dns`) each read the
+  Cloudflare DNS token from their own SOPS Secret `cloudflare-api-token` (flux/secrets/cloudflare)
 - NetworkPolicies use `default-deny-all` — new services need explicit ingress/egress rules from `traefik` namespace
 
 ### Resource Management
