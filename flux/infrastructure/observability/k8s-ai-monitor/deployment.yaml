@@ -20,7 +20,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: k8s-ai-monitor
-          image: ${image_registry}/k8s-ai-monitor:main # {"$imagepolicy": "observability:k8s-ai-monitor:tag"}
+          image: main-v0.0.1-cb6c582-1790430914 # {"$imagepolicy": "observability:k8s-ai-monitor:tag"}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
