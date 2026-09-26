@@ -25,8 +25,6 @@ spec:
         app.kubernetes.io/name: frontend
         app.kubernetes.io/component: web
     spec:
-      imagePullSecrets:
-      - name: ghcr-credentials-docker
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

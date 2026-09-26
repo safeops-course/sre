@@ -7,8 +7,6 @@ metadata:
 spec:
   image: ${image_registry}/frontend
   interval: 1m0s
-  secretRef:
-    name: ghcr-credentials-docker
   accessFrom:
     namespaceSelectors:
       - matchLabels:

@@ -29,8 +29,6 @@ spec:
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
-      imagePullSecrets:
-      - name: ghcr-credentials-docker
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
