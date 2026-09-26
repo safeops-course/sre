@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10.1"
+  required_version = ">= 1.11.0" # write-only attributes (data_wo) need 1.11; ephemeral variables 1.10
 
   required_providers {
     kind = {
