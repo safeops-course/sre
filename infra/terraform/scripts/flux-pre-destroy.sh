@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Runs before `terraform destroy` removes the nodes (null_resource.flux_pre_destroy, hcloud and kind).
 # While the cluster is still alive, let it clean up what Terraform does not know about:
-#   1. suspend Flux, so it does not recreate what we delete;
+#   1. suspend Flux, so it does not recreate what we delete; stop Kyverno and remove all admission
+#      webhooks - teardown needs none, and a webhook without a running backend (failurePolicy
+#      Fail) blocks every delete in the namespaces;
 #   2. delete the target namespaces - with them go the workloads, CNPG clusters and their PVCs,
 #      so no controller recreates a PVC; then every other PVC in the cluster;
 #   3. wait until the PersistentVolumes are gone - volumes with reclaimPolicy Delete (hcloud-volumes)
@@ -66,6 +68,16 @@ suspend_flux() {
   if api_exists fluxinstances.fluxcd.controlplane.io; then
     kc -n flux-system delete fluxinstance flux --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
   fi
+}
+
+remove_admission_webhooks() {
+  # Kyverno re-registers its webhooks while it runs - stop it first.
+  if kc get namespace kyverno >/dev/null 2>&1; then
+    log "stopping Kyverno"
+    kc -n kyverno scale deployment --all --replicas=0 >/dev/null 2>&1 || true
+  fi
+  log "removing admission webhooks"
+  kc delete validatingwebhookconfigurations,mutatingwebhookconfigurations --all >/dev/null 2>&1 || true
 }
 
 delete_volumes() {
@@ -139,6 +151,7 @@ for ns in "${requested[@]}"; do
 done
 
 suspend_flux
+remove_admission_webhooks
 if (( ${#namespaces[@]} > 0 )); then
   delete_namespaces
 fi
