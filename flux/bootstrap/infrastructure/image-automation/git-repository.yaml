@@ -13,4 +13,4 @@ spec:
   # public, so the main flux-system GitRepository needs no credentials at all.
   secretRef:
     name: flux-image-automation-deploy-key
-  url: ssh://git@github.com/${git_owner}/sre.git
+  url: ssh://git@ssh.github.com:443/${git_owner}/sre.git

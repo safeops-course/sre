@@ -109,11 +109,33 @@ module "kube_hetzner" {
   # etcd backup to Hetzner Object Storage
   etcd_s3_backup = local.etcd_s3_backup
 
-  # OIDC / extra kube-apiserver flags
+  # OIDC (Dex) for kubectl and Headlamp - applied in place (k3s restart, no node recreation)
+  authentication_config = local.oidc_authentication_config
+
+  # Extra k3s server flags (escape hatch; OIDC goes through authentication_config above)
   control_plane_exec_args = var.k3s_exec_server_args
 }
 
 locals {
+  # Structured authentication (not --oidc-* flags): one issuer can accept several audiences, so
+  # both Dex clients work - "kubernetes" (kubectl oidc-login) and "headlamp" (Headlamp's own login).
+  # Claims map 1:1 to RBAC: users by email, groups = GitHub orgs (e.g. "safeops-course").
+  oidc_authentication_config = var.oidc_issuer_url == "" ? "" : yamlencode({
+    apiVersion = "apiserver.config.k8s.io/v1"
+    kind       = "AuthenticationConfiguration"
+    jwt = [{
+      issuer = {
+        url                 = var.oidc_issuer_url
+        audiences           = var.oidc_audiences
+        audienceMatchPolicy = "MatchAny"
+      }
+      claimMappings = {
+        username = { claim = "email", prefix = "" }
+        groups   = { claim = "groups", prefix = "" }
+      }
+    }]
+  })
+
   kubeconfig_path = pathexpand("${path.module}/kubeconfig.yaml")
 
   # kube-hetzner names the kubeconfig context after cluster_name ("sre") - too generic next to other

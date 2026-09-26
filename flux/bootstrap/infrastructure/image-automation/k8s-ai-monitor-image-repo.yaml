@@ -7,3 +7,8 @@ metadata:
 spec:
   image: ${image_registry}/k8s-ai-monitor
   interval: 1m0s
+  # The ImagePolicy lives in observability; without accessFrom Flux rejects it ("missing ACL labels").
+  accessFrom:
+    namespaceSelectors:
+      - matchLabels:
+          kubernetes.io/metadata.name: observability
