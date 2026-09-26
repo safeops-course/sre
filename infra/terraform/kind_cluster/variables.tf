@@ -67,7 +67,7 @@ variable "flux_git_token" {
 }
 
 variable "sops_age_key" {
-  description = "age private key (AGE-SECRET-KEY-...) for SOPS decryption in Flux. Empty = the key generated for the local profile. Ephemeral: never stored in the plan or the state."
+  description = "age private key (AGE-SECRET-KEY-...) for SOPS decryption in Flux. Ephemeral: never stored in the plan or the state. Empty = the key generated for the local profile, which is read from a file and therefore IS in the state."
   type        = string
   default     = ""
   sensitive   = true

@@ -435,7 +435,10 @@ resource "kubernetes_secret_v1" "ghcr_credentials" {
 
 
 # SOPS age secret for Flux decryption. Write-only (data_wo): sops_age_key never reaches the plan
-# or the state (the generated local-profile key is a throwaway dev key read by data.local_file).
+# or the state. Exception: the key generated for the local profile is read by data.local_file,
+# so it IS in the (local) state - the local provider has no ephemeral file source, and the file
+# only exists after the first apply. Acceptable for a throwaway dev key; use sops_age_key for a
+# real one.
 # After rotating sops_age_key, bump sops_age_key_revision so Terraform re-sends it.
 resource "kubernetes_secret_v1" "sops_age" {
   depends_on = [null_resource.flux_instance, null_resource.age_key]

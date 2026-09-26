@@ -100,7 +100,7 @@ fi
 # kube-hetzner signs in through ssh-agent, so load the key there once.
 if [[ -f "${SSH_PRIV_PATH}" ]]; then
   if ! ssh-add -l 2>/dev/null | grep -qF "$(ssh-keygen -lf "${SSH_PUB_PATH}" | awk '{print $2}')"; then
-    ssh-add "${SSH_PRIV_PATH}" || echo "Could not add ${SSH_PRIV_PATH} to ssh-agent - Terraform cannot reach the nodes"
+    ssh-add "${SSH_PRIV_PATH}" || die "Could not add ${SSH_PRIV_PATH} to ssh-agent - Terraform cannot reach the nodes"
   fi
 else
   echo "Missing SSH private key at ${SSH_PRIV_PATH}"
