@@ -1,113 +1,124 @@
-language: en-US
-early_access: false
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Repo-specific rules. Organization defaults (language, tone, workflows, Dockerfile, shell,
+# *.example, CLAUDE/AGENT docs, pre-merge checks off, knowledge base scopes) come from
+# safeops-course/coderabbit/.coderabbit.yaml through `inheritance: true`.
+# CodeRabbit config for safeops-course/sre (public). This file is taught in
+# chapter-05-cicd-developer-guardrails (course-map.yml) - a change here opens a
+# snippet-sync PR in safeops-course/sre-course.
+#
+# Linters run with their defaults (every tool is enabled by default in the schema).
+# They are tuned through repo-native files, not here:
+#   yamllint   .yamllint.yaml  (none yet: "chill" = relaxed rule set, same as pre-commit)
+#   checkov    .checkov.yaml   (none yet)
+#   tflint     .tflint.hcl     (none yet)
+#   zizmor     .github/zizmor.yml (none yet)
+tone_instructions: >-
+  Concise and factual. Severity follows real worst-case impact, not style. Block on secret leaks, unpinned versions, missing manual gates and silent failures. Every finding names the file:line, the impact and a concrete fix. No praise, no filler.
 reviews:
-  profile: chill
+  profile: chill # assertive switches yamllint to the default rule set (~390 findings on main today)
   request_changes_workflow: true
-  high_level_summary: true
-  poem: false
-  review_status: true
+  sequence_diagrams: false
   auto_review:
     enabled: true
     drafts: false
     auto_incremental_review: true
+    # base_branches: [] (default) = only PRs into main are auto-reviewed.
+  path_filters:
+    # flux/secrets/** stays in scope on purpose: a plaintext Secret committed there must be seen.
+    - "!**/.terraform/**"
   path_instructions:
     - path: "**"
       instructions: |
-        - CONTEXT: SRE DevOps repository — k3s on Hetzner Cloud, FluxCD GitOps, Terraform IaC
-        - KISS principle: simple > complex in all decisions
-        - Be strict on: security vulnerabilities, breaking changes, secret leaks, resource misconfigurations
-        - Be fair on: established patterns, professional DevOps judgment, controlled environments
-        - Keep reviews concise and actionable — focus on high-impact issues only
-        - COURSE IMPACT: check course-map.yml at the repo root. If a changed file appears in the map, mention which course chapters reference it and warn that the course site snippets will be auto-updated. Example: "This file is referenced by chapter-02-iac and chapter-05-cicd — course snippets will be regenerated."
-    - path: "**/*.tf"
+        Platform repo for the SafeOps SRE course: Terraform (infra/terraform), Flux GitOps (flux/), guard scripts (scripts/).
+        Principles: KISS, explicit over implicit, fail loudly, guardrails, no plaintext secrets in git (SOPS+age only), pinned versions.
+        Course impact: if a changed, renamed or deleted file is a key in course-map.yml, name its chapters. On push to main,
+        sync-course-snippets.yml opens a PR in safeops-course/sre-course and fails when a snippet source path is missing,
+        so a rename/delete of a mapped file needs a matching course PR.
+    - path: "infra/terraform/**/*.tf"
       instructions: |
-        - Terraform manages Hetzner k3s cluster via kube-hetzner module
-        - State is remote in Cloudflare R2 (S3-compatible backend)
-        - Sensitive variables come from TF_VAR_* environment variables, not .tfvars
-        - Check: resource dependencies, lifecycle blocks, destroy provisioner safety
-        - Check: null_resource provisioners have on_failure = continue and timeouts for destroy
-        - Verify pinned versions for modules and providers
-        - Kubernetes provider uses fileexists() guard for kubeconfig — don't remove this pattern
-    - path: "flux/**/*.yaml"
+        hcloud_cluster: kube-hetzner module (exact version), S3 backend on Cloudflare R2 with use_lockfile.
+        kind_cluster: local state, kind provider; local-profile.tf creates the kind-only runtime Secrets.
+        - Providers: every one has a version constraint; modules use an exact version.
+        - Secrets arrive as TF_VAR_* (load-env.sh / GitHub secrets); such variables must be sensitive = true with no real default.
+        - helm/kubernetes providers read module.kube_hetzner.kubeconfig_data (hcloud) - do not switch them to a kubeconfig file.
+        - Create-time local-exec must fail the apply. Only destroy-time provisioners may use on_failure = continue, and they need a bounded --timeout.
+        - ConfigMaps cluster-config and backup-s3 are consumed by Flux postBuild.substituteFrom: renaming a key breaks flux/bootstrap/flux-system/*.yaml.
+        - k3s_version is pinned and auto_upgrade_k3s = false; flag changes that let Kubernetes upgrade itself.
+    - path: "infra/terraform/**/terraform.tfvars"
       instructions: |
-        - FluxCD GitOps manifests — Kustomizations, HelmReleases, secrets
-        - Pattern: base/ + overlays/{develop,staging,production}/patches/
-        - Check: dependsOn chains are correct (infrastructure → secrets → apps)
-        - Check: HelmRelease versions are pinned (not semver ranges)
-        - Check: SOPS-encrypted secrets have correct namespace and encrypted_regex
-        - Check: NetworkPolicies allow traffic from traefik namespace (not ingress-nginx)
-        - Check: ResourceQuota and LimitRange values are consistent across environments
-        - Ingress uses traefik ingressClassName with cert-manager.io/cluster-issuer annotation
-        - cert-manager uses DNS-01 challenge with Cloudflare (not HTTP-01)
-    - path: "**/.pre-commit-config.yaml"
+        Committed on purpose and holds only non-secret values. Flag any token, key, password or private key here.
+    - path: "flux/**"
       instructions: |
-        - Verify default_install_hook_types includes all used stages
-        - Check terraform fmt uses -check flag to fail on unformatted files
-        - Verify prepare-commit-msg hooks have pass_filenames: false
-        - Ensure security scanning (checkov) does not use --soft-fail
+        Flux Operator + Kustomizations. Entry: flux/bootstrap/flux-system (infrastructure.yaml, secrets.yaml, apps.yaml); flux/bootstrap/profiles/local = kind.
+        - dependsOn: namespace/operator before consumers; a Kustomization that uses a Secret from flux/secrets depends on its secrets-* Kustomization.
+        - HelmRelease chart versions are exact (no ranges); Terraform modules exact, providers constrained; actions and tool downloads pinned. Images use a fixed tag or digest; backend:latest / frontend:latest in apps/*/base are
+          placeholders replaced by the overlay images transformer; ":main" with a $imagepolicy marker is managed by image automation.
+        - postBuild variables must exist in ConfigMap cluster-config / backup-s3 or Secret cluster-secrets.
+        - NetworkPolicies: default-deny-all per env; ingress to apps only from namespace traefik; every new workload needs explicit rules.
+        - Ingress: ingressClassName traefik + cert-manager.io/cluster-issuer; ClusterIssuers use DNS-01 via Cloudflare.
+        - A kind: Secret with real values belongs only in flux/secrets/** and SOPS-encrypted.
+        - production/app-postgres-app is generated by Terraform (hcloud and kind), never a Secret under flux/infrastructure.
+        - Image automation pushes to main over ssh:// with the deploy key from flux/secrets/flux-system; the image-automation Kustomization depends on secrets-flux-system.
+    - path: "flux/secrets/**"
+      instructions: |
+        SOPS+age files decrypted by Flux (decryption.secretRef sops-age). Do not review or comment on ciphertext, MAC, lastmodified or other sops: metadata - a re-encryption changes every line by design. Check only the structure below.
+        - Every *.yaml except kustomization.yaml has a top-level sops: block and ENC[...] values under data/stringData.
+        - encrypted_regex and the recipient match the .sops.yaml rule for that directory; metadata.namespace matches the environment.
+        - *.yaml.example files hold placeholders only (change-me style) and are not listed in kustomization.yaml.
+    - path: "flux/apps/**/patches/**"
+      instructions: |
+        Strategic-merge patches, partial by design: do not ask for securityContext, probes or resources that come from base/.
+    - path: "flux/infrastructure/policy/packs/**"
+      instructions: |
+        Kyverno ClusterPolicies. *.example.yaml are teaching examples, not in kustomization.yaml - do not ask to include them.
+        Flag a policy switched from Audit to Enforce (or back) without a note in the PR description.
+    - path: "flux/infrastructure/data/migrations/*.sql"
+      instructions: |
+        Expand/contract examples run by hand with psql. Expand must stay backward-compatible and idempotent (IF [NOT] EXISTS);
+        contract is destructive and must keep its preconditions header.
+    - path: ".github/workflows/**"
+      instructions: |
+        - terraform apply/destroy runs only in a job that needs a manual-approval job with timeout-minutes; concurrency cancel-in-progress: false.
+        - Never trigger apply/destroy from pull_request or pull_request_target.
+        - Inputs and event fields reach run: only through env:, never ${{ }} inside the script.
+        - terraform-hcloud uploads the saved plan only encrypted (openssl, secret TFPLAN_PASSPHRASE) and the apply job decrypts it; never upload a plain tfplan, state, kubeconfig or .env - this repo is public.
+        - Actions and downloaded tools are pinned (no @main/@master); least-privilege permissions per job.
+        - A validation step must fail the job; no silent skips of missing paths.
     - path: "**/*.sh"
       instructions: |
-        - Scripts must use set -e minimum; critical scripts use set -Eeuo pipefail
-        - Check proper quoting of variables, especially file paths
-        - Verify shift operations are guarded by argument count checks
-        - Infrastructure scripts must fail fast with clear error messages
-    - path: "**/.github/workflows/*.yml"
-      instructions: |
-        - Terraform CI/CD with manual approval gates for apply/destroy
-        - Check: github.token (lowercase) not github.TOKEN
-        - Check: cancel-in-progress is false for apply/destroy workflows
-        - Check: user inputs are passed via env vars, not direct interpolation in shell
-        - Check: approval steps have timeout-minutes set
-        - Verify proper secret handling — no secrets in logs
+        - Executed scripts: set -Eeuo pipefail (set -e minimum), quoted expansions, argument checks before shift, clear error messages.
+        - load-env.sh is sourced: it must not use set -e or exit (return instead).
+        - Destroy-time helpers (infra/terraform/scripts/flux-pre-destroy.sh) are best-effort but must print what they skipped.
+        - Guards (scripts/guard-*.sh, block-secrets.sh) must fail closed.
     - path: "**/Makefile"
       instructions: |
-        - Root Makefile delegates to sub-Makefiles via $(MAKE) -C
-        - hcloud_cluster Makefile handles state cleanup for safe destroy
-        - Check: destroy target removes flux/k8s resources from state before terraform destroy
-        - Verify .PHONY declarations match actual targets
-    - path: "**/CLAUDE.md"
+        - .PHONY lists exactly the defined targets.
+        - hcloud_cluster destroy: targeted destroy of null_resource.flux_pre_destroy, state rm of Flux and kubernetes_/helm_ resources, then terraform destroy.
+        - kind_cluster destroy: kind delete cluster + state-clean (local state).
+        - state-clean removes everything from state: flag any new caller of it.
+    - path: ".pre-commit-config.yaml"
       instructions: |
-        - Repository guidelines for AI agents — learn and apply these principles
-        - Reference these guidelines when reviewing other files
+        - default_install_hook_types covers every stage used; hook repos pinned to a tag or SHA.
+        - terraform fmt uses -check; checkov never gets --soft-fail; prepare-commit-msg hooks use pass_filenames: false.
+    - path: ".sops.yaml"
+      instructions: |
+        One creation rule per flux/secrets/<dir>, encrypted_regex ^(data|stringData)$. The flux/secrets/local recipient is a
+        placeholder on purpose (written by scripts/sops-setup.sh --local).
     - path: "course-map.yml"
       instructions: |
-        - Auto-generated mapping of sre repo files to SafeOps Academy course chapters
-        - Do not edit manually — regenerated by sre-course/scripts/generate-course-map.sh
-        - Used by CodeRabbit to warn when PRs touch files taught in the course
-        - Used by sync-course-snippets Action to identify which chapters need snippet updates
-  path_filters:
-    - "**"
-    - "!**/.terraform/**"
-    - "!**/.terraform.lock.hcl"
-    - "!**/node_modules/**"
-    - "!**/*.log"
-  tools:
-    gitleaks:
-      enabled: true
-    semgrep:
-      enabled: true
-    checkov:
-      enabled: true
-    hadolint:
-      enabled: true
-    yamllint:
-      enabled: true
-    actionlint:
-      enabled: true
-
+        Generated by safeops-course/sre-course scripts/generate-course-map.sh (make course-map there). Do not edit by hand;
+        every key must be an existing path in this repo.
+    - path: "**/*.md"
+      instructions: |
+        CLAUDE.md, READMEs and docs/ are read by people and agents (CLAUDE.md is also a CodeRabbit guideline source):
+        commands, paths, versions, make targets and workflow triggers must match the code. No tokens or keys.
 knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
-      - "**/CLAUDE.md"
+      - "CLAUDE.md"
+      - "docs/ai-code-of-conduct.md"
       - "course-map.yml"
-  learnings:
-    scope: "local"
-  issues:
-    scope: "local"
-  pull_requests:
-    scope: "local"
-
 chat:
   auto_reply: false
-tone_instructions: "KISS principle: simple > complex. Assertive on security, secret leaks, breaking changes. Focus on infrastructure safety and production reliability. Skip theoretical concerns for controlled environments."
+inheritance: true
