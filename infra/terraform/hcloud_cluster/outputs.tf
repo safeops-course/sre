@@ -1,6 +1,6 @@
 output "kubeconfig" {
-  description = "Kubeconfig for the created cluster (YAML)."
-  value       = module.kube_hetzner.kubeconfig
+  description = "Kubeconfig for the created cluster (YAML), context hetzner-<cluster_name>-control-plane."
+  value       = local.kubeconfig_named
   sensitive   = true
 }
 

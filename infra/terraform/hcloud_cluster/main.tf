@@ -116,6 +116,17 @@ module "kube_hetzner" {
 locals {
   kubeconfig_path = pathexpand("${path.module}/kubeconfig.yaml")
 
+  # kube-hetzner names the kubeconfig context after cluster_name ("sre") - too generic next to other
+  # clusters in a merged kubeconfig. Rename only the context (cluster/user names, server and certs stay),
+  # so it reads like kind's "kind-sre-control-plane". cluster_name itself must not change: it also names
+  # the servers, the etcd snapshot folder and the external-dns owner ID.
+  kubeconfig_context = "hetzner-${var.cluster_name}-control-plane"
+  kubeconfig_parsed  = yamldecode(module.kube_hetzner.kubeconfig)
+  kubeconfig_named = yamlencode(merge(local.kubeconfig_parsed, {
+    contexts          = [for c in local.kubeconfig_parsed.contexts : merge(c, { name = local.kubeconfig_context })]
+    "current-context" = local.kubeconfig_context
+  }))
+
   # Render pullSecret only when a token is provided.
   flux_pull_secret_yaml = var.flux_git_token != "" ? "    pullSecret: flux-system\n" : ""
 
@@ -129,7 +140,7 @@ locals {
 }
 
 resource "local_sensitive_file" "kubeconfig" {
-  content         = module.kube_hetzner.kubeconfig
+  content         = local.kubeconfig_named
   filename        = local.kubeconfig_path
   file_permission = "0600"
 }
