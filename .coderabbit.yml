@@ -78,7 +78,7 @@ reviews:
         contract is destructive and must keep its preconditions header.
     - path: ".github/workflows/**"
       instructions: |
-        - terraform apply/destroy runs only in a job that needs a manual-approval job with timeout-minutes; concurrency cancel-in-progress: false.
+        - terraform apply/destroy (and the Hetzner e2e) runs only in a job with `environment: production` (required reviewer, deployment branches = main); no issue-based manual-approval actions. Concurrency cancel-in-progress: false.
         - Never trigger apply/destroy from pull_request or pull_request_target.
         - Inputs and event fields reach run: only through env:, never ${{ }} inside the script.
         - terraform-hcloud uploads the saved plan only encrypted (openssl, secret TFPLAN_PASSPHRASE) and the apply job decrypts it; never upload a plain tfplan, state, kubeconfig or .env - this repo is public.
