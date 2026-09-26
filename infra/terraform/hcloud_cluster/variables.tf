@@ -41,14 +41,14 @@ variable "enable_ghcr" {
 }
 
 variable "sops_age_key" {
-  description = "age private key (AGE-SECRET-KEY-...) for SOPS decryption in Flux. Ephemeral: needed for every plan and apply, never stored in the plan or the state."
+  description = "age private key for SOPS decryption in Flux: the key line or the whole age key file (comments allowed, as age-keygen writes it). Ephemeral: needed for every plan and apply, never stored in the plan or the state."
   type        = string
   sensitive   = true
   ephemeral   = true
 
   validation {
-    condition     = startswith(var.sops_age_key, "AGE-SECRET-KEY-")
-    error_message = "sops_age_key must be an age private key (AGE-SECRET-KEY-...): Flux cannot decrypt flux/secrets/** without it."
+    condition     = strcontains(var.sops_age_key, "AGE-SECRET-KEY-")
+    error_message = "sops_age_key must contain an age private key (AGE-SECRET-KEY-...): Flux cannot decrypt flux/secrets/** without it."
   }
 }
 
