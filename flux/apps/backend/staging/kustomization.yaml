@@ -16,7 +16,7 @@ resources:
 images:
   - name: backend
     newName: ${image_registry}/backend
-    newTag: staging-v0.0.0-66c44a2-1773188533 # {"$imagepolicy": "staging:backend:tag"}
+    newTag: staging-v0.0.0-00edbd3-1790430911 # {"$imagepolicy": "staging:backend:tag"}
 patches:
   - patch: |-
       - op: replace
