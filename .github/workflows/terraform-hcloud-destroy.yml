@@ -11,8 +11,10 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# Same group as plan/apply and the e2e check: never two runs against the same state (the state
+# lock alone would make the second run fail after -lock-timeout instead of waiting its turn).
 concurrency:
-  group: terraform-hcloud-destroy
+  group: terraform-hcloud
   cancel-in-progress: false
 
 permissions:
