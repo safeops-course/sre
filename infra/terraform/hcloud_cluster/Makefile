@@ -26,6 +26,8 @@ destroy: ## Destroy cluster (run Flux/Kubernetes pre-destroy cleanup, then infra
 	@$(MAKE) --no-print-directory state-clean-k8s
 	@echo "==> Destroying infrastructure..."
 	$(TF) destroy
+	@echo "==> Checking that nothing billable is left in the Hetzner project..."
+	@../../../scripts/hcloud-leftovers.sh
 
 state-list: ## List all resources in state
 	$(TF) state list

@@ -63,6 +63,23 @@ jobs:
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
+      # flux-pre-destroy.sh needs the kubeconfig to clean up inside the cluster before the nodes go
+      # (volumes the CSI driver created are not in the state). A fresh runner has no kubeconfig.yaml
+      # - write it from the state.
+      - name: Write the kubeconfig from the state
+        working-directory: infra/terraform/hcloud_cluster
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init -input=false
+          if terraform output -raw kubeconfig > kubeconfig.yaml 2>/dev/null && [ -s kubeconfig.yaml ]; then
+            chmod 600 kubeconfig.yaml
+          else
+            rm -f kubeconfig.yaml
+            echo "::warning::no kubeconfig in the state - the cluster-side cleanup will be skipped"
+          fi
+
       - name: Destroy infrastructure via Makefile target
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -81,3 +98,9 @@ jobs:
           TF_INPUT: "false"
           TF_CLI_ARGS_destroy: "-auto-approve -lock-timeout=5m"
         run: make terraform-hcloud-destroy
+
+      - name: Nothing left in Hetzner
+        if: always()
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+        run: scripts/hcloud-leftovers.sh

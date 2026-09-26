@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+# Runs before `terraform destroy` removes the nodes (null_resource.flux_pre_destroy, hcloud and kind).
+# While the cluster is still alive, let it clean up what Terraform does not know about:
+#   1. suspend Flux, so it does not recreate what we delete;
+#   2. delete the target namespaces - with them go the workloads, CNPG clusters and their PVCs,
+#      so no controller recreates a PVC; then every other PVC in the cluster;
+#   3. wait until the PersistentVolumes are gone - volumes with reclaimPolicy Delete (hcloud-volumes)
+#      are removed by the CSI driver only while it runs; after the nodes are gone they stay, billed;
+#   4. wait for the namespaces; only for what is still stuck, clear the finalizers on the objects
+#      that actually have them (not every object - that took hundreds of API calls per namespace).
+# Everything left over is reported loudly. Terraform continues either way (on_failure = continue),
+# so the log lines here are the only warning.
 
 set -o errexit
 set -o nounset
@@ -6,164 +17,134 @@ set -o pipefail
 
 KUBECONFIG_PATH="${1:-}"
 TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability}"
-
-if [[ -z "${KUBECONFIG_PATH}" ]]; then
-  echo "[flux-pre-destroy] missing kubeconfig path" >&2
-  exit 1
-fi
+PV_TIMEOUT="${PRE_DESTROY_PV_TIMEOUT:-300}"
+NS_TIMEOUT="${PRE_DESTROY_NS_TIMEOUT:-180}"
 
 log() {
   echo "[flux-pre-destroy] $*"
 }
 
+warn() {
+  echo "[flux-pre-destroy] WARNING: $*" >&2
+}
+
 kc() {
-  kubectl --kubeconfig="${KUBECONFIG_PATH}" "$@"
+  kubectl --kubeconfig="${KUBECONFIG_PATH}" --request-timeout=30s "$@"
 }
 
 api_exists() {
-  local resource="$1"
-  kc api-resources -o name 2>/dev/null | grep -qx "${resource}"
+  kc api-resources -o name 2>/dev/null | grep -qx "$1"
 }
 
-patch_finalizers() {
-  local name="$1"
+# Wait until "$@" (a kubectl get ... -o name) prints nothing, or the timeout (seconds) passes.
+wait_until_empty() {
+  local timeout="$1"
   shift
-  kc "$@" patch "${name}" --type=merge -p '{"metadata":{"finalizers":[]}}' >/dev/null 2>&1 || true
+  local deadline=$((SECONDS + timeout))
+  while (( SECONDS < deadline )); do
+    [[ -z "$(kc "$@" 2>/dev/null || true)" ]] && return 0
+    sleep 5
+  done
+  return 1
 }
 
-# Namespace deletion blockers live in spec.finalizers, not metadata.finalizers.
-# The only way to clear them is to PUT the finalize subresource via the API.
-force_delete_namespace() {
+suspend_flux() {
+  local resource
+  log "suspending Flux reconciliation"
+  for resource in \
+    kustomizations.kustomize.toolkit.fluxcd.io \
+    helmreleases.helm.toolkit.fluxcd.io \
+    imageupdateautomations.image.toolkit.fluxcd.io
+  do
+    api_exists "${resource}" || continue
+    kc get "${resource}" -A -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+      | while read -r ns name; do
+          [[ -z "${name}" ]] && continue
+          kc -n "${ns}" patch "${resource}" "${name}" --type=merge -p '{"spec":{"suspend":true}}' >/dev/null 2>&1 || true
+        done
+  done
+  if api_exists fluxinstances.fluxcd.controlplane.io; then
+    kc -n flux-system delete fluxinstance flux --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+  fi
+}
+
+delete_volumes() {
+  log "deleting the remaining PersistentVolumeClaims (the CSI driver removes their volumes)"
+  kc delete pvc --all -A --wait=false >/dev/null 2>&1 || true
+  if wait_until_empty "${PV_TIMEOUT}" get pv -o name; then
+    log "all PersistentVolumes deleted"
+  else
+    warn "PersistentVolumes still present after ${PV_TIMEOUT}s - their volumes will outlive the cluster (billed):"
+    kc get pv -o custom-columns=NAME:.metadata.name,RECLAIM:.spec.persistentVolumeReclaimPolicy,STATUS:.status.phase,CLAIM:.spec.claimRef.name >&2 || true
+  fi
+}
+
+delete_namespaces() {
+  local ns
+  for ns in "${namespaces[@]}"; do
+    log "deleting namespace ${ns}"
+    kc delete namespace "${ns}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+  done
+}
+
+wait_for_namespaces() {
+  local ns
+  if wait_until_empty "${NS_TIMEOUT}" get namespace "${namespaces[@]}" -o name --ignore-not-found=true; then
+    log "target namespaces deleted"
+    return 0
+  fi
+  for ns in "${namespaces[@]}"; do
+    kc get namespace "${ns}" >/dev/null 2>&1 || continue
+    unblock_namespace "${ns}"
+  done
+}
+
+# Last resort for a namespace stuck in Terminating: clear finalizers only on the objects that still
+# have any (one list per resource type), then the namespace's own spec.finalizers.
+unblock_namespace() {
   local ns="$1"
-  log "force-clearing spec.finalizers on namespace ${ns}"
-  kc get namespace "${ns}" -o json \
+  local resource object
+  warn "namespace ${ns} still terminating after ${NS_TIMEOUT}s - clearing the finalizers that block it"
+  while read -r resource; do
+    [[ -z "${resource}" || "${resource}" == events* ]] && continue
+    kc -n "${ns}" get "${resource}" -o jsonpath='{range .items[?(@.metadata.finalizers)]}{.kind}/{.metadata.name}{"\n"}{end}' 2>/dev/null \
+      | while read -r object; do
+          [[ -z "${object}" ]] && continue
+          log "  clearing finalizers on ${ns}/${object}"
+          kc -n "${ns}" patch "${resource}" "${object#*/}" --type=merge -p '{"metadata":{"finalizers":[]}}' >/dev/null 2>&1 || true
+        done
+  done < <(kc api-resources --verbs=list --namespaced -o name 2>/dev/null || true)
+  kc get namespace "${ns}" -o json 2>/dev/null \
     | jq '.spec.finalizers = []' \
     | kc replace --raw "/api/v1/namespaces/${ns}/finalize" -f - >/dev/null 2>&1 || true
 }
 
-delete_all_if_present() {
-  local resource="$1"
-  shift || true
-  if api_exists "${resource}"; then
-    kc "$@" delete "${resource}" --all --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
-  fi
-}
-
-strip_resource_finalizers_in_namespace() {
-  local namespace="$1"
-  local resource
-  local object
-
-  while IFS= read -r resource; do
-    [[ -z "${resource}" ]] && continue
-    while IFS= read -r object; do
-      [[ -z "${object}" ]] && continue
-      patch_finalizers "${object}" -n "${namespace}"
-    done < <(kc -n "${namespace}" get "${resource}" -o name --ignore-not-found=true 2>/dev/null || true)
-  done < <(kc api-resources --verbs=list --namespaced -o name 2>/dev/null || true)
-}
-
-delete_flux_inventory() {
-  local flux_ns="flux-system"
-
-  log "suspending Flux reconciliation"
-  for resource in \
-    "kustomizations.kustomize.toolkit.fluxcd.io" \
-    "helmreleases.helm.toolkit.fluxcd.io" \
-    "imageupdateautomations.image.toolkit.fluxcd.io"
-  do
-    if api_exists "${resource}"; then
-      while IFS= read -r object; do
-        [[ -z "${object}" ]] && continue
-        kc -n "${flux_ns}" patch "${object}" --type=merge -p '{"spec":{"suspend":true}}' >/dev/null 2>&1 || true
-      done < <(kc -n "${flux_ns}" get "${resource}" -o name --ignore-not-found=true 2>/dev/null || true)
-    fi
-  done
-
-  log "deleting Flux custom resources"
-  for resource in \
-    "helmreleases.helm.toolkit.fluxcd.io" \
-    "kustomizations.kustomize.toolkit.fluxcd.io" \
-    "helmcharts.source.toolkit.fluxcd.io" \
-    "helmrepositories.source.toolkit.fluxcd.io" \
-    "gitrepositories.source.toolkit.fluxcd.io" \
-    "ocirepositories.source.toolkit.fluxcd.io" \
-    "buckets.source.toolkit.fluxcd.io" \
-    "imagerepositories.image.toolkit.fluxcd.io" \
-    "imagepolicies.image.toolkit.fluxcd.io" \
-    "imageupdateautomations.image.toolkit.fluxcd.io" \
-    "alerts.notification.toolkit.fluxcd.io" \
-    "providers.notification.toolkit.fluxcd.io" \
-    "receivers.notification.toolkit.fluxcd.io"
-  do
-    delete_all_if_present "${resource}" -n "${flux_ns}"
-  done
-
-  if api_exists "fluxinstances.fluxcd.controlplane.io"; then
-    kc -n "${flux_ns}" delete fluxinstance flux --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
-  fi
-
-  sleep 5
-
-  log "clearing remaining Flux finalizers"
-  strip_resource_finalizers_in_namespace "${flux_ns}"
-}
-
-delete_target_namespaces() {
-  IFS=',' read -r -a namespaces <<< "${TARGET_NAMESPACES_CSV}"
-  local namespace
-  local deadline
-
-  for namespace in "${namespaces[@]}"; do
-    [[ -z "${namespace}" ]] && continue
-    kc get namespace "${namespace}" >/dev/null 2>&1 || continue
-    log "clearing namespaced finalizers in ${namespace}"
-    strip_resource_finalizers_in_namespace "${namespace}"
-    log "deleting namespace ${namespace}"
-    kc delete namespace "${namespace}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
-  done
-
-  deadline=$((SECONDS + 90))
-  while (( SECONDS < deadline )); do
-    local remaining=0
-    for namespace in "${namespaces[@]}"; do
-      [[ -z "${namespace}" ]] && continue
-      if kc get namespace "${namespace}" >/dev/null 2>&1; then
-        remaining=1
-      fi
-    done
-    if [[ "${remaining}" -eq 0 ]]; then
-      log "target namespaces deleted"
-      return 0
-    fi
-    sleep 3
-  done
-
-  log "forcing namespace finalizer cleanup for stuck namespaces"
-  for namespace in "${namespaces[@]}"; do
-    [[ -z "${namespace}" ]] && continue
-    if kc get namespace "${namespace}" >/dev/null 2>&1; then
-      force_delete_namespace "${namespace}"
-    fi
-  done
-}
-
 if ! command -v kubectl >/dev/null 2>&1; then
-  log "kubectl not found; skipping Flux pre-destroy cleanup"
+  warn "kubectl not found - no cluster-side cleanup; volumes created by the cluster may be left behind"
+  exit 0
+fi
+if [[ -z "${KUBECONFIG_PATH}" || ! -f "${KUBECONFIG_PATH}" ]]; then
+  warn "kubeconfig '${KUBECONFIG_PATH}' not found - no cluster-side cleanup; volumes created by the cluster may be left behind"
+  exit 0
+fi
+if ! kc version >/dev/null 2>&1; then
+  warn "cluster not reachable - no cluster-side cleanup; volumes created by the cluster may be left behind"
   exit 0
 fi
 
-if [[ ! -f "${KUBECONFIG_PATH}" ]]; then
-  log "kubeconfig ${KUBECONFIG_PATH} not found; skipping Flux pre-destroy cleanup"
-  exit 0
-fi
+IFS=',' read -r -a requested <<< "${TARGET_NAMESPACES_CSV}"
+namespaces=()
+for ns in "${requested[@]}"; do
+  [[ -n "${ns}" ]] && kc get namespace "${ns}" >/dev/null 2>&1 && namespaces+=("${ns}")
+done
 
-if ! kc version --request-timeout=5s >/dev/null 2>&1; then
-  log "cluster not reachable; skipping Flux pre-destroy cleanup"
-  exit 0
+suspend_flux
+if (( ${#namespaces[@]} > 0 )); then
+  delete_namespaces
 fi
-
-delete_flux_inventory
-delete_target_namespaces
+delete_volumes
+if (( ${#namespaces[@]} > 0 )); then
+  wait_for_namespaces
+fi
 
 log "pre-destroy cleanup finished"
