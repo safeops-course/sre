@@ -36,3 +36,13 @@ spec:
     limits:
       cpu: 100m
       memory: 512Mi
+  # initdb sets the owner's password only once. managed.roles keeps the app role's password equal to
+  # the app-postgres-app Secret on every reconcile, so rotating the Secret (SOPS or Terraform) rotates
+  # the database password too - no drift between what the backend reads and what Postgres accepts.
+  managed:
+    roles:
+      - name: app
+        ensure: present
+        login: true
+        passwordSecret:
+          name: app-postgres-app
