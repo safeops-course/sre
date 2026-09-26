@@ -156,8 +156,25 @@ fi
 
 IFS=',' read -r -a requested <<< "${TARGET_NAMESPACES_CSV}"
 namespaces=()
+# "not there" only when the API says so; an API error is retried, and a namespace that still cannot
+# be checked is kept - deleting a namespace that is already gone is harmless, skipping one is not.
+namespace_state() {  # prints: present | absent | unknown
+  local out
+  for _ in 1 2 3; do
+    if out=$(kc get namespace "$1" --ignore-not-found -o name 2>/dev/null); then
+      [[ -n "${out}" ]] && echo present || echo absent
+      return 0
+    fi
+    sleep 5
+  done
+  echo unknown
+}
 for ns in "${requested[@]}"; do
-  [[ -n "${ns}" ]] && kc get namespace "${ns}" >/dev/null 2>&1 && namespaces+=("${ns}")
+  [[ -z "${ns}" ]] && continue
+  case "$(namespace_state "${ns}")" in
+    present) namespaces+=("${ns}") ;;
+    unknown) warn "could not check namespace ${ns} after 3 tries - deleting it anyway"; namespaces+=("${ns}") ;;
+  esac
 done
 
 suspend_flux
