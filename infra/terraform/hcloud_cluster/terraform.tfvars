@@ -57,5 +57,4 @@ flux_kustomization_path    = "./flux/bootstrap/flux-system"
 # git_owner      = "your-github-username"
 
 # ─── OIDC (Dex) ───────────────────────────────────────────────────────────────
-# Enable after Dex is deployed and reachable at dex.safeops.work
-# k3s_exec_server_args = "--kube-apiserver-arg oidc-issuer-url=https://dex.safeops.work --kube-apiserver-arg oidc-client-id=kubernetes --kube-apiserver-arg oidc-username-claim=email --kube-apiserver-arg oidc-groups-claim=groups"
+# On by default (oidc_issuer_url = "https://dex.safeops.work"). Set "" to disable.

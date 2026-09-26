@@ -259,8 +259,20 @@ variable "flux_kustomization_path" {
 
 # ─── OIDC / Authentication ─────────────────────────────────────────────────────
 
+variable "oidc_issuer_url" {
+  description = "OIDC issuer the kube-apiserver trusts (Dex). Empty disables OIDC login for kubectl and Headlamp."
+  type        = string
+  default     = "https://dex.safeops.work"
+}
+
+variable "oidc_audiences" {
+  description = "Dex client IDs whose ID tokens the kube-apiserver accepts (must match staticClients in flux/infrastructure/security/dex)."
+  type        = list(string)
+  default     = ["kubernetes", "headlamp"]
+}
+
 variable "k3s_exec_server_args" {
-  description = "Extra arguments passed to k3s server (e.g., kube-apiserver OIDC flags)."
+  description = "Extra arguments passed to k3s server. OIDC uses oidc_issuer_url instead."
   type        = string
   default     = ""
 }
