@@ -335,7 +335,11 @@ EOF
 }
 
 resource "null_resource" "flux_pre_destroy" {
+  # module.kube_hetzner: destroy runs this hook before ANY node is removed. Without it a plain
+  # `terraform destroy` deleted the workers in parallel - Kyverno, the Flux controllers and the CSI
+  # driver died with them, and the namespaces and volumes could no longer be cleaned up.
   depends_on = [
+    module.kube_hetzner,
     local_sensitive_file.kubeconfig,
     kubernetes_namespace_v1.bootstrap,
     null_resource.flux_instance,

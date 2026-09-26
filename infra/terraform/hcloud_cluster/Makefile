@@ -25,7 +25,12 @@ destroy: ## Destroy cluster (run Flux/Kubernetes pre-destroy cleanup, then infra
 	@echo "==> Removing Kubernetes resources from state (cluster-side teardown already handled)..."
 	@$(MAKE) --no-print-directory state-clean-k8s
 	@echo "==> Destroying infrastructure..."
-	$(TF) destroy
+	@# The leftover check runs even when the destroy fails - that is when something is most likely
+	@# left behind. A failed destroy keeps its own exit status; otherwise the check's status counts.
+	@rc=0; $(TF) destroy || rc=$$?; \
+	echo "==> Checking that nothing billable is left in the Hetzner project..."; \
+	../../../scripts/hcloud-leftovers.sh; check=$$?; \
+	if [ $$rc -ne 0 ]; then exit $$rc; fi; exit $$check
 
 state-list: ## List all resources in state
 	$(TF) state list
