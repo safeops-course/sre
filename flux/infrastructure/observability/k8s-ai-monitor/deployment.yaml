@@ -43,6 +43,10 @@ spec:
             # openai on the platform; on kind Terraform sets guardian_llm_provider (gemini by default).
             - name: LLM_PROVIDER
               value: ${guardian_llm_provider:=openai}
+            # Store each LLM request/response (already redacted) for GET /llm-debug, 7 days.
+            # Off on the platform; on kind Terraform turns it on to show what is sent.
+            - name: LLM_DEBUG
+              value: "${guardian_llm_debug:=false}"
             - name: PROMETHEUS_URL
               value: http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090
             - name: SQLITE_PATH

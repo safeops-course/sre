@@ -34,7 +34,7 @@ guardian_llm_provider = "gemini"        # gemini (cheapest), anthropic or openai
 guardian_llm_api_key  = "your-own-key"
 ```
 
-Without a key the Guardian still detects, deduplicates and tracks incidents - only the LLM analysis is missing. Its HTTP API token (`internal-token`) is generated; read it with `kubectl --context kind-sre-control-plane -n observability get secret k8s-ai-monitor-secrets -o jsonpath='{.data.internal-token}' | base64 -d`. The age key lands in `age.agekey` at the repo root (git-ignored); register its public half with `scripts/sops-setup.sh --local` before you encrypt anything.
+Without a key the Guardian still detects, deduplicates, tracks and posts incidents - only the LLM analysis and the daily report are missing. With a key, every request it sends and the answer are kept for 7 days (`GET /llm-debug`, `guardian_llm_debug` in `cluster-config`): you can see exactly what left the cluster. Its HTTP API token (`internal-token`) is generated; read it with `kubectl --context kind-sre-control-plane -n observability get secret k8s-ai-monitor-secrets -o jsonpath='{.data.internal-token}' | base64 -d`. The age key lands in `age.agekey` at the repo root (git-ignored); register its public half with `scripts/sops-setup.sh --local` before you encrypt anything.
 
 Images are pulled from `ghcr.io/safeops-course/*`; no registry credentials are needed as long as the packages are public.
 

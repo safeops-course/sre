@@ -413,6 +413,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     image_registry        = var.image_registry
     git_owner             = var.git_owner
     guardian_llm_provider = var.guardian_llm_provider
+    # Keep every LLM request and response in the Guardian's store (GET /llm-debug, 7 days):
+    # on kind you see exactly what left the cluster (Chapter 14).
+    guardian_llm_debug = "true"
   }
 
   depends_on = [null_resource.flux_operator_install]
