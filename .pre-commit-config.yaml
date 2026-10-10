@@ -220,6 +220,15 @@ repos:
         files: ^flux/secrets/.*\.ya?ml$
         stages: [pre-commit]
 
+  # Secrets by CONTENT in the staged changes (rules: .gitleaks.toml). The hooks above see file names
+  # and SOPS structure only.
+  # pre-commit builds the hook with Go on first use - it installs its own Go if none is present.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1 # = GITLEAKS_VERSION in .github/workflows/secrets-guard.yml (the job checks it)
+    hooks:
+      - id: gitleaks
+        stages: [pre-commit]
+
   - repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.10.0
     hooks:

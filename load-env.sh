@@ -92,10 +92,6 @@ export TF_VAR_enable_ghcr=true
 export TF_VAR_flux_git_repository_url="https://github.com/safeops-course/sre.git"
 export TF_VAR_uptrace_dsn="${UPTRACE_DSN:-}"
 
-# Cloudflare Access / KV (for cloudflare_safeops Terraform)
-export TF_VAR_cloudflare_api_token="${CLOUDFLARE_API_TOKEN:-}"
-export TF_VAR_cloudflare_account_id="${CLOUDFLARE_ACCOUNT_ID:-}"
-
 # Only the AGE-SECRET-KEY-... line of the key file: the file also holds comment lines.
 if [[ -f "${AGE_PRIV_KEY}" ]]; then
   TF_VAR_sops_age_key="$(grep -o 'AGE-SECRET-KEY-[a-zA-Z0-9]*' "${AGE_PRIV_KEY}")"

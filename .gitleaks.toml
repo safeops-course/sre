@@ -1,0 +1,13 @@
+# gitleaks configuration: the default rules, no allowlist.
+# The no-secrets and sops-encrypted hooks look at a file's NAME and structure; gitleaks reads its
+# CONTENT - a token pasted into a values file, a script or a doc is caught here, not there.
+[extend]
+useDefault = true
+
+# A planted test secret, if one is ever needed, is allowed one line at a time with an inline
+# `gitleaks:allow` comment, so any other secret is still reported.
+#
+# Do NOT add a path-based [[allowlists]] entry. Verified with gitleaks 8.30.1 in the backend repository
+# (2026-09-27): an allowlist with `condition = "AND"`, `paths = [...]` and an anchored regex behaved
+# like the paths alone - a real-looking token planted under an allowed path was not reported.
+# SOPS-encrypted files need no allowlist either: their values are ciphertext, which no rule matches.
