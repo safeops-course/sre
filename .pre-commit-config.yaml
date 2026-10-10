@@ -92,6 +92,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: check-credentials-test
+        name: credential registry check tests (throw-away copy, no secrets)
+        entry: tests/check-credentials.test.sh
+        language: script
+        files: ^(scripts/check-credentials\.sh|tests/check-credentials\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: kyverno-policies-test
         name: Admission guardrails give the expected verdicts (kyverno test, no cluster)
         entry: tests/kyverno-policies.test.sh
@@ -154,6 +162,14 @@ repos:
         entry: scripts/check-policy-exceptions.sh
         language: script
         files: ^flux/.*\.ya?ml$
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: credentials
+        name: Every credential is in the registry, described and not due for rotation
+        entry: scripts/check-credentials.sh
+        language: script
+        files: ^(docs/credential-(registry\.yaml|rotation\.md)|flux/secrets/.*|scripts/check-credentials\.sh)$
         pass_filenames: false
         stages: [pre-commit]
 
