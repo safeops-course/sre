@@ -67,10 +67,10 @@ fi
 echo "== what a drain would evict (server-side dry run; PodDisruptionBudgets are checked)"
 # A blocked eviction is retried until --timeout - without one the dry run would wait forever.
 if dry="$(kube drain "${node}" --ignore-daemonsets --delete-emptydir-data --dry-run=server --timeout=60s 2>&1)"; then
-  echo "${dry}" | { grep 'evicting pod' || true; } | sort -u   # nothing to evict is not an error
+  echo "${dry}" | { grep '^evicting pod' || true; } | sort -u   # nothing to evict is not an error
   echo "a drain would complete"
 else
-  echo "${dry}" | { grep 'evicting pod' || true; } | sort -u   # nothing to evict is not an error
+  echo "${dry}" | { grep '^evicting pod' || true; } | sort -u   # nothing to evict is not an error
   blocked="$(echo "${dry}" | sed -n 's/.*evicting pods\/"\([^"]*\)" -n "\([^"]*\)".*disruption budget.*/\2\/\1/p' | sort -u)"
   if [[ -n "${blocked}" ]]; then
     echo "a drain would be BLOCKED by these pods' PodDisruptionBudgets (nowhere else to run them):"
