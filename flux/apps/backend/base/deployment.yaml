@@ -176,6 +176,8 @@ spec:
           value: "false"
         - name: AUTH_REGISTRATION_ENABLED
           value: "true"
+        - name: AUTH_REGISTRATIONS_PER_MINUTE   # bots signed up in bursts - one a minute is plenty
+          value: "1"
         livenessProbe:
           httpGet:
             path: /livez
