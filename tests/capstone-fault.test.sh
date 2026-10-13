@@ -21,7 +21,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # There it would fail every pull request, the colleague's included. Found in a real run on a fork.
 COURSE_REPOSITORY="safeops-course/sre"
 origin_url="$(git -C "${ROOT}" remote get-url origin 2>/dev/null || echo "none")"
-if [[ "${origin_url}" != *"${COURSE_REPOSITORY}"* ]]; then
+# OWNER/NAME from the URL, compared whole: safeops-course/sre-course is not safeops-course/sre.
+origin_repo="$(sed -E 's#\.git$##; s#^.*[:/]([^/:]+/[^/]+)$#\1#' <<<"${origin_url}")"
+if [[ "${origin_repo}" != "${COURSE_REPOSITORY}" ]]; then
   echo "skip - not the course repository (origin: ${origin_url}); the faults are checked there"
   exit 0
 fi
@@ -127,13 +129,17 @@ STUB
   chmod +x "${WORK}/bin/gh"
 }
 
-# github_repo_with_origin - fresh_repo plus ${WORK}/learner/sre.git as its origin, fetched.
+# github_repo_with_origin [URL] - fresh_repo plus an origin at URL (default
+# https://github.com/learner/sre.git) that git sends to the local bare ${WORK}/learner/sre.git
+# (url.insteadOf): the script sees a GitHub URL, the push stays on this machine.
 github_repo_with_origin() {
+  local url="${1:-https://github.com/learner/sre.git}"
   fresh_repo
   rm -rf "${WORK}/learner" "${WORK}/gh.log"
   mkdir -p "${WORK}/learner"
   git clone -q --bare "${WORK}/repo" "${WORK}/learner/sre.git"
-  git -C "${WORK}/repo" remote add origin "${WORK}/learner/sre.git"
+  git -C "${WORK}/repo" config "url.${WORK}/learner/sre.git.insteadOf" "${url}"
+  git -C "${WORK}/repo" remote add origin "${url}"
   git -C "${WORK}/repo" fetch -q origin
 }
 
@@ -177,10 +183,17 @@ check "github: every pull request call names the fork" \
   test "$(grep -c '^pr ' "${WORK}/gh.log")" -eq "$(grep -c '^pr .*--repo learner/sre' "${WORK}/gh.log")"
 
 expect_refused "github: a branch left on origin is refused"
+check "  - for that reason" grep -q 'from an earlier run' "${WORK}/out"
 check "  - and no worktree left" no_worktree_left
 
 github_repo_with_origin
 STUB_FORK=false expect_refused "github: a repository that is not a fork is refused"
+check "  - and nothing pushed" \
+  bash -c "! git -C '${WORK}/learner/sre.git' rev-parse -q --verify fix/signup-bots"
+
+github_repo_with_origin https://gitlab.example/learner/sre.git
+expect_refused "github: an origin that is not on GitHub is refused"
+check "  - and says so" grep -q 'is not github.com' "${WORK}/out"
 check "  - and nothing pushed" \
   bash -c "! git -C '${WORK}/learner/sre.git' rev-parse -q --verify fix/signup-bots"
 

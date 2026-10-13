@@ -130,9 +130,24 @@ cleanup() {
   git -C "${repo_root}" worktree prune
 }
 
-# github_repo - origin's GitHub repository as OWNER/NAME (from an https, ssh or ssh-alias URL).
+# github_repo - origin's GitHub repository as OWNER/NAME, from an https, ssh:// or scp-like URL. Its
+# host must be github.com, or an ssh alias for it (Host github-me / HostName github.com): gh looks the
+# name up on GitHub, and it must be the repository git pushes to.
 github_repo() {
-  git -C "${repo_root}" remote get-url origin | sed -E 's#\.git$##; s#^.*[:/]([^/:]+/[^/]+)$#\1#'
+  local url host path resolved
+  url="$(git -C "${repo_root}" config --get remote.origin.url)"
+  case "${url}" in
+    https://*|ssh://*) host="${url#*://}"; host="${host#*@}"; host="${host%%/*}"; path="${url#*://*/}" ;;
+    *@*:*) host="${url#*@}"; host="${host%%:*}"; path="${url#*:}" ;;
+    *) die "origin (${url}) is not a GitHub URL - the capstone runs in your fork on GitHub" ;;
+  esac
+  host="${host%%:*}"   # ssh://host:port
+  if [[ "${host}" != "github.com" ]]; then
+    resolved="$(ssh -G "${host}" 2>/dev/null | awk '$1 == "hostname" { print $2 }')"
+    [[ "${resolved}" == "github.com" ]] \
+      || die "origin's host ${host} is not github.com - the capstone runs in your fork on GitHub"
+  fi
+  echo "${path%.git}"
 }
 
 # run_github - the fault as a pull request in your GitHub repository, merged once its checks pass.
@@ -157,9 +172,14 @@ run_github() {
   cd "${WORK}"
   make_fault
   # A branch of the same name left on origin by an earlier run would refuse the push.
-  if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null; then
-    die "origin has a branch ${BRANCH} from an earlier run - close its pull request with gh pr close <number> --delete-branch, or delete it: git push origin --delete ${BRANCH}"
-  fi
+  # ls-remote --exit-code: 0 the branch exists, 2 it does not, anything else - origin did not answer.
+  local found=0
+  git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null || found=$?
+  case "${found}" in
+    0) die "origin has a branch ${BRANCH} from an earlier run - close its pull request with gh pr close <number> --repo ${repo} --delete-branch, or delete it: git push origin --delete ${BRANCH}" ;;
+    2) ;;
+    *) die "could not read origin's branches (git ls-remote exit ${found}) - is the network up?" ;;
+  esac
   commit_fault
   # Pushed from the detached worktree: no local branch is left behind, so the same fault can run again.
   local pushed
@@ -183,7 +203,7 @@ run_github() {
       || die "the pull request's checks failed - nothing merged: ${pr}"
   fi
   gh pr merge "${pr}" --repo "${repo}" --merge --delete-branch >/dev/null \
-    || die "the merge was refused (a ruleset that needs a review?) - the pull request is open: merge it yourself, as a colleague's approved change, or close it (gh pr close ${pr} --delete-branch) and run this again"
+    || die "the merge was refused (a ruleset that needs a review?) - the pull request is open: merge it yourself, as a colleague's approved change, or close it (gh pr close ${pr} --repo ${repo} --delete-branch) and run this again"
   echo "capstone-fault: and merged it. Flux applies main within a few minutes - carry on with your change."
 }
 

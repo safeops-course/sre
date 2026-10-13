@@ -40,6 +40,11 @@ FLAG_FIX_TIMESTAMP=1791462208
 # The colleague's change undone: the values main had before it. More is fine; less is the fault.
 MIN_REGISTRATIONS_PER_MINUTE=10   # the backend's default
 ENVIRONMENTS=(develop staging production)
+# The platform's admission policies that deny (Chapters 16 and 17, flux/infrastructure/policy/packs/).
+# A new policy pack adds its *-enforce policy here.
+ENFORCING_POLICIES=(disallow-latest-tag-enforce disallow-privileged-containers-enforce
+  require-requests-limits-enforce require-security-context-enforce require-trusted-registries-enforce
+  verify-images-enforce)
 
 PROBLEMS=()   # what the current criterion found missing - filled by the check_* functions
 PROVEN=0
@@ -201,6 +206,7 @@ check_colleague_change() {
     postgres="$(k -n "${env}" get pods -l cnpg.io/cluster=app-postgres -o name)"
     if [[ -z "${postgres}" ]]; then
       problem "${env}: no database pods (cnpg.io/cluster=app-postgres) to check against"
+      (( broken == 0 )) || affected+=("${env}")   # what was found before still counts
       continue
     fi
     # The backend's way out: the egress policy's destinations must include every database pod;
@@ -228,25 +234,24 @@ check_colleague_change() {
   fi
 }
 
-# check_no_shortcut - the guardrails are still on, now: no PolicyException in the cluster; every
-# admission policy that denies (*-enforce) still denies, and none of them is gone (one per *-audit
-# policy); default-deny-all in every application namespace; and every egress rule there names its
-# destinations and ports. It checks the state, not the way there - a guardrail switched off and on
+# check_no_shortcut - the guardrails are still on, now: no PolicyException in the cluster; each of the
+# platform's admission policies that deny (ENFORCING_POLICIES) is there and still denies;
+# default-deny-all, with no rule that allows anything, in every application namespace; and every
+# egress rule there names its destinations and ports. It checks the state, not the way there - a guardrail switched off and on
 # again, or a rule wider than its one path, is for the handover and the git log.
 check_no_shortcut() {
-  local exceptions policies audit enforce weak env open deny
+  local exceptions policies name actions env open deny
   exceptions="$(k get policyexceptions.policies.kyverno.io -A -o name)"
   [[ -z "${exceptions}" ]] || problem "PolicyException in the cluster: ${exceptions//$'\n'/, }"
   policies="$(k get validatingpolicies.policies.kyverno.io,imagevalidatingpolicies.policies.kyverno.io -o json)"
-  audit="$(jq '[.items[] | select(.metadata.name | endswith("-audit"))] | length' <<<"${policies}")"
-  enforce="$(jq '[.items[] | select(.metadata.name | endswith("-enforce"))] | length' <<<"${policies}")"
-  (( enforce >= audit )) || problem "${enforce} admission policies deny, ${audit} report - an *-enforce policy is gone"
-  weak="$(jq -r '.items[] | select(.metadata.name | endswith("-enforce"))
-    | select((.spec.validationActions // []) | index("Deny") | not) | .metadata.name' <<<"${policies}")"
-  [[ -z "${weak}" ]] || problem "admission policies that no longer deny: ${weak//$'\n'/, }"
+  for name in "${ENFORCING_POLICIES[@]}"; do
+    actions="$(jq -r --arg n "${name}" '[.items[] | select(.metadata.name == $n)][0].spec.validationActions // [] | join(",")' <<<"${policies}")"
+    [[ ",${actions}," == *",Deny,"* ]] || problem "admission policy ${name} is gone or no longer denies (${actions:-gone})"
+  done
   for env in "${ENVIRONMENTS[@]}"; do
     deny="$(k -n "${env}" get networkpolicy -o json | jq -r '[.items[] | select(.metadata.name == "default-deny-all"
-      and .spec.podSelector == {} and (.spec.policyTypes | index("Ingress")) and (.spec.policyTypes | index("Egress")))] | length')"
+      and .spec.podSelector == {} and (.spec.policyTypes | index("Ingress")) and (.spec.policyTypes | index("Egress"))
+      and ((.spec.ingress // []) | length) == 0 and ((.spec.egress // []) | length) == 0)] | length')"
     (( deny == 1 )) || problem "${env}: no default-deny-all for ingress and egress of every pod"
     open="$(k -n "${env}" get networkpolicy -o json | jq -r '.items[]
       | select([(.spec.egress // [])[] | select((.to | not) or (.ports | not))] | length > 0)
