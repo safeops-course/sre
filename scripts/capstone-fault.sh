@@ -131,17 +131,22 @@ cleanup() {
 }
 
 # github_repo - origin's GitHub repository as OWNER/NAME, from an https, ssh:// or scp-like URL. Its
-# host must be github.com, or an ssh alias for it (Host github-me / HostName github.com): gh looks the
-# name up on GitHub, and it must be the repository git pushes to.
+# host must be github.com; over ssh also an alias for it (Host github-me / HostName github.com) - an
+# ssh alias means nothing to https, which resolves the name in DNS. gh looks the name up on GitHub,
+# and it must be the repository git pushes to.
 github_repo() {
-  local url host path resolved
+  local url host path resolved transport
   url="$(git -C "${repo_root}" config --get remote.origin.url)"
   case "${url}" in
-    https://*|ssh://*) host="${url#*://}"; host="${host#*@}"; host="${host%%/*}"; path="${url#*://*/}" ;;
-    *@*:*) host="${url#*@}"; host="${host%%:*}"; path="${url#*:}" ;;
+    https://*) transport=https; host="${url#*://}"; host="${host#*@}"; host="${host%%/*}"; path="${url#*://*/}" ;;
+    ssh://*) transport=ssh; host="${url#*://}"; host="${host#*@}"; host="${host%%/*}"; path="${url#*://*/}" ;;
+    *@*:*) transport=ssh; host="${url#*@}"; host="${host%%:*}"; path="${url#*:}" ;;
     *) die "origin (${url}) is not a GitHub URL - the capstone runs in your fork on GitHub" ;;
   esac
-  host="${host%%:*}"   # ssh://host:port
+  host="${host%%:*}"   # host:port
+  if [[ "${host}" != "github.com" && "${transport}" == "https" ]]; then
+    die "origin's host ${host} is not github.com - the capstone runs in your fork on GitHub"
+  fi
   if [[ "${host}" != "github.com" ]]; then
     resolved="$(ssh -G "${host}" 2>/dev/null | awk '$1 == "hostname" { print $2 }')"
     [[ "${resolved}" == "github.com" ]] \

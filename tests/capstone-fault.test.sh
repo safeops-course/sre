@@ -111,9 +111,17 @@ check "  - and the checkout is clean, still on main" \
 # --- the GitHub path, with origin a local bare repository and a stub gh ---
 
 # stub_gh - ${WORK}/bin/gh: logs each call to ${STUB_LOG}; is-fork and merge answers from
-# STUB_FORK (default true) and STUB_MERGE_RC (default 0).
+# STUB_FORK (default true) and STUB_MERGE_RC (default 0). Also ${WORK}/bin/ssh, for ssh -G only:
+# the alias github-alias resolves to github.com, any other host to itself - the machine's ssh config
+# must not decide the test.
 stub_gh() {
   mkdir -p "${WORK}/bin"
+  cat >"${WORK}/bin/ssh" <<'STUB'
+#!/usr/bin/env bash
+[[ "$1" == "-G" ]] || { echo "stub ssh: only -G" >&2; exit 1; }
+if [[ "$2" == "github-alias" ]]; then echo "hostname github.com"; else echo "hostname $2"; fi
+STUB
+  chmod +x "${WORK}/bin/ssh"
   cat >"${WORK}/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 echo "$*" >>"${STUB_LOG}"
@@ -196,6 +204,19 @@ expect_refused "github: an origin that is not on GitHub is refused"
 check "  - and says so" grep -q 'is not github.com' "${WORK}/out"
 check "  - and nothing pushed" \
   bash -c "! git -C '${WORK}/learner/sre.git' rev-parse -q --verify fix/signup-bots"
+
+github_repo_with_origin https://github-alias/learner/sre.git
+expect_refused "github: an https origin on an ssh alias is refused (https does not read ssh aliases)"
+check "  - and says so" grep -q 'is not github.com' "${WORK}/out"
+
+github_repo_with_origin git@github-alias:learner/sre.git
+if run_github_fault; then
+  echo "ok   - github: an ssh origin on an alias for github.com works"
+else
+  echo "FAIL - github: an ssh origin on an alias for github.com works:"
+  sed 's/^/       /' "${WORK}/out"
+  FAILED=1
+fi
 
 github_repo_with_origin
 STUB_MERGE_RC=1 expect_refused "github: a refused merge fails"
