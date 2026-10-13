@@ -111,7 +111,8 @@ check "  - and the checkout is clean, still on main" \
 # --- the GitHub path, with origin a local bare repository and a stub gh ---
 
 # stub_gh - ${WORK}/bin/gh: logs each call to ${STUB_LOG}; is-fork and merge answers from
-# STUB_FORK (default true) and STUB_MERGE_RC (default 0). Also ${WORK}/bin/ssh, for ssh -G only:
+# STUB_FORK (default true) and STUB_MERGE_RC (default 0); STUB_CHECKS=none answers like a fork whose
+# Actions are off. Also ${WORK}/bin/ssh, for ssh -G only:
 # the alias github-alias resolves to github.com, any other host to itself - the machine's ssh config
 # must not decide the test.
 stub_gh() {
@@ -129,7 +130,9 @@ case "$1 $2" in
   "auth status") exit 0 ;;
   "repo view") echo "${STUB_FORK:-true}" ;;
   "pr create") echo "https://github.com/learner/sre/pull/1" ;;
-  "pr checks") echo "all checks passed" ;;
+  "pr checks")
+    if [[ "${STUB_CHECKS:-}" == "none" ]]; then echo "no checks reported on the 'x' branch"; exit 1; fi
+    echo "all checks passed" ;;
   "pr merge") exit "${STUB_MERGE_RC:-0}" ;;
   *) echo "stub gh: unexpected call: $*" >&2; exit 1 ;;
 esac
@@ -217,6 +220,12 @@ else
   sed 's/^/       /' "${WORK}/out"
   FAILED=1
 fi
+
+github_repo_with_origin
+STUB_CHECKS=none expect_refused "github: no checks at all - nothing is merged"
+check "  - and says to enable Actions" grep -q 'Enable Actions in your fork' "${WORK}/out"
+check "  - and never calls merge" bash -c "! grep -q '^pr merge' '${WORK}/gh.log'"
+check "  - and no worktree left" no_worktree_left
 
 github_repo_with_origin
 STUB_MERGE_RC=1 expect_refused "github: a refused merge fails"

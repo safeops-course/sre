@@ -194,19 +194,18 @@ run_github() {
 
   # Wait for the repository's checks, as you would for your own pull request (Chapter 05).
   # They take a few seconds to appear after the pull request; until then gh pr checks says "no checks
-  # reported". A fork whose Actions are off has none at all: then it merges as your own pull requests
-  # do there (Chapter 15's lab accepts that too), and says so.
+  # reported". None after a minute and a half means Actions are off in the fork: then nothing is
+  # merged - the colleague's change passes the same checks as yours, or it does not land (Chapter 05).
   for _ in 1 2 3 4 5 6 7 8 9; do
     sleep "${CAPSTONE_POLL_SECONDS:-10}"
     if checks="$(gh pr checks "${pr}" --repo "${repo}" 2>&1)"; then break; fi   # 0: there are checks, all passed
     grep -q 'no checks reported' <<<"${checks}" || break
   done
   if grep -q 'no checks reported' <<<"${checks}"; then
-    echo "capstone-fault: no checks on ${pr} after a minute and a half - are Actions enabled in your fork? Merging without them."
-  else
-    gh pr checks "${pr}" --repo "${repo}" --watch >/dev/null \
-      || die "the pull request's checks failed - nothing merged: ${pr}"
+    die "no checks on ${pr} after a minute and a half - nothing merged. Enable Actions in your fork (its Actions tab) and keep Chapter 05's ruleset, then close this pull request (gh pr close ${pr} --repo ${repo} --delete-branch) and run this again"
   fi
+  gh pr checks "${pr}" --repo "${repo}" --watch >/dev/null \
+    || die "the pull request's checks failed - nothing merged: ${pr}"
   gh pr merge "${pr}" --repo "${repo}" --merge --delete-branch >/dev/null \
     || die "the merge was refused (a ruleset that needs a review?) - the pull request is open: merge it yourself, as a colleague's approved change, or close it (gh pr close ${pr} --repo ${repo} --delete-branch) and run this again"
   echo "capstone-fault: and merged it. Flux applies main within a few minutes - carry on with your change."
