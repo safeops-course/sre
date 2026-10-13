@@ -29,13 +29,14 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   KUBE_CONTEXT: kind-sre-control-plane
 
+# One run per event and ref: a push to the pull request cancels only that pull request's older run,
+# never the nightly one.
 concurrency:
-  group: nightly-kind
-  cancel-in-progress: true
+  group: nightly-kind-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   baseline:
@@ -68,9 +69,19 @@ jobs:
           terraform_version: "1.16.5"
           terraform_wrapper: false
 
-      # age-keygen creates the cluster's own SOPS key on the first apply (local-profile.tf).
+      # age-keygen creates the cluster's own SOPS key on the first apply (local-profile.tf). A pinned
+      # release, checked against its SHA-256 before use - not whatever the runner's apt has.
       - name: Setup age
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+        run: |
+          # renovate: datasource=github-releases depName=FiloSottile/age
+          AGE_VERSION="v1.3.2"
+          AGE_SHA256="cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10"
+          curl -sSLo age.tar.gz "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz"
+          echo "${AGE_SHA256}  age.tar.gz" | sha256sum --check --strict
+          tar xzf age.tar.gz
+          sudo mv age/age age/age-keygen /usr/local/bin/
+          rm -rf age age.tar.gz
+          age-keygen --version
 
       # Chapter 00, as a learner runs it: plan, then apply exactly that plan.
       - name: Create the kind cluster (make kind-plan, make kind-apply)
@@ -82,10 +93,12 @@ jobs:
       - name: Wait for every Kustomization to be Ready
         run: |
           not_ready() {
-            kubectl --context "$KUBE_CONTEXT" get kustomizations -A -o json | jq -r '.items[]
+            # No Kustomization at all is not "all Ready": Flux has not created them yet.
+            kubectl --context "$KUBE_CONTEXT" get kustomizations -A -o json | jq -r '
+              if (.items | length) == 0 then "(no Kustomization yet)" else .items[]
               | select(.spec.suspend == true
                   or ([.status.conditions[]? | select(.type == "Ready" and .status == "True")] | length) == 0)
-              | "\(.metadata.namespace)/\(.metadata.name)"'
+              | "\(.metadata.namespace)/\(.metadata.name)" end'
           }
           for i in $(seq 1 80); do
             left="$(not_ready)" || left="(the API did not answer)"
@@ -105,9 +118,10 @@ jobs:
       - name: Wait for every database to be healthy
         run: |
           for i in $(seq 1 40); do
-            sick="$(kubectl --context "$KUBE_CONTEXT" get clusters.postgresql.cnpg.io -A -o json | jq -r '.items[]
+            sick="$(kubectl --context "$KUBE_CONTEXT" get clusters.postgresql.cnpg.io -A -o json | jq -r '
+              if (.items | length) == 0 then "(no database yet)" else .items[]
               | select(.status.phase != "Cluster in healthy state")
-              | "\(.metadata.namespace)/\(.metadata.name): \(.status.phase // "no phase")"')" || sick="(the API did not answer)"
+              | "\(.metadata.namespace)/\(.metadata.name): \(.status.phase // "no phase")" end')" || sick="(the API did not answer)"
             if [ -z "$sick" ]; then
               echo "every database healthy after about $((i / 2)) min"
               exit 0
@@ -152,17 +166,26 @@ jobs:
           kubectl --context "$KUBE_CONTEXT" get events -A --sort-by=.lastTimestamp | tail -60
           exit 0
 
-      # One open issue for the nightly run: a new failure comments on it instead of opening another.
-      # Not for the pull_request run - the pull request shows its own failure.
+  # One open issue for the nightly run: a new failure comments on it instead of opening another.
+  # Its own job, so only this job can write issues. Not for the pull_request run - the pull request
+  # shows its own failure.
+  report:
+    needs: baseline
+    if: failure() && github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    permissions:
+      issues: write
+    steps:
       - name: Open or update the nightly-kind issue
-        if: failure() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
         run: |
           gh label create nightly-kind --color B60205 --description "The nightly kind baseline failed" --force
           number="$(gh issue list --label nightly-kind --state open --json number --jq '.[0].number')"
-          body="The nightly kind baseline failed on main ($(git rev-parse --short HEAD)): ${RUN_URL}"
+          body="The nightly kind baseline failed on main (${SHA:0:7}) - the failed step and the diagnostics are in the run: ${RUN_URL}"
           if [ -n "$number" ]; then
             gh issue comment "$number" --body "$body"
           else
