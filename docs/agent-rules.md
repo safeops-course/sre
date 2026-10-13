@@ -335,8 +335,10 @@ back when its metrics fail.
 
 ## Chapter 20 - Every version moves through a reviewed pull request
 
-Every chart, image and tool version is pinned; Renovate's dashboard shows what is due. Nodes and k3s are
-upgraded only when `scripts/node-maintenance.sh` runs - a dry run unless told otherwise.
+Every chart and tool version is pinned, and every rendered image has an exact tag - the application
+images get theirs from each environment's overlay (`images[].newTag`, `scripts/check-image-tags.sh`).
+Renovate's dashboard shows what is due. Nodes and k3s are upgraded only when
+`scripts/node-maintenance.sh` runs - a dry run unless told otherwise.
 
 | Rule for the agent | What enforces it |
 |---|---|
@@ -349,10 +351,13 @@ upgraded only when `scripts/node-maintenance.sh` runs - a dry run unless told ot
 
 ## Chapter 21 - A credential's value stays in SOPS; a rotation is proven both ways
 
-Every credential is in `docs/credential-registry.yaml`, with what it grants, where its copies live and
-when it was last replaced; the runbooks are in `docs/credential-rotation.md`
-(`scripts/check-credentials.sh`, pre-commit and every day on main); values live only in SOPS-encrypted
-Secrets under `flux/secrets/`.
+Every credential is in `docs/credential-registry.yaml` - names, places and dates, never a value - with
+what it grants, where its copies live and when it was last replaced; the runbooks are in
+`docs/credential-rotation.md` (`scripts/check-credentials.sh`, pre-commit and every day on main). Values
+live only in SOPS-encrypted Secrets under `flux/secrets/`. The one exception is the break-glass
+kubeconfig (`k3s-admin-kubeconfig` in the registry): it stays only on the machine that applied
+Terraform, git-ignored - never in Git, not even encrypted under `flux/secrets/` (the `Block sensitive
+files` hook refuses a file named kubeconfig).
 
 | Rule for the agent | What enforces it |
 |---|---|
