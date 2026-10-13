@@ -46,15 +46,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The platform's images need more room than the runner leaves free; these preinstalled
-      # toolchains are never used here. The numbers before and after go into the log.
-      - name: Free disk space
-        run: |
-          df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL /usr/share/swift
-          sudo docker image prune --all --force >/dev/null
-          df -h /
+      # The runner's disk is large enough (first run: 91 GB free, at most 40 GB used); the numbers
+      # before and after go into the log, so a growing platform shows here first.
+      - name: Disk before
+        run: df -h /
 
       # The versions the root Makefile pins - the ones a learner installs.
       - name: Setup kubectl
@@ -102,6 +97,25 @@ jobs:
             sleep 30
           done
           echo "::error::not Ready after 40 minutes: $(echo "$left" | tr '\n' ' ')"
+          exit 1
+
+      # A Ready Kustomization means applied, not that every database has caught up: production's
+      # second instance joins minutes later. The smoke test checks the databases, so wait for them
+      # here - bounded, with the phase of each one that is not healthy.
+      - name: Wait for every database to be healthy
+        run: |
+          for i in $(seq 1 40); do
+            sick="$(kubectl --context "$KUBE_CONTEXT" get clusters.postgresql.cnpg.io -A -o json | jq -r '.items[]
+              | select(.status.phase != "Cluster in healthy state")
+              | "\(.metadata.namespace)/\(.metadata.name): \(.status.phase // "no phase")"')" || sick="(the API did not answer)"
+            if [ -z "$sick" ]; then
+              echo "every database healthy after about $((i / 2)) min"
+              exit 0
+            fi
+            echo "$(date -u +%T) not healthy yet: $(echo "$sick" | tr '\n' ';')"
+            sleep 30
+          done
+          echo "::error::not healthy after 20 minutes: $(echo "$sick" | tr '\n' ';')"
           exit 1
 
       - name: Smoke test (make smoke-test)
