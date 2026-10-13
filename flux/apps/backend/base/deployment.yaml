@@ -205,11 +205,11 @@ spec:
         # is OOMKilled, CPU over it is throttled. requests < limits makes the pod Burstable.
         resources:
           requests:
-            cpu: 100m
+            cpu: 25m
             memory: 128Mi
             ephemeral-storage: 64Mi
           limits:
-            cpu: 250m
+            cpu: 25m
             memory: 256Mi
             ephemeral-storage: 128Mi
         volumeMounts:
