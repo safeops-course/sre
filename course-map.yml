@@ -6,10 +6,7 @@
 #   - CodeRabbit: warns when a PR touches files taught in course chapters
 #   - sync-course-snippets Action: identifies which chapters need snippet updates
 
-.coderabbit.yml:
-  - chapter-05-cicd-developer-guardrails
-
-.github/workflows/terraform-hcloud-destroy.yml:
+.github/workflows/pre-commit.yml:
   - chapter-05-cicd-developer-guardrails
 
 .github/workflows/terraform-hcloud.yml:
@@ -22,8 +19,8 @@
 .sops.yaml:
   - chapter-04-secrets-management
 
-docs/gitops-workflow.md:
-  - chapter-10-version-promotion
+docs/agent-rules.md:
+  - chapter-23-capstone
 
 docs/local-dev.md:
   - appendix-local-dev
@@ -31,22 +28,22 @@ docs/local-dev.md:
 flux/apps/backend/base/deployment.yaml:
   - chapter-07-security-context
   - chapter-08-resource-management
+  - chapter-18-rollback-data-migrations
 
-flux/apps/backend/base/servicemonitor.yaml:
-  - chapter-11-observability
-
-flux/apps/backend/develop:
+flux/apps/backend/production/hpa.yaml:
   - chapter-09-availability-engineering
+
+flux/apps/backend/production/image-policy.yaml:
   - chapter-10-version-promotion
 
-flux/apps/backend/production:
+flux/apps/backend/production/kustomization.yaml:
   - chapter-10-version-promotion
+
+flux/apps/backend/production/pdb.yaml:
+  - chapter-09-availability-engineering
 
 flux/apps/frontend/base/ingress.yaml:
   - appendix-dns-tls
-
-flux/apps/frontend/overlays/develop:
-  - chapter-09-availability-engineering
 
 flux/bootstrap/flux-system/gotk-sync.yaml:
   - chapter-03-gitops
@@ -54,27 +51,35 @@ flux/bootstrap/flux-system/gotk-sync.yaml:
 flux/bootstrap/infrastructure/base/namespaces.yaml:
   - chapter-07-security-context
 
-flux/bootstrap/infrastructure/image-automation/backend-image-repo.yaml:
-  - chapter-10-version-promotion
-
 flux/bootstrap/profiles/local/secrets-local.yaml:
   - chapter-03-gitops
-
-flux/infrastructure/chaos/develop:
-  - chapter-13-controlled-chaos
 
 flux/infrastructure/chaos/develop/cronjob.yaml:
   - chapter-13-controlled-chaos
 
-flux/infrastructure/data/cnpg-clusters:
+flux/infrastructure/chaos/develop/target-guard.yaml:
+  - chapter-13-controlled-chaos
+
+flux/infrastructure/data/cnpg-clusters/develop/cluster.yaml:
   - chapter-12-backup-restore
-  - chapter-18-rollback-data-migrations
+
+flux/infrastructure/data/cnpg-clusters/production/cluster.yaml:
+  - chapter-22-disaster-recovery
 
 flux/infrastructure/network-policies/base/allow-backend-ingress.yaml:
   - chapter-06-network-policies
 
 flux/infrastructure/network-policies/base/allow-dns-egress.yaml:
   - chapter-06-network-policies
+
+flux/infrastructure/network-policies/base/allow-postgres-egress-apiserver.yaml:
+  - chapter-12-backup-restore
+
+flux/infrastructure/observability/alerting/routing/routing.yaml:
+  - chapter-11-observability
+
+flux/infrastructure/observability/k8s-ai-monitor/alertmanager-guardian.yaml:
+  - chapter-14-ai-assisted-sre-guardian
 
 flux/infrastructure/observability/k8s-ai-monitor/clusterrole.yaml:
   - chapter-14-ai-assisted-sre-guardian
@@ -85,19 +90,28 @@ flux/infrastructure/observability/k8s-ai-monitor/deployment.yaml:
 flux/infrastructure/observability/kube-prometheus-stack/monitoring/backend-alerts.yaml:
   - chapter-11-observability
 
-flux/infrastructure/policy/packs/admission-guardrails/require-security-context.example.yaml:
+flux/infrastructure/observability/kube-prometheus-stack/monitoring/backend-slo-rules.yaml:
+  - chapter-11-observability
+
+flux/infrastructure/observability/kube-prometheus-stack/monitoring/backup-alerts.yaml:
+  - chapter-12-backup-restore
+
+flux/infrastructure/policy/exceptions/only-from-git.yaml:
   - chapter-16-admission-policy-guardrails
 
-flux/infrastructure/policy/packs/supply-chain/verify-attestations.example.yaml:
+flux/infrastructure/policy/packs/admission-guardrails/disallow-latest-tag.yaml:
+  - chapter-16-admission-policy-guardrails
+
+flux/infrastructure/policy/packs/admission-guardrails/require-trusted-registries.yaml:
+  - chapter-16-admission-policy-guardrails
+
+flux/infrastructure/policy/packs/supply-chain/verify-images-enforce.yaml:
   - chapter-17-supply-chain-security
 
-flux/infrastructure/policy/packs/supply-chain/verify-images.example.yaml:
-  - chapter-17-supply-chain-security
-
-flux/infrastructure/progressive-delivery/develop/canary-backend.yaml:
+flux/infrastructure/progressive-delivery/develop/canary-frontend.yaml:
   - chapter-19-progressive-delivery
 
-flux/infrastructure/resource-management/develop:
+flux/infrastructure/resource-management/develop/limitrange.yaml:
   - chapter-08-resource-management
 
 flux/infrastructure/resource-management/develop/resourcequota.yaml:
@@ -115,17 +129,35 @@ flux/infrastructure/security/dns-and-certificates/release-external-dns.yaml:
 infra/terraform/hcloud_cluster/backend.tf:
   - chapter-02-iac
 
-infra/terraform/hcloud_cluster/main.tf:
-  - chapter-12-backup-restore
-
 infra/terraform/kind_cluster:
   - appendix-local-dev
 
 infra/terraform/kind_cluster/main.tf:
   - chapter-02-iac
 
+renovate.json:
+  - chapter-20-platform-lifecycle
+
+scripts/check-app-resources.sh:
+  - chapter-08-resource-management
+
+scripts/check-app-security.sh:
+  - chapter-07-security-context
+
+scripts/check-image-tags.sh:
+  - chapter-10-version-promotion
+
+scripts/check-sops-encrypted.sh:
+  - chapter-04-secrets-management
+
 scripts/guard-terraform-plan.sh:
   - chapter-02-iac
+
+scripts/hpa-replicas-handover.sh:
+  - chapter-09-availability-engineering
+
+scripts/postgres-restore-manifest.sh:
+  - chapter-12-backup-restore
 
 scripts/sops-encrypt-secret.sh:
   - chapter-04-secrets-management
