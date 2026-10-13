@@ -1,0 +1,156 @@
+name: Nightly - kind lab baseline
+
+# Builds the course's local platform from main every night, inside the GitHub runner, and checks
+# the baseline every chapter starts from: every Kustomization Ready, the smoke test, and
+# make capstone-check at its known starting point (criteria 1, 4, 5, 6 proven; 2, 3, 7 not yet).
+#
+# Why: the platform follows "latest versions, monthly". A chart or image bump can break a lab's
+# Expected output without failing any pull request check - the labs run on a learner's laptop,
+# not in CI. This run is the learner's Chapter 00 setup, done by a machine every night.
+#
+# Free: a public repository's standard runner (4 vCPU, 16 GB) at no cost; kind runs in its Docker.
+# No secrets: the kind module's local profile generates its own age key and local secrets
+# (infra/terraform/kind_cluster/local-profile.tf); Flux reads the public repository's main.
+# A failure opens (or comments on) one issue labelled nightly-kind - GitHub e-mails nobody about a
+# scheduled run on its own. Forks skip the job.
+#
+# The pull_request trigger runs it on a change to this file only: a scheduled or manual run needs
+# the file on main first. Either way Flux deploys main (the kind module's default), not the branch.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/nightly-kind.yml
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  KUBE_CONTEXT: kind-sre-control-plane
+
+concurrency:
+  group: nightly-kind
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  baseline:
+    if: github.repository == 'safeops-course/sre'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The platform's images need more room than the runner leaves free; these preinstalled
+      # toolchains are never used here. The numbers before and after go into the log.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/share/swift
+          sudo docker image prune --all --force >/dev/null
+          df -h /
+
+      # The versions the root Makefile pins - the ones a learner installs.
+      - name: Setup kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Setup flux CLI
+        uses: fluxcd/flux2/action@b9c17924adb533d3617ec7de97a7b0f4acc07b39 # v2.9.6
+        with:
+          version: 2.9.6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.5"
+          terraform_wrapper: false
+
+      # age-keygen creates the cluster's own SOPS key on the first apply (local-profile.tf).
+      - name: Setup age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      # Chapter 00, as a learner runs it: plan, then apply exactly that plan.
+      - name: Create the kind cluster (make kind-plan, make kind-apply)
+        run: |
+          make kind-plan
+          make kind-apply
+
+      # Bounded: a Kustomization that is not Ready after 40 minutes is a failure, named.
+      - name: Wait for every Kustomization to be Ready
+        run: |
+          not_ready() {
+            kubectl --context "$KUBE_CONTEXT" get kustomizations -A -o json | jq -r '.items[]
+              | select(.spec.suspend == true
+                  or ([.status.conditions[]? | select(.type == "Ready" and .status == "True")] | length) == 0)
+              | "\(.metadata.namespace)/\(.metadata.name)"'
+          }
+          for i in $(seq 1 80); do
+            left="$(not_ready)" || left="(the API did not answer)"
+            if [ -z "$left" ]; then
+              echo "every Kustomization Ready after about $((i / 2)) min"
+              exit 0
+            fi
+            echo "$(date -u +%T) not Ready yet: $(echo "$left" | tr '\n' ' ')"
+            sleep 30
+          done
+          echo "::error::not Ready after 40 minutes: $(echo "$left" | tr '\n' ' ')"
+          exit 1
+
+      - name: Smoke test (make smoke-test)
+        run: make smoke-test
+
+      # capstone-check exits 1 at the baseline (criteria 2, 3, 7 are the capstone's work), so the
+      # step checks the verdict of each criterion instead of the exit code.
+      - name: Capstone check at its baseline (make capstone-check)
+        run: |
+          set +e
+          make capstone-check | tee /tmp/capstone.log
+          set -e
+          fail=0
+          for n in 1 4 5 6; do
+            grep -qE "^  PROVEN +${n}\. " /tmp/capstone.log || { echo "::error::criterion ${n} is not PROVEN"; fail=1; }
+          done
+          for n in 2 3 7; do
+            grep -qE "^  NOT PROVEN YET +${n}\. " /tmp/capstone.log || { echo "::error::criterion ${n} is not NOT PROVEN YET"; fail=1; }
+          done
+          grep -q '^4 of 7 proven\.$' /tmp/capstone.log || { echo "::error::expected '4 of 7 proven.'"; fail=1; }
+          exit "$fail"
+
+      - name: Disk and time used
+        if: always()
+        run: df -h /
+
+      - name: Diagnostics
+        if: failure()
+        # Best effort: each command prints what it can; one that fails must not hide the next.
+        run: |
+          set +e
+          flux --context "$KUBE_CONTEXT" get all -A
+          kubectl --context "$KUBE_CONTEXT" get pods -A --no-headers | grep -vE 'Running|Completed'
+          kubectl --context "$KUBE_CONTEXT" get events -A --sort-by=.lastTimestamp | tail -60
+          exit 0
+
+      # One open issue for the nightly run: a new failure comments on it instead of opening another.
+      # Not for the pull_request run - the pull request shows its own failure.
+      - name: Open or update the nightly-kind issue
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create nightly-kind --color B60205 --description "The nightly kind baseline failed" --force
+          number="$(gh issue list --label nightly-kind --state open --json number --jq '.[0].number')"
+          body="The nightly kind baseline failed on main ($(git rev-parse --short HEAD)): ${RUN_URL}"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "Nightly kind baseline fails" --label nightly-kind --body "$body"
+          fi
