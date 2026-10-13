@@ -52,6 +52,15 @@ TODO: production, run at (UTC)
 - **Decision (accepted, rejected, or accepted in part):** TODO
 - **The reason, with the evidence or the rule behind it:** TODO
 
+## Beyond This Platform
+
+Another team's manifest (the lab's C1), on a cluster without this platform's checks or helpers - what
+you would tell them before it goes to production:
+
+- **What can break, and how it would show:** TODO
+- **What you would check first, and what the answer would prove:** TODO
+- **The one change you would make first, and why that one:** TODO
+
 ## Acceptance Criteria
 
 Each criterion graded - proven, proven with a hint, or not proven yet - with what proves it. For 3,
@@ -69,6 +78,7 @@ request (its time on GitHub).
 | 7 | The handover in Git | TODO | TODO | TODO | TODO |
 | 8 | The users' path, under a second | TODO | TODO | TODO | TODO |
 | 9 | The AI agent's proposal decided | TODO | TODO | TODO | TODO |
+| 10 | Beyond this platform | TODO | TODO | TODO | TODO |
 
 The output of `make capstone-check`, as printed, and the revision it ran against:
 
