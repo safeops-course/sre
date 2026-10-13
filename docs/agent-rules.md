@@ -305,3 +305,72 @@ the same way. Elsewhere it reports.
 | Never build or push an image from a workstation, and never sign one by hand: an image reaches the registry only through its repository's `build.yml`. | The policy refuses an image without that signer identity; registry write access only for CI. |
 | When a signed image is refused, find out why before anything else (`cosign verify`, `cosign verify-attestation --type spdxjson`) - never widen the signer identity, switch the policy to Audit or add an exception to get it through. | `tests/kyverno-supply-chain.test.sh` (pre-commit and CI) fails when a verdict changes; review of the policy diff. |
 | A CI change that touches signing (a cosign or attest action version, the signing step) is verified against the policy with a real signed image before it merges. | Instruction; the test's real images. |
+
+## Chapter 18 - A rollback is the previous release; the schema only moves forward
+
+Migrations in the backend repository are forward-only (`*.up.sql`, expand and contract): a rollback is
+the previous release running on the current schema, and a point-in-time restore goes into a separate
+cluster (`app-postgres-restore`), never over the live one.
+
+| Rule for the agent | What enforces it |
+|---|---|
+| Never write a down migration, and never change or delete a migration that was merged: a mistake is fixed by the next migration. The one exception is a migration that no database has recorded as clean - it failed everywhere it ran - see the runbook in the course. | The backend builds in only `*.up.sql` files; a test fails when the newest file and the version the code requires disagree; review. |
+| Every migration file starts with `SET LOCAL lock_timeout = '5s';` - except a `CONCURRENTLY` statement, which is the only statement in its file, without that line. | A backend test that checks every file for one of the two shapes. |
+| A migration only adds or relaxes. Removing, renaming or tightening a column, table or constraint is a contract step: its own release, after no release you might roll back to uses it. | The CI job *previous release on this schema (N-1)* - the previous release must migrate, start, and log in its own and the new release's users on the new schema. |
+| Never run ad hoc DDL by hand on a database that serves users - the one exception is finishing or undoing a migration left dirty, reviewed, as the runbook describes - and never restore over the live database to undo a release. A point-in-time restore goes into a separate cluster. | Instruction; `scripts/postgres-restore-manifest.sh` only creates a separate cluster (`app-postgres-restore`). |
+| Merge a pull request with a migration only while a restore to the second before it is possible: a base backup exists and the WAL archive is healthy. | Instruction; the cluster's `ContinuousArchiving` condition and the alerts `PostgresWALArchivingFailing`, `PostgresNeverBackedUp`, `PostgresBackupTooOld` (Chapter 12). |
+
+## Chapter 19 - A canary's verdict is evidence, not an obstacle
+
+Flagger runs a canary for the develop frontend - opt-in,
+`flux/bootstrap/flux-system/progressive-delivery-develop.yaml` - shifting traffic in steps and rolling
+back when its metrics fail.
+
+| Rule for the agent | What enforces it |
+|---|---|
+| When a canary rolls a release back, find out why from its events and metrics - never lower the threshold, remove a metric or set `skipAnalysis` to get the release through. | The alert `CanaryRolledBack`; review of the Canary's diff. |
+| A failed check with *no values* is a broken analysis, not a bad release: fix the traffic or the metrics before the next release. | `frontend-synthetic-traffic` and the Traefik PodMonitor in the module; instruction. |
+| A route made for a canary is a public route: never match an internal name on a public entrypoint. | Instruction; review. |
+| `RANDOM_ERROR_RATE` is for `develop` and labs only. | `scripts/check-app-security.sh` in pre-commit and in the Flux Diff workflow. |
+
+## Chapter 20 - Every version moves through a reviewed pull request
+
+Every chart, image and tool version is pinned; Renovate's dashboard shows what is due. Nodes and k3s are
+upgraded only when `scripts/node-maintenance.sh` runs - a dry run unless told otherwise.
+
+| Rule for the agent | What enforces it |
+|---|---|
+| Never unpin a version (a range, `latest`, a major tag) and never turn on automatic updates for charts, nodes or k3s: every version moves through a reviewed pull request. | Review; `scripts/check-image-tags.sh` for the app images; Renovate's dashboard shows what is due. |
+| Bump a chart and the tool that tests it in the same pull request; never edit a test's tool version to make a mismatch pass. | `tests/tool-versions.test.sh` (pre-commit and CI). |
+| Read the release notes of every version between the pinned one and the target, and render the chart diff, before proposing an upgrade - and say what changes in the pull request. | Instruction; review. |
+| Never drain or reboot a node without the dry run first and the owner's yes for the window; never use `--accept-outage` on your own. | `scripts/node-maintenance.sh` defaults to a dry run; instruction. |
+| Every app container keeps its `preStop` sleep; never remove it to make a rollout faster. | `scripts/check-app-security.sh` (pre-commit and CI). |
+| Before proposing a Kubernetes minor, run the removed-API checks against the target version and report what they found. | Instruction; `scripts/flux-kustomize-validate.sh` fails a removed API. |
+
+## Chapter 21 - A credential's value stays in SOPS; a rotation is proven both ways
+
+Every credential is in `docs/credential-registry.yaml`, with what it grants, where its copies live and
+when it was last replaced; the runbooks are in `docs/credential-rotation.md`
+(`scripts/check-credentials.sh`, pre-commit and every day on main); values live only in SOPS-encrypted
+Secrets under `flux/secrets/`.
+
+| Rule for the agent | What enforces it |
+|---|---|
+| Never put a credential's value into a command line, a file outside `flux/secrets/` (SOPS), a chat, an issue or a pull request. | Gitleaks (pre-commit and CI), `no-secrets`, `sops-encrypted`. |
+| Every new credential, and every new key in a SOPS Secret, gets a registry entry with a runbook in the same pull request. | `scripts/check-credentials.sh` (pre-commit, CI). |
+| Restart readers of a rotated Secret through Git (`safeops.io/secrets-rotated`), never with `kubectl rollout restart` on a Flux-managed Deployment. | Instruction; Flux removes the annotation `rollout restart` adds. |
+| A rotation is reported done only with both proofs: the new value works, the old one is refused. | Instruction; the runbooks. |
+| Never use or copy the break-glass kubeconfig without the owner's yes for that incident. | The file exists only on the machine that applied Terraform; instruction. |
+
+## Chapter 22 - A recovery is done when it is proven; an archive is never reused
+
+Production runs two database instances; a lost database or a lost cluster is rebuilt from the backup
+archive, as Chapter 22's runbook describes. A new cluster writes its own archive.
+
+| Rule for the agent | What enforces it |
+|---|---|
+| A new cluster is done when every database reports `ContinuousArchiving=True` and has a completed backup - not when it is Ready. | `PostgresWALArchivingFailing`, `PostgresNeverBackedUp`; the runbook's first check. |
+| Never clean, reuse or skip the check on a backup archive; a new cluster writes a new one (`serverName` with `BACKUP_CLUSTER_ID`). | The Barman Cloud plugin's empty-archive check; instruction. |
+| Never rebuild a cluster that may still come back, and declare a database recovery in Git before the new cluster is created. | Instruction; CloudNativePG reads `bootstrap` only at creation. |
+| Never delete an old archive while it is the newest copy of that data. | Instruction; retention never touches an archive the live cluster does not write. |
+| Report failover and recovery times only from a measurement, with how it was measured. | Instruction. |
