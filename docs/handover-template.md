@@ -30,12 +30,12 @@ not proven yet.
 
 ## Evidence on the Users' Path
 
-The sign-up and sign-in of each environment, after its change - status, time and the returned user,
-pasted as the commands printed them:
+The probe of each environment after its change (the lab's A3) - each request's status, time and the
+returned user, pasted as the commands printed them, with the time (UTC) you ran it:
 
 ```text
-TODO: staging
-TODO: production
+TODO: staging, run at (UTC)
+TODO: production, run at (UTC)
 ```
 
 ## The Colleague's Change
@@ -54,6 +54,22 @@ TODO: production
 
 ## Acceptance Criteria
 
+Each criterion graded - proven, proven with a hint, or not proven yet - with what proves it. For 3,
+the order is the proof: staging's probe (its time above) comes before the merge of production's pull
+request (its time on GitHub).
+
+| # | Criterion | Level (and the hint opened, if any) | Evidence: where above, or the command | Time (UTC) | Revision |
+|---|---|---|---|---|---|
+| 1 | Flux applies origin/main | TODO | TODO | TODO | TODO |
+| 2 | Display names in staging | TODO | TODO | TODO | TODO |
+| 3 | Display names in production, after staging | TODO | TODO | TODO | TODO |
+| 4 | The colleague's change fixed | TODO | TODO | TODO | TODO |
+| 5 | No guardrail switched off | TODO | TODO | TODO | TODO |
+| 6 | The smoke test | TODO | TODO | TODO | TODO |
+| 7 | The handover in Git | TODO | TODO | TODO | TODO |
+| 8 | The users' path, under a second | TODO | TODO | TODO | TODO |
+| 9 | The AI agent's proposal decided | TODO | TODO | TODO | TODO |
+
 The output of `make capstone-check`, as printed, and the revision it ran against:
 
 ```text
@@ -65,7 +81,7 @@ TODO
 - **Where a change goes in, and how it reaches the cluster:** TODO
 - **What alerts, and who it reaches:** TODO
 - **The runbooks, and which one for what:** TODO
-- **Backups - the last proven restore, RTO and RPO as measured:** TODO
+- **Backups - the last proven restore; the RTO and RPO objectives, and what was measured against them:** TODO
 - **Credentials - where the registry is, what is due next:** TODO
 
 ## What It Does Not Protect Against
