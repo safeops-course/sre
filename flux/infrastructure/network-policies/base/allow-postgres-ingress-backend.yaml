@@ -9,7 +9,7 @@ spec:
     matchExpressions:
       - key: cnpg.io/cluster
         operator: In
-        values: [app-postgres, app-postgres-restore]
+        values: [app-postgres-rw]
   policyTypes:
     - Ingress
   ingress:

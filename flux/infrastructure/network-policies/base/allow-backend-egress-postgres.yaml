@@ -17,7 +17,7 @@ spec:
             matchExpressions:
               - key: cnpg.io/cluster
                 operator: In
-                values: [app-postgres, app-postgres-restore]
+                values: [app-postgres-rw]
       ports:
         - protocol: TCP
           port: 5432
