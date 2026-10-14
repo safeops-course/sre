@@ -1,0 +1,111 @@
+# Google Cloud (GKE) - foundation runbook
+
+The Google Cloud side of the platform comes in two Terraform modules:
+
+| Module | Lifetime | Who applies it | Costs |
+|---|---|---|---|
+| `infra/terraform/gcp_foundation` | once per project, stays | a person, from a workstation | nothing |
+| `infra/terraform/gke_cluster` (next) | per cycle: created, tested, destroyed | GitHub Actions, with approval | while it exists |
+
+This page covers the foundation: what it creates, why, and how to set it up with one command.
+
+## What the foundation creates, and why
+
+| Piece | What | Why |
+|---|---|---|
+| Identity check | The plan fails unless Terraform runs as `TF_VAR_expected_principal` | A workstation often holds other Google identities (client work, an impersonated service account). Applying as the wrong one would build in the wrong place. |
+| APIs | Only what the clusters need (GKE, Compute, IAM, STS, logging, monitoring, budgets) | Enabling an API is free, using it costs. They are never turned off on destroy, because that can delete what other tools created. |
+| `gke-nodes` service account | `roles/container.defaultNodeServiceAccount` only | Google's documented minimum for nodes: write logs and metrics. Nodes never run as the Compute default account. |
+| `terraform-gke` deployer | `container.admin`, `compute.networkAdmin`, `compute.securityAdmin`, alert policies; `serviceAccountUser` on `gke-nodes` only | What CI runs as: enough for a cluster and its network. No owner or editor, no IAM admin, no keys. |
+| Workload Identity Federation | GitHub Actions of one repository (numeric id), its owner, on `refs/heads/main` only | GitHub signs a short-lived token per run, and Google exchanges it for the deployer's credentials. No key is stored anywhere. A repository name can be registered again by anyone, its id cannot. Pull request code never gets in. |
+| Alert e-mail channel | One Cloud Monitoring channel | Budget and Cloud NAT alerts go here. |
+| Monthly budget | Alerts at 50, 90 and 100 % of spend and at 100 % of the forecast | A budget only warns, it never stops spending. The alert is the signal to destroy what was forgotten. |
+
+### What Google creates on its own, and what we remove
+
+Turning the Compute API on creates two things in a project that has no organization policy against them:
+
+1. **The Compute Engine default service account, with `roles/editor`** on the whole project. The foundation takes Editor away (`google_project_iam_member_remove`), and every plan checks that it stays away.
+2. **A `default` VPC whose firewall opens SSH (22), RDP (3389) and ICMP to `0.0.0.0/0`.** Terraform cannot delete what it did not create, so `make delete-default-network CONFIRM=yes` deletes it once. A `check` in the module warns on every plan if it comes back.
+
+Both are on the CIS Google Cloud Benchmark's list. In a Google Cloud organization, the policies `iam.automaticIamGrantsForDefaultServiceAccounts` and `compute.skipDefaultNetworkCreation` stop them from being created at all. A project without an organization has to clean up after the fact.
+
+## Setup
+
+### 1. Prerequisites
+
+- A Google Cloud project with billing enabled, and `gcloud`, `terraform`, `jq` and `make` on your machine.
+- The Cloudflare R2 key for the Terraform state, the same one as for the Hetzner cluster.
+
+### 2. Sign in - as the right identity
+
+```bash
+gcloud auth login
+gcloud auth application-default login     # the credentials Terraform uses
+```
+
+If this machine also holds other Google identities, for example client work, keep this project's gcloud in its own directory. Do it before signing in, in every terminal you use for it:
+
+```bash
+export CLOUDSDK_CONFIG="$HOME/.config/gcloud-platform"      # any directory of your own
+gcloud auth login --no-launch-browser                        # open the link in a private window
+gcloud auth application-default login --no-launch-browser
+gcloud config set project YOUR_PROJECT_ID
+```
+
+The google Terraform provider **ignores `CLOUDSDK_CONFIG`**: it reads `GOOGLE_APPLICATION_CREDENTIALS` or gcloud's default directory. Point `GOOGLE_APPLICATION_CREDENTIALS` at `$CLOUDSDK_CONFIG/application_default_credentials.json` (step 3). Otherwise Terraform silently runs as whatever the default directory holds. The identity check catches that, but it is better not to get there.
+
+### 3. Settings
+
+```bash
+cp .env.gcp.example .env.gcp        # git-ignored
+```
+
+Fill in the expected identity, its ADC file, the billing account, the alert e-mail and the R2 key. The non-personal settings (project, region, budget, GitHub repository ids) are in `infra/terraform/gcp_foundation/terraform.tfvars`, so change them there for your own project.
+
+### 4. One command
+
+```bash
+make -C infra/terraform/gcp_foundation bootstrap
+```
+
+It runs, in order:
+1. **preflight**: names any missing setting before anything runs;
+2. **plan**: saved, with the identity check;
+3. **one question**: apply this plan?
+4. **apply**: exactly that plan;
+5. **delete-default-network**: only now does the default VPC exist, because the apply turned the Compute API on;
+6. **verify**: no drift and no default VPC.
+
+Expected on a fresh project: `Plan: 24 to add`, then `OK no drift` and `OK no default VPC`.
+
+Google confirms nothing by e-mail for an e-mail notification channel. The first budget e-mail arrives when spending crosses 50 %.
+
+### 5. Later
+
+```bash
+make -C infra/terraform/gcp_foundation verify      # still as the code says?
+make -C infra/terraform/gcp_foundation plan        # after a change: read it ...
+make -C infra/terraform/gcp_foundation apply       # ... then apply exactly that plan
+```
+
+## Check it by hand
+
+```bash
+gcloud iam service-accounts list --format='value(email)'
+gcloud iam workload-identity-pools providers describe github-actions \
+  --workload-identity-pool=github --location=global --format='value(state,attributeCondition)'
+gcloud projects get-iam-policy YOUR_PROJECT_ID --flatten='bindings[].members' \
+  --filter='bindings.members:compute@developer' --format='value(bindings.role)'   # expect: nothing
+gcloud compute networks list                                                      # expect: nothing
+gcloud billing budgets list --billing-account=YOUR_BILLING_ACCOUNT
+```
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Resource postcondition failed ... Terraform authenticates as X, expected Y` | The credentials are someone else's | Set `GOOGLE_APPLICATION_CREDENTIALS` to the right ADC file (step 2). |
+| `SERVICE_DISABLED` right after the first apply | Enabling an API takes a minute to reach every Google system | Run `make plan` again after a minute. |
+| `missing: ...` from preflight | A setting is not in `.env.gcp` or your shell | Add it (template: `.env.gcp.example`). |
+| A deleted Workload Identity pool or provider "already exists" | Google keeps a deleted pool or provider for 30 days | Restore it (`gcloud iam workload-identity-pools undelete`) or wait. The foundation is applied once, not per cycle. |

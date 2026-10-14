@@ -228,10 +228,11 @@ resource "google_project_iam_member_remove" "default_compute_editor" {
 # Terraform did not create the default VPC, so it cannot delete it declaratively; the one-time delete
 # is `make delete-default-network`. This check warns on every plan while it (or a re-created one)
 # exists - a warning, not an error: the rest of the plan stays usable.
+# No depends_on: in a check block it defers the read to every apply, and a plan would never come out
+# clean. On a project whose Compute API is still off the read fails - in a check block that is a
+# warning too, never an error.
 check "no_default_network" {
-  data "google_compute_networks" "all" {
-    depends_on = [google_project_service.this]
-  }
+  data "google_compute_networks" "all" {}
 
   assert {
     condition     = !contains(data.google_compute_networks.all.networks, "default")
