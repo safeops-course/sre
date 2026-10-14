@@ -45,11 +45,6 @@ kured_enabled = false
 # kured_start_time  = "02:00"     # default: 02:00
 # kured_end_time    = "05:00"     # default: 05:00
 
-# ─── Ingress ─────────────────────────────────────────────────────────────────
-ingress_controller = "traefik"
-# traefik_redirect_to_https = true
-# traefik_autoscaling       = true
-
 # ─── Flux ────────────────────────────────────────────────────────────────────
 flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
