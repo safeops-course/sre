@@ -13,7 +13,7 @@ KIND_VERSION := 0.33.0
 # renovate: datasource=github-releases depName=fluxcd/flux2
 FLUX_VERSION := 2.9.6
 
-.PHONY: help check-tools versions tf install-hooks pre-commit fmt validate smoke-test \
+.PHONY: help check-tools versions tf install-hooks pre-commit fmt validate smoke-test cluster-conformance \
 	capstone-fault capstone-check \
 	kind-plan kind-apply kind-drift kind-destroy \
 	hcloud-plan hcloud-apply hcloud-drift hcloud-destroy \
@@ -91,6 +91,9 @@ KUBE_CONTEXT ?= kind-sre-control-plane
 
 smoke-test: ## Smoke tests against KUBE_CONTEXT (default: the local kind cluster)
 	KUBE_CONTEXT=$(KUBE_CONTEXT) bash tests/smoke-test.sh
+
+cluster-conformance: ## The cluster contract (C1-C12) against KUBE_CONTEXT - what the platform needs from any cluster
+	@KUBE_CONTEXT=$(KUBE_CONTEXT) scripts/cluster-conformance.sh
 
 # --- Chapter 23 capstone ---------------------------------------------------
 capstone-fault: ## Capstone: a colleague's pull request, merged in your repository (one random fault)

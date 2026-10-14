@@ -135,6 +135,11 @@ jobs:
       - name: Smoke test (make smoke-test)
         run: make smoke-test
 
+      # The cluster contract (C1-C12): what the platform needs from any cluster. On the runner the
+      # nodes are amd64, so C11 checks the other architecture than a Mac's kind does.
+      - name: Cluster contract (make cluster-conformance)
+        run: make cluster-conformance
+
       # capstone-check exits 1 at the baseline (criteria 2, 3, 7 are the capstone's work), so the
       # step checks the verdict of each criterion instead of the exit code.
       - name: Capstone check at its baseline (make capstone-check)
