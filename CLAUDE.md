@@ -162,6 +162,10 @@ scripts/             # Pre-commit hooks, automation scripts
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)
 - `make hcloud-plan` / `hcloud-apply` / `hcloud-destroy` — the same for Hetzner (aliases of
   `terraform-hcloud-plan|apply|destroy`; CI calls `terraform-hcloud-destroy`); `make hcloud-drift` - drift check
+- `make cluster-conformance` — the cluster contract C1-C12 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
+  pinned Kubernetes version exactly, NetworkPolicies enforced (egress too), API-server egress rule, default StorageClass,
+  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures; PASS/FAIL/SKIP with a
+  reason. Creates and deletes the namespace `conformance` (a real disk for ~1 min on a cloud); nightly on kind
 - `make capstone-fault` — Chapter 23: a colleague's pull request with one random fault (f1 sign-up limit,
   f2 database network policies, f3 backend CPU), merged in the learner's repository; `scripts/capstone-fault.sh --local` commits only
   (tests/capstone-fault.test.sh). `make capstone-check` — the capstone's acceptance criteria against Git and
