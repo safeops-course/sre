@@ -192,12 +192,13 @@ variable "age_key_file" {
 
 # ─── Pinned versions: a rebuild gets the same cluster ────────────────────────
 
-# Kubernetes 1.36 on kind while Hetzner runs 1.37 - on purpose, until the kind provider can create 1.37.
-# Kubernetes 1.37 drops kubeadm's v1beta3 config; kind writes v1beta4 from v0.32 on. The tehcyx/kind
-# provider (0.11.0, the newest) embeds kind v0.31, so a 1.37 node fails at "kubeadm init" (seen
-# 2026-10-11). Move to 1.37 with the first provider release on kind >= v0.32.
+# The platform's Kubernetes version: Hetzner pins the same (k3s_version in hcloud_cluster), a managed
+# cloud runs its provider's patch of this minor (scripts/cluster-conformance.sh, C1). Move every
+# cluster together. 1.37 waits for kind: it drops kubeadm's v1beta3 config, kind writes v1beta4 from
+# v0.32 on, and the tehcyx/kind provider (0.11.0, the newest) embeds kind v0.31 - a 1.37 node fails at
+# "kubeadm init" (seen 2026-10-11).
 variable "kind_node_image" {
-  description = "kindest/node image, pinned by digest. Kubernetes v1.36.4 - one minor behind k3s on Hetzner (see above)."
+  description = "kindest/node image, pinned by digest. Kubernetes v1.36.4 - the same as k3s on Hetzner (see above)."
   type        = string
   # renovate: datasource=docker depName=kindest/node
   default = "kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed"
