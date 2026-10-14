@@ -53,12 +53,17 @@ probe() {
 }
 
 # expected_version - the Kubernetes version Git pins for this cluster: EXPECTED_K8S_VERSION, else the
-# kind node image or the Hetzner k3s version from the Terraform variables; empty when unknown.
+# kind node image, or the Hetzner k3s_version - terraform.tfvars when it sets one, else the variable's
+# default (never its description, which carries an example); empty when unknown.
 expected_version() {
   if [ -n "${EXPECTED_K8S_VERSION:-}" ]; then echo "$EXPECTED_K8S_VERSION"; return; fi
+  local hcloud="$ROOT/infra/terraform/hcloud_cluster" pin
   case "$CONTEXT" in
     kind-*) grep -oE 'kindest/node:v[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/infra/terraform/kind_cluster/variables.tf" | head -1 | sed 's/.*:v//' ;;
-    hetzner-*) awk '/variable "k3s_version"/,/^}/' "$ROOT/infra/terraform/hcloud_cluster/variables.tf" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//' ;;
+    hetzner-*)
+      pin="$(grep -E '^k3s_version *=' "$hcloud/terraform.tfvars" 2>/dev/null || true)"
+      [ -n "$pin" ] || pin="$(awk '/variable "k3s_version"/,/^}/' "$hcloud/variables.tf" | grep -E '^ *default *=')"
+      grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' <<<"$pin" | head -1 | sed 's/^v//' ;;
   esac
 }
 
