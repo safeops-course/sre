@@ -72,9 +72,13 @@ cleanup
 
 # C1 - the version Git pins, exactly: an older cluster misses what the policies and charts were
 # tested on, a newer one was never tested.
-want="$(expected_version)"
-have="$(k version -o json | jq -r .serverVersion.gitVersion | sed -E 's/^v//; s/[+-].*//')"
-if [ -z "$want" ]; then
+# A command that fails inside a check is that check's FAIL, never the end of the run: each one below
+# catches its own error (|| ...), so the remaining checks and the summary always print.
+want="$(expected_version)" || want=""
+have="$(k version -o json | jq -r .serverVersion.gitVersion | sed -E 's/^v//; s/[+-].*//')" || have=""
+if [ -z "$have" ]; then
+  fail C1 "could not read the server version (kubectl version)"
+elif [ -z "$want" ]; then
   fail C1 "Kubernetes $have - unknown pin for $CONTEXT: set EXPECTED_K8S_VERSION"
 elif [ "$have" = "$want" ]; then
   pass C1 "Kubernetes $have = the version Git pins"
@@ -110,17 +114,21 @@ spec:
   selector: { app: server }
   ports: [{ port: 8080, targetPort: 8080 }]
 EOF
-k -n "$NS" wait --for=condition=Ready pod/server --timeout=120s >/dev/null
+server_ready=true
+k -n "$NS" wait --for=condition=Ready pod/server --timeout=120s >/dev/null 2>&1 || server_ready=false
 
 # C2 - NetworkPolicies are enforced, egress included. Four probes from a pod labelled app=client:
 # open with no policy; blocked by the platform's own default-deny-all (+ DNS); still blocked once the
 # server admits the client (only egress is left closed - proves egress is enforced); open once the
 # client may also send. A CNI that ignores policies passes the first probe and fails the second.
 np="$ROOT/flux/infrastructure/network-policies/base"
-r1="$(probe open -l app=client server 8080)"
-k -n "$NS" apply -f "$np/default-deny-all.yaml" -f "$np/allow-dns-egress.yaml" >/dev/null
-r2="$(probe blocked -l app=client server 8080)"
-k -n "$NS" apply -f - >/dev/null <<'EOF'
+if [ "$server_ready" = false ]; then
+  fail C2 "the test server pod was not Ready within 2 min - no probe possible"
+else
+  r1="$(probe open -l app=client server 8080)"
+  k -n "$NS" apply -f "$np/default-deny-all.yaml" -f "$np/allow-dns-egress.yaml" >/dev/null
+  r2="$(probe blocked -l app=client server 8080)"
+  k -n "$NS" apply -f - >/dev/null <<'EOF'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -130,8 +138,8 @@ spec:
   policyTypes: [Ingress]
   ingress: [{ from: [{ podSelector: { matchLabels: { app: client } } }], ports: [{ port: 8080 }] }]
 EOF
-r3="$(probe blocked -l app=client server 8080)"
-k -n "$NS" apply -f - >/dev/null <<'EOF'
+  r3="$(probe blocked -l app=client server 8080)"
+  k -n "$NS" apply -f - >/dev/null <<'EOF'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -141,11 +149,12 @@ spec:
   policyTypes: [Egress]
   egress: [{ to: [{ podSelector: { matchLabels: { app: server } } }], ports: [{ port: 8080 }] }]
 EOF
-r4="$(probe open -l app=client server 8080)"
-if [ "$r1 $r2 $r3 $r4" = "open blocked blocked open" ]; then
-  pass C2 "NetworkPolicies enforced: no policy open, default-deny blocked, ingress-only blocked (egress enforced), both allowed open"
-else
-  fail C2 "NetworkPolicies - expected open/blocked/blocked/open, got $r1/$r2/$r3/$r4"
+  r4="$(probe open -l app=client server 8080)"
+  if [ "$r1 $r2 $r3 $r4" = "open blocked blocked open" ]; then
+    pass C2 "NetworkPolicies enforced: no policy open, default-deny blocked, ingress-only blocked (egress enforced), both allowed open"
+  else
+    fail C2 "NetworkPolicies - expected open/blocked/blocked/open, got $r1/$r2/$r3/$r4"
+  fi
 fi
 
 # C3 - a pod reaches the API server through the platform's own egress rule (the one CloudNativePG
@@ -173,7 +182,7 @@ fi
 
 # C4 - a default StorageClass gives a disk a non-root pod can write. Expansion is checked only where
 # the StorageClass allows it (kind's local-path does not; the platform never resizes a disk).
-sc="$(k get storageclass -o json | jq -r '[.items[] | select(.metadata.annotations["storageclass.kubernetes.io/is-default-class"] == "true")] | .[0] | "\(.metadata.name) \(.allowVolumeExpansion // false)"')"
+sc="$(k get storageclass -o json | jq -r '[.items[] | select(.metadata.annotations["storageclass.kubernetes.io/is-default-class"] == "true")] | .[0] | "\(.metadata.name) \(.allowVolumeExpansion // false)"')" || sc=""
 if [ "$sc" = "null false" ] || [ -z "$sc" ]; then
   fail C4 "no default StorageClass"
 else
@@ -205,15 +214,22 @@ EOF
     size="$(k -n "$NS" get pvc disk -o jsonpath='{.status.capacity.storage}')"
     pass C4 "default StorageClass ${sc% *}: disk bound ($size), written by a non-root pod"
     if [ "${sc#* }" = true ]; then
-      bigger="$(( $(k -n "$NS" get pvc disk -o json | jq -r '.status.capacity.storage | sub("Gi$"; "") | tonumber') + 1 ))Gi"
-      k -n "$NS" patch pvc disk --type merge -p "{\"spec\":{\"resources\":{\"requests\":{\"storage\":\"$bigger\"}}}}" >/dev/null
-      grown=""
-      for _ in $(seq 1 24); do
-        grown="$(k -n "$NS" get pvc disk -o jsonpath='{.status.capacity.storage}')"
-        [ "$grown" = "$bigger" ] && break
-        sleep 5
-      done
-      if [ "$grown" = "$bigger" ]; then pass C4 "disk expanded online to $bigger"; else fail C4 "disk not expanded to $bigger within 2 min (capacity $grown)"; fi
+      # One Gi more than the disk got (a cloud rounds 1Gi up - Hetzner gives 10Gi).
+      gi="$(k -n "$NS" get pvc disk -o jsonpath='{.status.capacity.storage}' | sed -n 's/^\([0-9][0-9]*\)Gi$/\1/p')" || gi=""
+      bigger="$((${gi:-0} + 1))Gi"
+      if [ -z "$gi" ]; then
+        fail C4 "expansion - the disk's capacity is not in Gi ($size)"
+      elif ! k -n "$NS" patch pvc disk --type merge -p "{\"spec\":{\"resources\":{\"requests\":{\"storage\":\"$bigger\"}}}}" >/dev/null; then
+        fail C4 "expansion - the resize to $bigger was refused"
+      else
+        grown=""
+        for _ in $(seq 1 24); do
+          grown="$(k -n "$NS" get pvc disk -o jsonpath='{.status.capacity.storage}')" || grown=""
+          [ "$grown" = "$bigger" ] && break
+          sleep 5
+        done
+        if [ "$grown" = "$bigger" ]; then pass C4 "disk expanded online to $bigger"; else fail C4 "disk not expanded to $bigger within 2 min (capacity $grown)"; fi
+      fi
     else
       skip C4 "expansion - StorageClass ${sc% *} does not allow it (the platform never resizes a disk)"
     fi
@@ -255,8 +271,9 @@ fi
 skip C8 "OIDC sign-in - manual: kubectl oidc-login (CLAUDE.md); kind has none (Chapter 21 uses --as)"
 
 # C9 - backups reach the object storage: every CloudNativePG cluster archives its WAL.
-dbs="$(k get clusters.postgresql.cnpg.io -A -o json | jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name) \([.status.conditions[]? | select(.type == "ContinuousArchiving")][0].status // "none")"')"
-if [ -z "$dbs" ]; then
+if ! dbs="$(k get clusters.postgresql.cnpg.io -A -o json | jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name) \([.status.conditions[]? | select(.type == "ContinuousArchiving")][0].status // "none")"')"; then
+  fail C9 "could not list the CloudNativePG clusters (is the operator installed?)"
+elif [ -z "$dbs" ]; then
   fail C9 "no CloudNativePG clusters to check the backups of"
 elif bad="$(awk '$2 != "True"' <<<"$dbs")" && [ -z "$bad" ]; then
   pass C9 "WAL archiving to object storage: $(awk '{print $1}' <<<"$dbs" | tr '\n' ' ')"
@@ -269,14 +286,16 @@ skip C10 "node upgrades - a procedure, Chapter 20"
 
 # C11 - the platform's own images exist for every node architecture (kind on a Mac is arm64, the
 # clouds mostly amd64). Third-party images come from multi-arch charts; ours are built by build.yml.
-archs="$(k get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.architecture}{"\n"}{end}' | sort -u)"
+archs="$(k get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.architecture}{"\n"}{end}' | sort -u)" || archs=""
 registry="$(k -n flux-system get configmap cluster-config -o jsonpath='{.data.image_registry}' 2>/dev/null || true)"
 if ! command -v docker >/dev/null 2>&1; then
   skip C11 "image architectures - docker not found (nodes: $(tr '\n' ' ' <<<"$archs"))"
+elif [ -z "$archs" ]; then
+  fail C11 "could not read the nodes' architectures"
 elif [ -z "$registry" ]; then
   fail C11 "no image_registry in flux-system/cluster-config"
 else
-  images="$(k get pods -A -o json | jq -r --arg r "$registry/" '.items[].spec.containers[].image | select(startswith($r))' | sort -u)"
+  images="$(k get pods -A -o json | jq -r --arg r "$registry/" '.items[].spec.containers[].image | select(startswith($r))' | sort -u)" || images=""
   missing=""
   for image in $images; do
     platforms="$(docker buildx imagetools inspect "$image" 2>/dev/null | awk '/Platform:/ {print $2}')"

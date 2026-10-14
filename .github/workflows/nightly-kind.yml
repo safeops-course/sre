@@ -138,11 +138,14 @@ jobs:
       # The cluster contract (C1-C12): what the platform needs from any cluster. On the runner the
       # nodes are amd64, so C11 checks the other architecture than a Mac's kind does.
       - name: Cluster contract (make cluster-conformance)
+        id: contract
         run: make cluster-conformance
 
       # capstone-check exits 1 at the baseline (criteria 2, 3, 7 are the capstone's work), so the
-      # step checks the verdict of each criterion instead of the exit code.
+      # step checks the verdict of each criterion instead of the exit code. It runs after a failed
+      # contract too - two independent findings in one night; the job stays failed either way.
       - name: Capstone check at its baseline (make capstone-check)
+        if: success() || steps.contract.outcome == 'failure'
         run: |
           set +e
           make capstone-check | tee /tmp/capstone.log
