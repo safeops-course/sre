@@ -181,7 +181,7 @@ node upgrade, kured before a reboot - not rolling updates (the Deployment strate
 | Rule for the agent | What enforces it |
 |---|---|
 | Never put `spec.replicas` in Git for a Deployment an HPA scales. | `scripts/check-app-security.sh` in pre-commit and CI. |
-| Never drain a node without a plan: first a dry run that names the cluster with `--context` and the node explicitly - `kubectl --context <cluster> drain <node> --dry-run=server --ignore-daemonsets --delete-emptydir-data --timeout=...` - and the budgets of every namespace on that node (`kubectl get pdb -A`), not only the one you work in; a real drain only with the owner's yes, and `uncordon` after. | Instruction only. |
+| Never drain a node without a plan: first a dry run that names the cluster with `--context` and the node explicitly - `kubectl --context <cluster> drain <node> --dry-run=server --ignore-daemonsets --delete-emptydir-data --timeout=...` - and the budgets of every namespace on that node (`kubectl --context <cluster> get pdb -A`), not only the one you work in; a real drain only with the owner's yes, and `uncordon` after. | Instruction only. |
 | Never lower or delete a PodDisruptionBudget, and never use `--disable-eviction`, to let a drain through. Report which budget blocks and why - only after reading its status (`currentHealthy`, `desiredHealthy`, `expectedPods`, the `DisruptionAllowed` condition): too few healthy pods, a budget as strict as the replica count, or a replacement with nowhere to run. | The budgets are in Git (review), and Flux sets a hand edit back. |
 | Do not promise node redundancy: check where the replicas run (`-o wide`) and how many schedulable nodes there are. | Instruction only. |
 
@@ -216,7 +216,7 @@ traffic the backend alerts stay quiet; other alerts still fire on their own cond
 |---|---|
 | Never add an alert that does not name an action, an urgency and a first check. Internal signals go on a dashboard. | Review of the rules in Git; the lab's silence-at-rest check (only `Watchdog` fires on a healthy idle cluster). |
 | Measure the backend on user requests per environment - never on all requests, never across environments. | The recording rules in `backend-slo-rules.yaml` (review). |
-| Never lower a threshold or remove the traffic floor to make an alert fire in a test - generate the condition, or post a test alert to Alertmanager. | Instruction only. |
+| Never lower a threshold or remove the traffic floor to make an alert fire in a test - a test of the rule generates the condition; a test alert posted to Alertmanager tests only the routing and the receiver. | Instruction only. |
 | Never route an alert to a receiver nobody reads, and never silence a channel instead of removing the noise. | The routes in Git (review). |
 
 ## Chapter 12 - A backup is only as good as the last restore you proved
@@ -287,7 +287,7 @@ and audit everywhere else (PolicyReports). An exception for one workload is a `P
 | Rule for the agent | What enforces it |
 |---|---|
 | When admission refuses a change, fix the manifest - never weaken the policy, switch it to Audit, or narrow its namespaces to get one workload through. | Review of the policy diff; `tests/kyverno-policies.test.sh` (pre-commit and CI) fails when a policy's verdicts change, or its two copies drift apart. |
-| An exception names one policy, one namespace and one workload by name or name prefix, in the fixed `matchConditions` form, with an owner (`safeops.io/owner`), a reason (`safeops.io/reason`) and an `expiresAt` at most 90 days ahead - and goes in through a pull request. | `scripts/check-policy-exceptions.sh` (pre-commit and CI); the ValidatingAdmissionPolicy `policy-exceptions-only-from-git` refuses any writer but Flux. |
+| An exception names one policy, one namespace and one workload - by its exact name, or for a Deployment by a name prefix that no other workload in the namespace starts with - in the fixed `matchConditions` form, with an owner (`safeops.io/owner`), a reason (`safeops.io/reason`) and an `expiresAt` at most 90 days ahead - and goes in through a pull request. | `scripts/check-policy-exceptions.sh` (pre-commit and CI); the ValidatingAdmissionPolicy `policy-exceptions-only-from-git` refuses any writer but Flux. |
 | Never `kubectl apply` a policy, a mode change or an exception by hand, and never delete the `policy-exceptions-only-from-git` binding - that is the owner's break-glass, when Flux itself is broken. | The ValidatingAdmissionPolicy for exceptions; Flux reverts hand changes to the policies (Chapter 03). |
 | Before proposing Enforce for a rule or a namespace, show the evidence: that namespace's PolicyReports with no failures, and the occasional workloads (lab pods, Jobs) checked too. | Review of the pull request. |
 
