@@ -207,3 +207,34 @@ resource "google_billing_budget" "monthly" {
 
   depends_on = [google_project_service.this]
 }
+
+# ─── Defaults Google creates with the Compute API ─────────────────────────────
+# Turning on compute.googleapis.com creates, in a project without an organization policy against it:
+#   1. the Compute Engine default service account, with roles/editor on the whole project;
+#   2. a "default" VPC whose firewall opens SSH and RDP to the whole internet.
+# Neither is used here (nodes run as gke-nodes, clusters in their own VPC), and both are what the CIS
+# Google Cloud benchmark says to remove. In an organization, the policies
+# iam.automaticIamGrantsForDefaultServiceAccounts and compute.skipDefaultNetworkCreation prevent them.
+
+# Take Editor away from the default service account - and keep it away: every plan checks it.
+resource "google_project_iam_member_remove" "default_compute_editor" {
+  project = var.project_id
+  role    = "roles/editor"
+  member  = "serviceAccount:${data.google_project.this.number}-compute@developer.gserviceaccount.com"
+
+  depends_on = [google_project_service.this]
+}
+
+# Terraform did not create the default VPC, so it cannot delete it declaratively; the one-time delete
+# is `make delete-default-network`. This check warns on every plan while it (or a re-created one)
+# exists - a warning, not an error: the rest of the plan stays usable.
+check "no_default_network" {
+  data "google_compute_networks" "all" {
+    depends_on = [google_project_service.this]
+  }
+
+  assert {
+    condition     = !contains(data.google_compute_networks.all.networks, "default")
+    error_message = "The project has a \"default\" VPC (SSH and RDP open to the internet). Delete it once: make -C infra/terraform/gcp_foundation delete-default-network CONFIRM=yes"
+  }
+}
