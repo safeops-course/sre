@@ -221,6 +221,10 @@ output "kubeconfig_load_instructions" {
 # `removed` with destroy = false makes Terraform forget them without deleting anything - Flux's
 # HelmRelease (same release name, same namespace) takes the release over in place, so the ingress
 # never goes away. https://developer.hashicorp.com/terraform/language/resources/syntax#removing-resources
+# Flux keeps its own release record in flux-system, like every HelmRelease here; Terraform's old one
+# stays in traefik. Delete only that record once Flux shows the release Ready - never `helm uninstall`,
+# which would remove the live ingress:
+#   kubectl --context kind-sre-control-plane -n traefik delete secret -l owner=helm,name=traefik
 removed {
   from = helm_release.traefik
   lifecycle { destroy = false }
