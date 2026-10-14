@@ -53,4 +53,4 @@ past the frontend's API allowlist. Removed; the analysis now has metrics, traffi
 
 On kind there is no external-dns and no cert-manager (Traefik's default certificate). On Hetzner:
 that the IngressRoute serves `frontend-tls`, that external-dns keeps the record, and that
-kube-hetzner's Traefik exposes the `metrics` port. Check before enabling the module there.
+Traefik (the same Flux HelmRelease as on kind, chart defaults) exposes the `metrics` port. Check before enabling the module there.

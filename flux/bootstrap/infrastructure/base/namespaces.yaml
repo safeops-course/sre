@@ -15,6 +15,16 @@ metadata:
     name: cert-manager
     managed-by: flux
 ---
+# Traefik, the ingress (flux/infrastructure/ingress/traefik). The application network policies admit
+# traffic from this namespace by its name.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+  labels:
+    name: traefik
+    managed-by: flux
+---
 # external-dns is its own tool (DNS records for Ingresses), not part of cert-manager (TLS).
 apiVersion: v1
 kind: Namespace

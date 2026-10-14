@@ -4,7 +4,7 @@
 # between resources (kind_cluster.sre.endpoint in a provider block, depends_on):
 #   1. kind_cluster.sre                     the cluster: each node is a Docker container
 #   2. merge_kubeconfig, wait_for_cluster   its kubeconfig merged into ~/.kube/config, a short wait for the API
-#   3. helm_release.traefik / metrics_server ingress on localhost:8080/8443, metrics for kubectl top and the HPA
+#   3. helm_release.metrics_server          metrics for kubectl top and the HPA (Traefik, the ingress, comes from Flux)
 #   4. namespaces, ConfigMaps, Secrets      what Flux expects to find when it starts deploying -
 #                                           incl. flux_git_auth, the Git token (private forks only)
 #   5. flux_operator_install, flux_instance Flux, following your fork - from here on Git drives the cluster
@@ -216,46 +216,19 @@ output "kubeconfig_load_instructions" {
   EOT
 }
 
-# Kubernetes objects, created through the kubernetes provider.
-# https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/namespace_v1
-resource "kubernetes_namespace_v1" "traefik" {
-  metadata { name = "traefik" }
-  depends_on = [time_sleep.wait_for_cluster]
+# Traefik moved to Flux (flux/infrastructure/ingress/traefik; the local profile makes it a NodePort on
+# 30080/30443). A cluster built before the move still has Terraform's Helm release and namespace:
+# `removed` with destroy = false makes Terraform forget them without deleting anything - Flux's
+# HelmRelease (same release name, same namespace) takes the release over in place, so the ingress
+# never goes away. https://developer.hashicorp.com/terraform/language/resources/syntax#removing-resources
+removed {
+  from = helm_release.traefik
+  lifecycle { destroy = false }
 }
 
-# A Helm chart installed and tracked as one resource: Traefik, the ingress.
-# https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release
-resource "helm_release" "traefik" {
-  name       = "traefik"
-  repository = "https://traefik.github.io/charts"
-  chart      = "traefik"
-  namespace  = "traefik"
-  version    = var.traefik_chart_version
-
-  depends_on = [kubernetes_namespace_v1.traefik]
-
-  set = [
-    {
-      name  = "service.spec.type"
-      value = "NodePort"
-    },
-    {
-      name  = "ports.web.nodePort"
-      value = "30080"
-    },
-    {
-      name  = "ports.websecure.nodePort"
-      value = "30443"
-    },
-    {
-      name  = "providers.kubernetesIngress.enabled"
-      value = "true"
-    },
-    {
-      name  = "providers.kubernetesCRD.enabled"
-      value = "true"
-    },
-  ]
+removed {
+  from = kubernetes_namespace_v1.traefik
+  lifecycle { destroy = false }
 }
 
 # metrics-server: CPU and memory metrics for kubectl top and the HPA (Chapter 09).
@@ -382,7 +355,6 @@ EOF
 resource "null_resource" "flux_pre_destroy" {
   depends_on = [
     kind_cluster.sre,
-    kubernetes_namespace_v1.traefik,
     kubernetes_namespace_v1.bootstrap,
     null_resource.flux_instance,
   ]

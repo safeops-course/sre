@@ -24,4 +24,5 @@ spec:
   wait: false
   dependsOn:
     - name: flagger
+    - name: traefik   # IngressRoute and TraefikService come with its chart
     - name: apps-develop
