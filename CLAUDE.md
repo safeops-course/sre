@@ -57,6 +57,8 @@ This is the SRE DevOps infrastructure repository, responsible for managing k3s c
 infra/terraform/
   hcloud_cluster/    # Hetzner k3s cluster (kube-hetzner module)
   kind_cluster/      # Local development cluster
+  gcp_foundation/    # Google Cloud: APIs, node + deployer service accounts, GitHub Workload Identity
+                     # Federation, alert e-mail channel, budget - applied once by a person, nothing billed
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap (kustomizations, secrets)
