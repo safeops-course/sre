@@ -181,7 +181,7 @@ node upgrade, kured before a reboot - not rolling updates (the Deployment strate
 | Rule for the agent | What enforces it |
 |---|---|
 | Never put `spec.replicas` in Git for a Deployment an HPA scales. | `scripts/check-app-security.sh` in pre-commit and CI. |
-| Never drain a node without a plan: first a dry run that names the cluster with `--context` and the node explicitly - `kubectl drain --dry-run=server --ignore-daemonsets --delete-emptydir-data --timeout=...` - and the budgets of every namespace on that node (`kubectl get pdb -A`), not only the one you work in; a real drain only with the owner's yes, and `uncordon` after. | Instruction only. |
+| Never drain a node without a plan: first a dry run that names the cluster with `--context` and the node explicitly - `kubectl --context <cluster> drain <node> --dry-run=server --ignore-daemonsets --delete-emptydir-data --timeout=...` - and the budgets of every namespace on that node (`kubectl get pdb -A`), not only the one you work in; a real drain only with the owner's yes, and `uncordon` after. | Instruction only. |
 | Never lower or delete a PodDisruptionBudget, and never use `--disable-eviction`, to let a drain through. Report which budget blocks and why - only after reading its status (`currentHealthy`, `desiredHealthy`, `expectedPods`, the `DisruptionAllowed` condition): too few healthy pods, a budget as strict as the replica count, or a replacement with nowhere to run. | The budgets are in Git (review), and Flux sets a hand edit back. |
 | Do not promise node redundancy: check where the replicas run (`-o wide`) and how many schedulable nodes there are. | Instruction only. |
 
