@@ -163,7 +163,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - `make hcloud-plan` / `hcloud-apply` / `hcloud-destroy` — the same for Hetzner (aliases of
   `terraform-hcloud-plan|apply|destroy`; CI calls `terraform-hcloud-destroy`); `make hcloud-drift` - drift check
 - `make cluster-conformance` — the cluster contract C1-C12 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
-  pinned Kubernetes version exactly, NetworkPolicies enforced (egress too), API-server egress rule, default StorageClass,
+  pinned Kubernetes version exactly (a managed cluster without a pin: kind's minor), NetworkPolicies enforced (egress too), API-server egress rule, default StorageClass,
   ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures; PASS/FAIL/SKIP with a
   reason. Creates and deletes the namespace `conformance` (a real disk for ~1 min on a cloud); nightly on kind
 - `make capstone-fault` — Chapter 23: a colleague's pull request with one random fault (f1 sign-up limit,

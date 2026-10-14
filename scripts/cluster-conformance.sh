@@ -2,7 +2,7 @@
 # cluster-conformance.sh - does this cluster give what the platform needs?
 #
 # The platform runs on any cluster that keeps a short contract (C1-C12): the Kubernetes version Git
-# pins, NetworkPolicies that are enforced (egress too), a default StorageClass, a load balancer for
+# pins (on a managed cluster without a pin: the platform's minor), NetworkPolicies that are enforced (egress too), a default StorageClass, a load balancer for
 # the ingress, metrics-server, reachable admission webhooks, backups to S3, images for the nodes'
 # architecture. This script checks the contract on a running cluster with the platform installed -
 # the layer below tests/smoke-test.sh (do the apps answer?). One line per item: PASS, FAIL or SKIP
@@ -11,7 +11,8 @@
 # Usage: scripts/cluster-conformance.sh            (or: make cluster-conformance KUBE_CONTEXT=...)
 #   KUBE_CONTEXT           the cluster (default kind-sre-control-plane); every kubectl call names it
 #   EXPECTED_K8S_VERSION   the version Git pins for this cluster (x.y.z). Known for kind and Hetzner
-#                          (read from their Terraform variables); required for any other cluster.
+#                          (read from their Terraform variables). Without one (a managed cluster runs
+#                          the version its provider offers) C1 checks the minor against kind's pin.
 #
 # Changes: creates the namespace "conformance" (Pod Security restricted) with a few pods, a Service,
 # NetworkPolicies and one PersistentVolumeClaim - on a cloud a real disk for about a minute - and
@@ -76,7 +77,9 @@ trap cleanup EXIT
 cleanup
 
 # C1 - the version Git pins, exactly: an older cluster misses what the policies and charts were
-# tested on, a newer one was never tested.
+# tested on, a newer one was never tested. A cluster without a pin in Git (a managed one: the
+# provider picks the patch) must run the platform's minor - the one kind pins and every check is
+# tested on.
 # A command that fails inside a check is that check's FAIL, never the end of the run: each one below
 # catches its own error (|| ...), so the remaining checks and the summary always print.
 want="$(expected_version)" || want=""
@@ -84,7 +87,14 @@ have="$(k version -o json | jq -r .serverVersion.gitVersion | sed -E 's/^v//; s/
 if [ -z "$have" ]; then
   fail C1 "could not read the server version (kubectl version)"
 elif [ -z "$want" ]; then
-  fail C1 "Kubernetes $have - unknown pin for $CONTEXT: set EXPECTED_K8S_VERSION"
+  minor="$(CONTEXT=kind-sre-control-plane expected_version | cut -d. -f1,2)"
+  if [ -z "$minor" ]; then
+    fail C1 "Kubernetes $have - no pin for $CONTEXT and could not read kind's pin"
+  elif [ "$(cut -d. -f1,2 <<<"$have")" = "$minor" ]; then
+    pass C1 "Kubernetes $have - no pin in Git for $CONTEXT, the platform's minor $minor (the provider picks the patch)"
+  else
+    fail C1 "Kubernetes $have - no pin in Git for $CONTEXT, the platform runs $minor (kind's pin)"
+  fi
 elif [ "$have" = "$want" ]; then
   pass C1 "Kubernetes $have = the version Git pins"
 else

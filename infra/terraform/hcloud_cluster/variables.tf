@@ -179,7 +179,7 @@ variable "k3s_channel" {
 variable "k3s_version" {
   description = "Pin an exact K3s version (e.g. v1.34.0+k3s1). Overrides k3s_channel when set."
   type        = string
-  default     = "v1.37.1+k3s1"
+  default     = "v1.36.4+k3s1"
 }
 
 variable "auto_upgrade_k3s" {
