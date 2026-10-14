@@ -121,10 +121,11 @@ module "kube_hetzner" {
   load_balancer_location    = var.location
   load_balancer_enable_ipv6 = false
 
-  # Ingress
-  ingress_controller        = var.ingress_controller
-  traefik_redirect_to_https = var.traefik_redirect_to_https
-  traefik_autoscaling       = var.traefik_autoscaling
+  # Ingress: Traefik comes from Flux (flux/infrastructure/ingress/traefik), as on every cluster.
+  # "custom" = the module installs no ingress controller but still creates the load balancer
+  # (<cluster_name>-custom, on the private network) and deletes it on destroy - the billed resource
+  # stays in Terraform's state. Traefik's Service takes it over by name (cluster-config below).
+  ingress_controller = "custom"
 
   # K3s versioning
   k3s_channel                      = var.k3s_channel
@@ -275,6 +276,11 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cluster_name       = var.cluster_name
     image_registry     = var.image_registry
     git_owner          = var.git_owner
+    # The load balancer kube-hetzner creates for ingress_controller = "custom" (its name is
+    # "<cluster_name>-<ingress_controller>"); Traefik's Service annotations name it.
+    ingress_lb_name     = "${var.cluster_name}-custom"
+    ingress_lb_location = var.location
+    ingress_lb_type     = var.load_balancer_type
   }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]

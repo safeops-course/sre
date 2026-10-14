@@ -76,7 +76,8 @@ scripts/             # Pre-commit hooks, automation scripts
 - **GitOps**: FluxCD (Flux Operator + FluxInstance, Kustomizations, HelmReleases)
 - **Secrets**: SOPS with AGE encryption
 - **DNS/TLS**: external-dns (Cloudflare, proxied records) + cert-manager with Cloudflare Origin CA (origin-ca-issuer); zone SSL mode Full (strict)
-- **Ingress**: Traefik (via kube-hetzner)
+- **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
+  `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
 - **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)
 - **Database**: CloudNativePG
 - **State**: Terraform remote state in Cloudflare R2 (S3-compatible)

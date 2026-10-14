@@ -32,7 +32,7 @@ terraform apply
 ```
 
 This will:
-1. Create a kind cluster named `sre-control-plane` (+ Traefik, metrics-server)
+1. Create a kind cluster named `sre-control-plane` (+ metrics-server; Traefik comes from Flux)
 2. Install the Flux Operator
 3. Deploy a FluxInstance with all Flux controllers, syncing `./flux/bootstrap/profiles/local` from the course repo
 4. Generate the local runtime secrets (JWT, Postgres owner, MinIO, sops-age from `age.agekey`) - see `local-profile.tf`

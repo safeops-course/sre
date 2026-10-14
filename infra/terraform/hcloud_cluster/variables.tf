@@ -233,26 +233,6 @@ variable "kured_end_time" {
   default     = "05:00"
 }
 
-# ─── Ingress ─────────────────────────────────────────────────────────────────
-
-variable "ingress_controller" {
-  description = "Ingress controller to deploy (traefik, nginx, haproxy, none)."
-  type        = string
-  default     = "traefik"
-}
-
-variable "traefik_redirect_to_https" {
-  description = "Redirect HTTP to HTTPS in traefik."
-  type        = bool
-  default     = true
-}
-
-variable "traefik_autoscaling" {
-  description = "Enable HPA for traefik pods."
-  type        = bool
-  default     = true
-}
-
 # ─── Flux ────────────────────────────────────────────────────────────────────
 
 variable "flux_operator_version" {

@@ -52,6 +52,29 @@ spec:
   dependsOn:
     - name: infrastructure
 ---
+# Traefik, the ingress of every cluster (see release.yaml). cluster-config gives the load balancer
+# values on Hetzner; the local profile replaces them for kind.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: traefik
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/ingress/traefik
+  prune: true
+  wait: true
+  timeout: 10m0s
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+  dependsOn:
+    - name: infrastructure
+---
 # Cloudflare Origin CA Issuer (platform only). CRDs from the upstream repo, pinned to the commit of
 # release v0.15.0 (a moved tag cannot change them); the controller from its OCI chart (same release).
 apiVersion: source.toolkit.fluxcd.io/v1

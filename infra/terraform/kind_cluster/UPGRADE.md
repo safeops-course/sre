@@ -8,7 +8,6 @@ Every version this module installs is pinned, so a rebuild gives the same cluste
 | Kubernetes | `variables.tf` `kind_node_image` | `kindest/node:v1.36.4@sha256:...` (one minor behind Hetzner until the kind provider supports 1.37 - see the variable) |
 | Flux Operator | `variables.tf` `flux_operator_version` | `0.61.0` (install.yaml of that GitHub release) |
 | Flux | `variables.tf` `flux_version` | `2.9.6` |
-| Traefik chart | `variables.tf` `traefik_chart_version` | `41.7.1` |
 | metrics-server chart | `variables.tf` `metrics_server_chart_version` | `3.14.0` |
 
 To upgrade one of them: change the default (or set it in `terraform.tfvars`), then plan, read, apply:

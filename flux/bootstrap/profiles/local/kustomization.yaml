@@ -167,6 +167,35 @@ patches:
                 path: /spec/values/extraArgs
                 value: ["--controllers=*,-ingress-shim"]
 
+  # --- Traefik: a NodePort instead of a cloud load balancer -----------------
+  # kind has no load balancer: the Service is a NodePort on 30080/30443, which kind's port mappings
+  # (infra/terraform/kind_cluster) publish as localhost:8080/8443. No HTTPS redirect (the labs use
+  # http://localhost:8080), no PROXY protocol, one replica, no autoscaling - the values the kind
+  # cluster's Terraform set before Traefik moved to Flux.
+  - target: { kind: Kustomization, name: traefik }
+    patch: |-
+      - op: add
+        path: /spec/patches
+        value:
+          - target: { kind: HelmRelease, name: traefik }
+            patch: |-
+              - op: replace
+                path: /spec/values
+                value:
+                  service:
+                    spec:
+                      type: NodePort
+                  ports:
+                    web:
+                      nodePort: 30080
+                    websecure:
+                      nodePort: 30443
+                  providers:
+                    kubernetesIngress:
+                      enabled: true
+                    kubernetesCRD:
+                      enabled: true
+
   # --- observability no longer waits for cert-manager -----------------------
   - target: { kind: Kustomization, name: observability }
     patch: |-
