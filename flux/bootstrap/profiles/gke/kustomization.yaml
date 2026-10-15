@@ -1,0 +1,26 @@
+# GKE profile: the full platform on the GKE cluster (infra/terraform/gke_cluster) - the same as on
+# Hetzner. Clusters of the two providers never run at the same time: they share the DNS names (one
+# external-dns owner) and image automation writes to the same branch.
+#
+#   base         flux/bootstrap/flux-system - what every cluster runs
+#   components   every one, as on Hetzner
+#   patches      none for Traefik: the base's LoadBalancer Service is what GKE needs - GKE creates
+#                a passthrough network load balancer for it, and deletes it with the Service (the
+#                destroy removes the Service first: infra/terraform/gke_cluster/flux.tf)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../flux-system
+components:
+  - ../../components/platform-secrets
+  - ../../components/public-edge
+  - ../../components/image-automation
+  - ../../components/alerting
+  - ../../components/opentelemetry
+patches:
+  # Point the self-managing Kustomization at this profile.
+  - target: { kind: Kustomization, name: flux-system }
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./flux/bootstrap/profiles/gke

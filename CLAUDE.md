@@ -62,12 +62,13 @@ infra/terraform/
                      # (docs/gcp.md; `make -C infra/terraform/gcp_foundation bootstrap`, settings in .env.gcp)
   gke_cluster/       # GKE Standard, per test cycle (created, tested, destroyed): own VPC, private nodes +
                      # Cloud NAT, DNS endpoint only, pools "platform" + "apps"; `make plan|apply|destroy|leftovers`,
-                     # kubeconfig.yaml context gke-sre-control-plane (no credentials; gke-gcloud-auth-plugin)
+                     # kubeconfig.yaml context gke-sre-control-plane (no credentials; gke-gcloud-auth-plugin);
+                     # flux.tf: the same Flux bootstrap as Hetzner, profile flux/bootstrap/profiles/gke
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap: a profile per cluster on the provider-neutral base flux-system/.
-                     # profiles/hetzner = base + all components (components/: platform-secrets, public-edge,
-                     # image-automation, alerting, opentelemetry) + the Hetzner load balancer patch;
+                     # profiles/hetzner and profiles/gke = base + all components (components/: platform-secrets, public-edge,
+                     # image-automation, alerting, opentelemetry) (+ the Hetzner load balancer patch on Hetzner);
                      # profiles/local (kind) = base + minio, lab, local secrets + kind patches, no components.
                      # The base never names a provider or depends on a component; components add their own dependsOn edges
   infrastructure/    # Helm releases (cert-manager, external-dns, prometheus, cnpg)

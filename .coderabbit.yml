@@ -49,7 +49,7 @@ reviews:
         Committed on purpose and holds only non-secret values. Flag any token, key, password or private key here.
     - path: "flux/**"
       instructions: |
-        Flux Operator + Kustomizations. Entry: a profile per cluster, built on the provider-neutral base flux/bootstrap/flux-system (infrastructure.yaml, apps.yaml). Each profile picks its Kustomize components (flux/bootstrap/components/*): profiles/hetzner = base + all five components + the Hetzner load balancer patch; profiles/local (kind) = base + its own resources (minio, lab, local secrets) + kind patches, no components.
+        Flux Operator + Kustomizations. Entry: a profile per cluster, built on the provider-neutral base flux/bootstrap/flux-system (infrastructure.yaml, apps.yaml). Each profile picks its Kustomize components (flux/bootstrap/components/*): profiles/hetzner and profiles/gke = base + all five components (+ the Hetzner load balancer patch on Hetzner); profiles/local (kind) = base + its own resources (minio, lab, local secrets) + kind patches, no components.
         - The base never names a provider and never depends on a component's Kustomization; a component adds its own dependsOn edges with patches.
         - dependsOn: namespace/operator before consumers; a Kustomization that uses a Secret from flux/secrets depends on its secrets-* Kustomization.
         - HelmRelease chart versions are exact (no ranges); Terraform modules exact, providers constrained; actions and tool downloads pinned. Images use a fixed tag or digest; backend:latest / frontend:latest in apps/*/base are

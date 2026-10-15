@@ -137,9 +137,16 @@ The cluster costs money from the first minute: nodes, their disks and the NAT ga
 ```bash
 gcloud components install gke-gcloud-auth-plugin   # once
 make -C infra/terraform/gke_cluster plan            # read it
-make -C infra/terraform/gke_cluster apply           # about 10 minutes
+make -C infra/terraform/gke_cluster apply           # the cluster, then Flux
 kubectl --kubeconfig infra/terraform/gke_cluster/kubeconfig.yaml get nodes
 make -C infra/terraform/gke_cluster destroy         # asks first, then runs make leftovers
 ```
+
+**Flux.** The apply ends with Flux following the platform repository and reconciling `flux/bootstrap/profiles/gke` - the same platform as on Hetzner: the provider-neutral base and every component (the platform's secrets, Cloudflare DNS and Origin CA, Dex, Headlamp, image automation, alert routing, OpenTelemetry). Before Flux starts, Terraform writes what it expects (`flux.tf`): the namespaces, `cluster-config`, `cluster-secrets`, `backup-s3`, the age key `sops-age` and the production database password. A GKE and a Hetzner cluster never run at the same time: they share the DNS names, and image automation writes to the same branch.
+
+- **Settings:** `SOPS_AGE_KEY_FILE` (the platform's age key, default `~/.ssh/age.agekey`) and optionally `TF_VAR_uptrace_dsn`, in `.env.gcp`.
+- **kubectl** goes through `gke-gcloud-auth-plugin`, which signs in as gcloud's active account. `make preflight` (before plan, apply and destroy) stops when that account is not `TF_VAR_expected_principal`.
+- **Backups:** none yet - `backup_s3_*` are empty, so WAL archiving fails and its alerts fire (cluster-conformance C9). All clusters will back up to Cloudflare R2.
+- **Destroy:** before the node pools go, `flux-pre-destroy.sh` suspends Flux and deletes the workload namespaces with their volumes, and the `traefik` namespace with its LoadBalancer Service - GKE deletes the load balancer's forwarding rule, address and firewall rules only with the Service. A persistent disk or a load balancer left behind keeps costing; `make leftovers` names it.
 
 `make leftovers` lists what can outlive a cluster and keep costing money: disks of PersistentVolumes, load balancer forwarding rules and addresses, NEGs, firewall rules, routers, networks and clusters. It exits 1 when anything is left. Delete what it names, then run it again.

@@ -17,7 +17,7 @@ flux/
 The Flux controllers bootstrapped by Terraform reconcile from:
 - **Repository:** configured via Terraform (`TF_VAR_flux_git_repository_url`, typically `https://github.com/<owner>/<repo>.git`)
 - **Branch:** `main`
-- **Path:** the cluster's profile - `./flux/bootstrap/profiles/local` (kind) or `./flux/bootstrap/profiles/hetzner`
+- **Path:** the cluster's profile - `./flux/bootstrap/profiles/local` (kind), `./flux/bootstrap/profiles/hetzner` or `./flux/bootstrap/profiles/gke`
 
 A profile = the provider-neutral base `flux/bootstrap/flux-system` + the Kustomize components it needs
 (`flux/bootstrap/components/`: platform-secrets, public-edge, image-automation, alerting, opentelemetry)

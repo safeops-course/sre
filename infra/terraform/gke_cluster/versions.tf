@@ -1,6 +1,9 @@
 # Terraform and provider versions; the exact versions are pinned in .terraform.lock.hcl.
 #   google  Google Cloud - VPC, Cloud NAT, firewall, GKE, alert policies
-#   local   writes kubeconfig.yaml next to the module (no credentials in it)
+#   local       writes kubeconfig.yaml next to the module (no credentials in it)
+#   kubernetes  what Terraform puts inside the cluster before Flux takes over (flux.tf)
+#   null        runs kubectl for the Flux Operator, the FluxInstance and the pre-destroy hook
+#   random      generates the production database password
 terraform {
   required_version = ">= 1.11.0"
 
@@ -9,9 +12,21 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 8.7"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 3.2"
+    }
     local = {
       source  = "hashicorp/local"
       version = "~> 2.9"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.9"
     }
   }
 }
