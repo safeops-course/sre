@@ -20,7 +20,8 @@ export TF_VAR_backup_s3_bucket TF_VAR_backup_s3_access_key_id TF_VAR_backup_s3_s
 # Only the AGE-SECRET-KEY-... line: the file also holds comment lines, and $(shell) joins lines with
 # spaces - the whole file became one line starting with "#", which age cannot read (seen 2026-10-15:
 # every secrets-* Kustomization failed with "cannot get sops data key").
-export TF_VAR_sops_age_key = $(if $(SOPS_AGE_KEY_FILE),$(shell grep -o 'AGE-SECRET-KEY-[A-Z0-9]*' "$(SOPS_AGE_KEY_FILE)" 2>/dev/null))
+# The first key only: a file with several would otherwise send them joined by spaces.
+export TF_VAR_sops_age_key = $(if $(SOPS_AGE_KEY_FILE),$(shell grep -m1 -o 'AGE-SECRET-KEY-[A-Z0-9]*' "$(SOPS_AGE_KEY_FILE)" 2>/dev/null))
 SOPS_CONFIG := ../../../.sops.yaml
 ifneq ($(R2_ACCESS_KEY_ID),)
 export AWS_ACCESS_KEY_ID     := $(R2_ACCESS_KEY_ID)
@@ -42,7 +43,9 @@ settings: ## Check that every setting is there (no cloud calls)
 	[ -n "$${TF_VAR_sops_age_key:-}" ] || missing="$$missing SOPS_AGE_KEY_FILE($(if $(SOPS_AGE_KEY_FILE),$(SOPS_AGE_KEY_FILE) not readable,not set))"; \
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.gcp.example)" >&2; exit 2; }
 	@command -v age-keygen >/dev/null || { echo "missing: age-keygen (to check SOPS_AGE_KEY_FILE against .sops.yaml)" >&2; exit 2; }
-	@recipient="$$(age-keygen -y "$(SOPS_AGE_KEY_FILE)")"; \
+	@# The recipient of exactly the key Terraform sends. A failed age-keygen must stop here: an empty
+	@# recipient would match any .sops.yaml (grep -F "" matches every line).
+	@recipient="$$(printf '%s\n' "$$TF_VAR_sops_age_key" | age-keygen -y)" && [ -n "$$recipient" ] || { echo "SOPS_AGE_KEY_FILE ($(SOPS_AGE_KEY_FILE)): age-keygen could not read the key" >&2; exit 2; }; \
 	grep -qF "$$recipient" "$(SOPS_CONFIG)" || { echo "SOPS_AGE_KEY_FILE ($(SOPS_AGE_KEY_FILE)) is $$recipient - not a recipient in .sops.yaml: Flux could not decrypt flux/secrets" >&2; exit 2; }
 
 # kubectl through kubeconfig.yaml - the Flux bootstrap and the pre-destroy hook (flux.tf) - needs the

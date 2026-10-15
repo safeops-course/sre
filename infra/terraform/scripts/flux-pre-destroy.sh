@@ -133,7 +133,8 @@ remove_disruption_budgets() {
   while read -r ns name; do
     [[ -z "${ns}" || "${ns}" == kube-system ]] && continue
     log "removing PodDisruptionBudget ${ns}/${name}"
-    kc -n "${ns}" delete pdb "${name}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    kc -n "${ns}" delete pdb "${name}" --ignore-not-found=true --wait=false >/dev/null 2>&1 \
+      || warn "could not delete PodDisruptionBudget ${ns}/${name} - a node drain may wait for it (billed)"
   done <<<"${pdbs}"
 }
 
@@ -144,7 +145,8 @@ stop_pods() {  # namespace...
   local ns
   for ns in "$@"; do
     log "stopping the pods in ${ns} now (grace period 0)"
-    kc -n "${ns}" delete pods --all --grace-period=0 --force --wait=false >/dev/null 2>&1 || true
+    kc -n "${ns}" delete pods --all --grace-period=0 --force --wait=false >/dev/null 2>&1 \
+      || warn "could not stop the pods in ${ns} - their disks stay attached until they stop (PVs may outlive the cluster)"
   done
 }
 

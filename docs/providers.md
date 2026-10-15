@@ -10,9 +10,9 @@ example to copy from.
 - [ ] **Two modules when the provider needs account-level setup:** a foundation applied once by a
   person (APIs, identities, CI federation, alerts, budget - nothing billed) and a cluster module
   created and destroyed per cycle.
-- [ ] **Runs from a laptop and from CI, with the same targets:** `make -C infra/terraform/<module>
-  preflight | plan | apply | destroy | leftovers`. Plan is saved through `scripts/guard-terraform-plan.sh`;
-  apply applies only that plan.
+- [ ] **Runs from a laptop and from CI, with the same targets** - each its own make call:
+  `make -C infra/terraform/<module> preflight`, then `plan`, `apply`, `destroy`, `leftovers`. Plan is saved
+  through `scripts/guard-terraform-plan.sh`; apply applies only that plan.
 - [ ] **One git-ignored settings file per provider** (`.env.<provider>`, template
   `.env.<provider>.example`): identities, credential file paths, the R2 state key. Secrets are read from
   files, never typed into a command or committed.
