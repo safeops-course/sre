@@ -47,4 +47,6 @@ flux_git_repository_url = "https://github.com/safeops-course/sre.git"
 flux_kustomization_path = "./flux/bootstrap/profiles/gke"
 image_registry          = "ghcr.io/safeops-course"
 git_owner               = "safeops-course"
-# No backup bucket yet (as on Hetzner): backup_s3_endpoint / backup_s3_bucket stay empty.
+# CNPG backups to Cloudflare R2 (the account's S3 endpoint; the bucket and its keys come from .env.gcp).
+backup_s3_endpoint = "https://99c9887cccb1cb265d748f267999af47.r2.cloudflarestorage.com"
+backup_s3_region   = "auto"

@@ -1,8 +1,8 @@
 # Flux on the GKE cluster: what Flux expects to find when it starts, then Flux itself, following the
 # platform repository - from there on Git drives the cluster. The same pieces, names and order as on
 # Hetzner (infra/terraform/hcloud_cluster/main.tf), so both clusters run the same platform:
-#   1. namespaces, ConfigMaps,   cluster-config, cluster-secrets, backup-s3, sops-age and the
-#      Secrets                   production database password
+#   1. namespaces, ConfigMaps,   cluster-config, cluster-secrets, backup-s3, cnpg-backup-s3, sops-age
+#      Secrets                   and the production database password
 #   2. flux_operator_install,    Flux, reconciling var.flux_kustomization_path (profiles/gke)
 #      flux_instance
 #   3. flux_pre_destroy          on destroy only: removes what Flux created - volumes and the load
@@ -116,6 +116,28 @@ resource "kubernetes_config_map_v1" "backup_s3" {
   depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
+# The backup bucket's keys for CloudNativePG, one Secret per environment (the ObjectStore reads them).
+# https://cloudnative-pg.io/plugin-barman-cloud/
+resource "kubernetes_secret_v1" "cnpg_backup_s3" {
+  for_each = toset(["develop", "staging", "production"])
+
+  metadata {
+    name      = "cnpg-backup-s3"
+    namespace = each.key
+  }
+
+  type = "Opaque"
+  data = {
+    ACCESS_KEY_ID     = var.backup_s3_access_key_id
+    ACCESS_SECRET_KEY = var.backup_s3_secret_access_key
+    BUCKET            = var.backup_s3_bucket
+    ENDPOINT          = var.backup_s3_endpoint
+    REGION            = var.backup_s3_region
+  }
+
+  depends_on = [kubernetes_namespace_v1.bootstrap]
+}
+
 # The production database owner's password: generated per cluster, never in Git (develop and staging
 # come from SOPS). CNPG adopts the Secret; Terraform only seeds it.
 resource "random_password" "postgres_app_production" {
@@ -209,6 +231,7 @@ resource "null_resource" "flux_instance" {
     kubernetes_secret_v1.cluster_secrets,
     kubernetes_secret_v1.sops_age,
     kubernetes_config_map_v1.backup_s3,
+    kubernetes_secret_v1.cnpg_backup_s3,
     kubernetes_secret_v1.postgres_app_production,
   ]
 }

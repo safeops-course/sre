@@ -20,6 +20,16 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: coredns
+        # NodeLocal DNSCache (GKE turns it on): a DNS cache pod on every node answers the kube-dns
+        # Service address, so the query never reaches a kube-dns pod. Without this peer nothing resolves
+        # under default-deny - nginx in frontend stopped at "host not found in upstream backend" (GKE,
+        # 2026-10-15). On clusters without the cache no pod has this label.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
       ports:
         - protocol: UDP
           port: 53

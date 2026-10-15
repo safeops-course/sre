@@ -11,6 +11,8 @@ TF_MAX_AGE ?= 60
 ENV_FILE ?= ../../../.env.gcp
 -include $(ENV_FILE)
 export TF_VAR_expected_principal GOOGLE_APPLICATION_CREDENTIALS TF_VAR_uptrace_dsn
+# The CNPG backup bucket (Cloudflare R2) and its bucket-scoped key.
+export TF_VAR_backup_s3_bucket TF_VAR_backup_s3_access_key_id TF_VAR_backup_s3_secret_access_key
 # The age key goes to Terraform as an ephemeral variable (never in the plan or the state); every run
 # needs it - plan, apply and destroy. Read from the file, so it is never typed or kept in an env file.
 # No default path: a workstation can hold several age keys, and the wrong one fails only inside the
@@ -35,7 +37,8 @@ help: ## List available targets
 # What Terraform needs for any run.
 settings: ## Check that every setting is there (no cloud calls)
 	@missing=""; \
-	for v in TF_VAR_expected_principal AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do [ -n "$${!v:-}" ] || missing="$$missing $$v"; done; \
+	for v in TF_VAR_expected_principal AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
+	         TF_VAR_backup_s3_bucket TF_VAR_backup_s3_access_key_id TF_VAR_backup_s3_secret_access_key; do [ -n "$${!v:-}" ] || missing="$$missing $$v"; done; \
 	[ -n "$${TF_VAR_sops_age_key:-}" ] || missing="$$missing SOPS_AGE_KEY_FILE($(if $(SOPS_AGE_KEY_FILE),$(SOPS_AGE_KEY_FILE) not readable,not set))"; \
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.gcp.example)" >&2; exit 2; }
 	@command -v age-keygen >/dev/null || { echo "missing: age-keygen (to check SOPS_AGE_KEY_FILE against .sops.yaml)" >&2; exit 2; }

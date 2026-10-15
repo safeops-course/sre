@@ -163,14 +163,38 @@ variable "git_owner" {
   type        = string
 }
 
+# CNPG backups: every cluster, of every provider, backs up to Cloudflare R2 - a bucket of its own, never
+# the state bucket, with a token scoped to that bucket.
 variable "backup_s3_endpoint" {
-  description = "S3 endpoint for the CNPG backups (ConfigMap backup-s3). Empty: no backups - WAL archiving fails and its alerts fire."
+  description = "S3 endpoint of the CNPG backups (ConfigMap backup-s3), e.g. https://<account>.r2.cloudflarestorage.com."
   type        = string
-  default     = ""
+
+  # The CNPG ObjectStore rejects an empty endpointURL, and Flux then refuses the whole cnpg-cluster-<env>
+  # Kustomization - no database at all (seen 2026-10-15). Fail the plan instead.
+  validation {
+    condition     = startswith(var.backup_s3_endpoint, "https://")
+    error_message = "backup_s3_endpoint is \"${var.backup_s3_endpoint}\"; set the https:// endpoint of the backup bucket - an empty one leaves the cluster without databases."
+  }
 }
 
 variable "backup_s3_bucket" {
-  description = "Bucket for the CNPG backups (ConfigMap backup-s3). Empty: no backups."
+  description = "Bucket of the CNPG backups (ConfigMap backup-s3, Secret cnpg-backup-s3). Set TF_VAR_backup_s3_bucket."
   type        = string
-  default     = ""
+}
+
+variable "backup_s3_region" {
+  description = "Region of the backup bucket (\"auto\" for R2)."
+  type        = string
+}
+
+variable "backup_s3_access_key_id" {
+  description = "Access key of the backup bucket (Secret cnpg-backup-s3). Set TF_VAR_backup_s3_access_key_id."
+  type        = string
+  sensitive   = true
+}
+
+variable "backup_s3_secret_access_key" {
+  description = "Secret key of the backup bucket (Secret cnpg-backup-s3). Set TF_VAR_backup_s3_secret_access_key."
+  type        = string
+  sensitive   = true
 }
