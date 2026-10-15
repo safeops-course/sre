@@ -7,6 +7,7 @@
 #      running backend (failurePolicy Fail) blocks every delete in the namespaces;
 #      remove every PodDisruptionBudget outside kube-system - in a teardown it only makes a drain or an
 #      eviction wait (GKE waits up to an hour per node pool, billed);
+#      delete every LoadBalancer Service and wait for it: the cloud's load balancer goes only with it;
 #   2. delete the target namespaces except flux-system - with them go the workloads, CNPG clusters
 #      and their PVCs, so no controller recreates a PVC; then stop their pods at once (grace period
 #      0): CloudNativePG gives Postgres up to 30 minutes to shut down, and a running pod keeps its
@@ -36,6 +37,7 @@ set -o pipefail
 KUBECONFIG_PATH="${1:-}"
 TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability}"
 PV_TIMEOUT="${PRE_DESTROY_PV_TIMEOUT:-300}"
+LB_TIMEOUT="${PRE_DESTROY_LB_TIMEOUT:-300}"
 NS_TIMEOUT="${PRE_DESTROY_NS_TIMEOUT:-180}"
 
 # log MESSAGE / warn MESSAGE - progress on stdout, problems on stderr, both prefixed.
@@ -138,6 +140,30 @@ remove_disruption_budgets() {
   done <<<"${pdbs}"
 }
 
+# delete_load_balancers - delete every LoadBalancer Service outside kube-system and wait until they are
+# gone: the cloud's service controller deletes the load balancer, its address and firewall rules only
+# while the Service is there (finalizer service.kubernetes.io/load-balancer-cleanup). Done before the
+# namespaces, so the namespace unblock below never has to clear that finalizer.
+delete_load_balancers() {
+  local lbs ns name
+  lbs="$(kc get services -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace} {.metadata.name}{"\n"}{end}' 2>/dev/null)" || {
+    warn "could not list LoadBalancer Services - a cloud load balancer may outlive the cluster (billed)"
+    return 0
+  }
+  [[ -z "${lbs//[[:space:]]/}" ]] && return 0
+  while read -r ns name; do
+    [[ -z "${ns}" || "${ns}" == kube-system ]] && continue
+    log "deleting LoadBalancer Service ${ns}/${name} (the cloud load balancer goes with it)"
+    kc -n "${ns}" delete service "${name}" --ignore-not-found=true --wait=false >/dev/null 2>&1 \
+      || warn "could not delete Service ${ns}/${name} - its cloud load balancer may outlive the cluster (billed)"
+  done <<<"${lbs}"
+  if wait_until_empty "${LB_TIMEOUT}" get services -A --field-selector=metadata.namespace!=kube-system -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.name}{"\n"}{end}'; then
+    log "all LoadBalancer Services deleted"
+  else
+    warn "LoadBalancer Services still present after ${LB_TIMEOUT}s - their cloud load balancers may outlive the cluster (billed)"
+  fi
+}
+
 # stop_pods NS... - delete every pod in these (already terminating) namespaces with grace period 0.
 # Their data goes with the cluster; waiting for a graceful stop only keeps disks attached - Postgres
 # (CloudNativePG) may take 30 minutes - while the PVs wait and the nodes are billed.
@@ -192,7 +218,9 @@ unblock_namespace() {
   local resource object
   warn "namespace ${ns} still terminating after ${NS_TIMEOUT}s - clearing the finalizers that block it"
   while read -r resource; do
-    [[ -z "${resource}" || "${resource}" == events* ]] && continue
+    # Services keep their load-balancer-cleanup finalizer: clearing it would leave the cloud load
+    # balancer behind (delete_load_balancers has already waited for them).
+    [[ -z "${resource}" || "${resource}" == events* || "${resource}" == services ]] && continue
     kc -n "${ns}" get "${resource}" -o jsonpath='{range .items[?(@.metadata.finalizers)]}{.kind}/{.metadata.name}{"\n"}{end}' 2>/dev/null \
       | while read -r object; do
           [[ -z "${object}" ]] && continue
@@ -270,6 +298,7 @@ done
 suspend_flux
 remove_admission_webhooks
 remove_disruption_budgets
+delete_load_balancers
 if (( ${#app_namespaces[@]} > 0 )); then
   delete_namespaces "${app_namespaces[@]}"
   stop_pods "${app_namespaces[@]}"

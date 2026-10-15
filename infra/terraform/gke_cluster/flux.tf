@@ -22,6 +22,9 @@ provider "kubernetes" {
 
 locals {
   kubeconfig_path = local_file.kubeconfig.filename
+  # What tells this cluster from a re-created one: every new cluster has a new certificate authority.
+  # The id (projects/.../clusters/<name>) stays the same when a cluster of the same name is re-created.
+  cluster_ca_hash = sha256(google_container_cluster.this.master_auth[0].cluster_ca_certificate)
   # Namespaces whose Secrets and ConfigMaps Terraform writes; Flux adds labels and annotations later.
   bootstrap_namespaces = ["flux-system", "develop", "staging", "production", "observability", "auth"]
   # What flux-pre-destroy.sh deletes before the cluster goes: the workloads' volumes (persistent disks
@@ -94,7 +97,7 @@ resource "kubernetes_secret_v1" "sops_age" {
 # writes an archive of its own. A new GKE cluster has a new id, so a new value.
 resource "terraform_data" "cluster_id" {
   input            = formatdate("YYYYMMDD-hhmm", timestamp())
-  triggers_replace = google_container_cluster.this.id
+  triggers_replace = local.cluster_ca_hash
 
   lifecycle {
     ignore_changes = [input]
@@ -168,7 +171,9 @@ resource "kubernetes_secret_v1" "postgres_app_production" {
 # The Flux Operator, from its release manifest (pinned).
 # https://fluxcd.control-plane.io/operator/
 resource "null_resource" "flux_operator_install" {
+  # cluster_ca: a re-created cluster gets Flux again (the kubeconfig path alone never changes).
   triggers = {
+    cluster_ca       = local.cluster_ca_hash
     kubeconfig_path  = local.kubeconfig_path
     operator_version = var.flux_operator_version
   }
@@ -186,6 +191,7 @@ resource "null_resource" "flux_operator_install" {
 # https://fluxcd.control-plane.io/operator/fluxinstance/
 resource "null_resource" "flux_instance" {
   triggers = {
+    cluster_ca      = local.cluster_ca_hash
     kubeconfig_path = local.kubeconfig_path
     repo_url        = var.flux_git_repository_url
     repo_branch     = var.flux_git_repository_branch
@@ -240,8 +246,10 @@ resource "null_resource" "flux_instance" {
 # and deletes the namespaces above with their volumes and the load balancer, while the controllers
 # that clean them up still run. on_failure = continue: the destroy goes on; make leftovers, run after
 # it, says loudly what was left.
-resource "null_resource" "flux_pre_destroy" {
-  triggers = {
+# terraform_data with `input`, not null_resource with `triggers`: the hook must run only when the
+# cluster is destroyed - never because the namespace list or the kubeconfig path changed (moved below).
+resource "terraform_data" "flux_pre_destroy" {
+  input = {
     kubeconfig_path = local.kubeconfig_path
     namespaces      = local.pre_destroy_namespaces
   }
@@ -250,7 +258,7 @@ resource "null_resource" "flux_pre_destroy" {
     when        = destroy
     on_failure  = continue
     interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.triggers.kubeconfig_path}\" \"${self.triggers.namespaces}\""
+    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.input.kubeconfig_path}\" \"${self.input.namespaces}\""
   }
 
   depends_on = [
@@ -260,4 +268,18 @@ resource "null_resource" "flux_pre_destroy" {
     kubernetes_namespace_v1.bootstrap,
     null_resource.flux_instance,
   ]
+}
+
+# Was a null_resource: a change of its triggers (the namespace list, the kubeconfig path) REPLACED it,
+# and a replacement runs the destroy-time hook - against the live cluster, in an ordinary apply.
+# terraform_data takes those values as `input`, which changes in place (found in review, 2026-10-15).
+# `removed` with destroy = false, not `moved`: a move turns the old triggers into triggers_replace and
+# replaces the resource - running the hook once more (kind plan, 2026-10-15). Forgetting the old one
+# runs nothing; the new one does nothing on create.
+removed {
+  from = null_resource.flux_pre_destroy
+
+  lifecycle {
+    destroy = false
+  }
 }

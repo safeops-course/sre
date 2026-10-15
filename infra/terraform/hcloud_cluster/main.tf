@@ -405,7 +405,9 @@ EOF
 # Runs only on destroy (when = destroy): ../scripts/flux-pre-destroy.sh suspends Flux and deletes
 # the workloads and volumes while the cluster still works - volumes left behind stay billed.
 # on_failure = continue: the destroy goes on, the script's log is the only warning.
-resource "null_resource" "flux_pre_destroy" {
+# terraform_data with `input`, not null_resource with `triggers`: the hook must run only when the
+# cluster is destroyed - never because the namespace list or the kubeconfig path changed (moved below).
+resource "terraform_data" "flux_pre_destroy" {
   # module.kube_hetzner: destroy runs this hook before ANY node is removed. Without it a plain
   # `terraform destroy` deleted the workers in parallel - Kyverno, the Flux controllers and the CSI
   # driver died with them, and the namespaces and volumes could no longer be cleaned up.
@@ -416,7 +418,7 @@ resource "null_resource" "flux_pre_destroy" {
     null_resource.flux_instance,
   ]
 
-  triggers = {
+  input = {
     kubeconfig_path = local.kubeconfig_path
     namespaces      = "flux-system,develop,staging,production,observability"
   }
@@ -425,7 +427,21 @@ resource "null_resource" "flux_pre_destroy" {
     when        = destroy
     on_failure  = continue
     interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.triggers.kubeconfig_path}\" \"${self.triggers.namespaces}\""
+    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.input.kubeconfig_path}\" \"${self.input.namespaces}\""
+  }
+}
+
+# Was a null_resource: a change of its triggers (the namespace list, the kubeconfig path) REPLACED it,
+# and a replacement runs the destroy-time hook - against the live cluster, in an ordinary apply.
+# terraform_data takes those values as `input`, which changes in place (found in review, 2026-10-15).
+# `removed` with destroy = false, not `moved`: a move turns the old triggers into triggers_replace and
+# replaces the resource - running the hook once more (kind plan, 2026-10-15). Forgetting the old one
+# runs nothing; the new one does nothing on create.
+removed {
+  from = null_resource.flux_pre_destroy
+
+  lifecycle {
+    destroy = false
   }
 }
 

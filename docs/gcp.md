@@ -123,7 +123,7 @@ gcloud billing budgets list --billing-account=YOUR_BILLING_ACCOUNT
 | Control plane | DNS endpoint only, no IP endpoint | IAM decides who gets in, from a laptop or a GitHub runner alike. No IP allow-list to keep up to date. |
 | Cluster | Dataplane V2, Workload Identity, shielded nodes with secure boot, no kubelet read-only port, no client certificates, anonymous access limited to health checks | Google's hardening guide. Dataplane V2 enforces NetworkPolicies, egress included. |
 | Node pools | `platform` (fixed size) and `apps` (autoscaling), both running as `gke-nodes` | Split by role. `spot` is a setting per pool, `true` in the course's tfvars only because the cluster lives for one cycle. A cluster that matters sets `false`. |
-| Webhooks | No firewall rule | With the DNS endpoint only, GKE reaches admission webhooks through Konnectivity: Pod to Pod from `konnectivity-agent` (kube-system). Under default-deny that needs a NetworkPolicy, not a firewall rule. |
+| Webhooks | No firewall rule, no NetworkPolicy | With the DNS endpoint only, GKE reaches admission webhooks through Konnectivity: Pod to Pod from `konnectivity-agent` (kube-system). Default-deny covers only develop, staging, production and minio, where no webhook runs, so nothing more is needed; cluster-conformance C7 checks it every cycle. |
 | kubeconfig | `kubeconfig.yaml`, context `gke-sre-control-plane` | The DNS endpoint and `gke-gcloud-auth-plugin`, which gets a short-lived token for whoever runs kubectl. No credentials in the file. |
 
 Not here, on purpose:
