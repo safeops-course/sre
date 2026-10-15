@@ -65,7 +65,11 @@ infra/terraform/
                      # kubeconfig.yaml context gke-sre-control-plane (no credentials; gke-gcloud-auth-plugin)
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
-  bootstrap/         # FluxCD bootstrap (kustomizations, secrets)
+  bootstrap/         # FluxCD bootstrap: a profile per cluster on the provider-neutral base flux-system/.
+                     # profiles/hetzner = base + all components (components/: platform-secrets, public-edge,
+                     # image-automation, alerting, opentelemetry) + the Hetzner load balancer patch;
+                     # profiles/local (kind) = base + minio, lab, local secrets + kind patches, no components.
+                     # The base never names a provider or depends on a component; components add their own dependsOn edges
   infrastructure/    # Helm releases (cert-manager, external-dns, prometheus, cnpg)
   apps/              # Application deployments (frontend, backend per environment)
   secrets/           # SOPS-encrypted secrets

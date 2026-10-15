@@ -10,7 +10,7 @@ As of February 16, 2026, the active deployment model is:
 
 Flux sync source:
 - Git repository branch: `main`
-- Path: `./flux/bootstrap/flux-system`
+- Path: the cluster's profile, `./flux/bootstrap/profiles/hetzner` (Hetzner) or `./flux/bootstrap/profiles/local` (kind)
 
 ## Actual Image Tagging Strategy
 

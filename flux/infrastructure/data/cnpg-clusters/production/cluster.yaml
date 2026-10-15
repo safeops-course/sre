@@ -5,6 +5,10 @@ metadata:
   namespace: production
   annotations:
     cnpg.io/validation: "disabled"
+    # Flux never deletes the database because it left Git (a moved folder, a profile that dropped
+    # it, a bad revert): its data would go with it. Deleting it on purpose: remove it from Git first,
+    # reconcile, then kubectl delete - while it is in Git, Flux re-creates it, empty (README.md).
+    kustomize.toolkit.fluxcd.io/prune: disabled
 spec:
   # A primary and one streaming replica (Chapter 22): when the primary's pod or disk is lost, CNPG
   # promotes the replica (24 s after a crash on kind), and an update restarts the replica first, then

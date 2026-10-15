@@ -1,0 +1,7 @@
+# Where the platform's alerts go: Alertmanager receivers and the Watchdog heartbeat. Needs the
+# platform-secrets component (the receiver URLs in secrets-observability). kind routes alerts its own
+# way (profiles/local/alerting-routing.yaml).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - alerting.yaml

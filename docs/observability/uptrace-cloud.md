@@ -90,7 +90,8 @@ The OpenTelemetry Collector is deployed as a DaemonSet (one pod per node):
 
 ```bash
 # Apply Flux Kustomization (if not already bootstrapped)
-kubectl apply -f flux/bootstrap/flux-system/infrastructure.yaml
+# (the component flux/bootstrap/components/opentelemetry - part of the Hetzner profile)
+kubectl apply -f flux/bootstrap/components/opentelemetry/opentelemetry.yaml
 
 # Verify deployment
 kubectl -n observability get daemonset otel-collector

@@ -20,7 +20,7 @@ private key: whoever gets the key can open every version of every file, includin
 | `local/` | `secrets-local` (kind local profile only) | **your** key | `develop` |
 
 The recipients are set per path in `.sops.yaml` at the repository root. The platform Kustomizations are defined in
-`flux/bootstrap/flux-system/secrets.yaml`, the local one in `flux/bootstrap/profiles/local/secrets-local.yaml`.
+`flux/bootstrap/components/platform-secrets/secrets.yaml` (the component every profile but local uses), the local one in `flux/bootstrap/profiles/local/secrets-local.yaml`.
 Each has `decryption: {provider: sops, secretRef: {name: sops-age}}`: the kustomize-controller decrypts
 in memory with the private key from the Secret `flux-system/sops-age` and applies the result.
 

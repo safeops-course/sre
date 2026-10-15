@@ -1,0 +1,7 @@
+# A cluster reachable from the internet under the platform's domain: Cloudflare DNS records
+# (external-dns), Cloudflare Origin CA certificates, the Dex sign-in and Headlamp behind it.
+# Needs the platform-secrets component (the Cloudflare tokens, the Dex GitHub app) and a load balancer.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - public-edge.yaml

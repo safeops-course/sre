@@ -71,7 +71,7 @@ Companion repos in this workspace:
 3. Provision the local kind cluster via Terraform (`infra/terraform/kind_cluster`) -- this installs Flux and reconciles the **local profile** (`flux/bootstrap/profiles/local`): the platform without its cloud-only parts, with MinIO standing in for R2 and Terraform-generated runtime secrets. `flux get kustomizations -A` should be all green.
 4. Follow `docs/local-dev.md` for what the local profile includes, how to point it at your fork, and the verification commands.
 
-The full platform profile (`./flux/bootstrap/flux-system`) is what Hetzner runs; select it with `TF_VAR_flux_kustomization_path` once you have the cloud secrets. See `docs/gitops/flux.md`.
+Each cluster reconciles a **profile**: the provider-neutral base (`flux/bootstrap/flux-system`) plus the components it needs (`flux/bootstrap/components/`) plus its own patches. Hetzner runs `./flux/bootstrap/profiles/hetzner` (the full platform); select a profile with `TF_VAR_flux_kustomization_path`. See `docs/gitops/flux.md`.
 
 ## Where To Start Reading
 

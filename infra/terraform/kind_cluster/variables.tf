@@ -20,7 +20,7 @@ variable "flux_git_repository_branch" {
 }
 
 variable "flux_kustomization_path" {
-  description = "Path within the Git repository to reconcile. ./flux/bootstrap/profiles/local is the kind profile (no cloud dependencies); ./flux/bootstrap/flux-system is the full platform used on Hetzner."
+  description = "Path within the Git repository to reconcile. ./flux/bootstrap/profiles/local is the kind profile (no cloud dependencies); ./flux/bootstrap/profiles/hetzner is the full platform used on Hetzner."
   type        = string
   default     = "./flux/bootstrap/profiles/local"
 }

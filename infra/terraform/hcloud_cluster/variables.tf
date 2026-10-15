@@ -263,7 +263,7 @@ variable "flux_git_repository_branch" {
 variable "flux_kustomization_path" {
   description = "Path within the Git repository to reconcile (relative to repository root)."
   type        = string
-  default     = "./flux/bootstrap/flux-system"
+  default     = "./flux/bootstrap/profiles/hetzner"
 }
 
 # ─── OIDC / Authentication ─────────────────────────────────────────────────────

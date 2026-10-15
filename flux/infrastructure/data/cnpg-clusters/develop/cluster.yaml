@@ -5,6 +5,10 @@ metadata:
   namespace: develop
   annotations:
     cnpg.io/validation: "disabled"
+    # Flux never deletes the database because it left Git (a moved folder, a profile that dropped
+    # it, a bad revert): its data would go with it. Deleting it on purpose: remove it from Git first,
+    # reconcile, then kubectl delete - while it is in Git, Flux re-creates it, empty (README.md).
+    kustomize.toolkit.fluxcd.io/prune: disabled
 spec:
   instances: 1
   # Pinned to a minor and its digest: the major tag (:17) moved to every new PostgreSQL minor by

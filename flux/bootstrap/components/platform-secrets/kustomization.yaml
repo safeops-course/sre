@@ -1,0 +1,32 @@
+# The platform's own secrets: SOPS-encrypted under flux/secrets/, for the platform's age key (the
+# sops-age Secret Terraform creates). A cluster without that key (kind: the learner's own key,
+# profiles/local/secrets-local.yaml) leaves this component out.
+# What waits for these secrets is in the base, so the edges are added here: a base Kustomization never
+# depends on something only some clusters have.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - secrets.yaml
+patches:
+  # Each environment's database waits for its own Secrets (the owner's password, the backup key).
+  - target: { kind: Kustomization, name: cnpg-cluster-develop }
+    patch: |-
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: secrets-develop }
+  - target: { kind: Kustomization, name: cnpg-cluster-staging }
+    patch: |-
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: secrets-staging }
+  - target: { kind: Kustomization, name: cnpg-cluster-production }
+    patch: |-
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: secrets-production }
+  # The Guardian's LLM key.
+  - target: { kind: Kustomization, name: k8s-ai-monitor }
+    patch: |-
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: secrets-observability }
