@@ -123,7 +123,7 @@ gcloud billing budgets list --billing-account=YOUR_BILLING_ACCOUNT
 | Control plane | DNS endpoint only, no IP endpoint | IAM decides who gets in, from a laptop or a GitHub runner alike. No IP allow-list to keep up to date. |
 | Cluster | Dataplane V2, Workload Identity, shielded nodes with secure boot, no kubelet read-only port, no client certificates, anonymous access limited to health checks | Google's hardening guide. Dataplane V2 enforces NetworkPolicies, egress included. |
 | Node pools | `platform` (fixed size) and `apps` (autoscaling), both running as `gke-nodes` | Split by role. `spot` is a setting per pool, `true` in the course's tfvars only because the cluster lives for one cycle. A cluster that matters sets `false`. |
-| Webhooks | No firewall rule | With the DNS endpoint only, GKE reaches admission webhooks through Konnectivity: Pod to Pod from `konnectivity-agent` (kube-system). Under default-deny that needs a NetworkPolicy, not a firewall rule. |
+| Webhooks | No firewall rule, no NetworkPolicy | With the DNS endpoint only, GKE reaches admission webhooks through Konnectivity: Pod to Pod from `konnectivity-agent` (kube-system). Default-deny covers only develop, staging, production and minio, where no webhook runs, so nothing more is needed; cluster-conformance C7 checks it every cycle. |
 | kubeconfig | `kubeconfig.yaml`, context `gke-sre-control-plane` | The DNS endpoint and `gke-gcloud-auth-plugin`, which gets a short-lived token for whoever runs kubectl. No credentials in the file. |
 
 Not here, on purpose:
@@ -137,9 +137,16 @@ The cluster costs money from the first minute: nodes, their disks and the NAT ga
 ```bash
 gcloud components install gke-gcloud-auth-plugin   # once
 make -C infra/terraform/gke_cluster plan            # read it
-make -C infra/terraform/gke_cluster apply           # about 10 minutes
+make -C infra/terraform/gke_cluster apply           # the cluster, then Flux
 kubectl --kubeconfig infra/terraform/gke_cluster/kubeconfig.yaml get nodes
 make -C infra/terraform/gke_cluster destroy         # asks first, then runs make leftovers
 ```
+
+**Flux.** The apply ends with Flux following the platform repository and reconciling `flux/bootstrap/profiles/gke` - the same platform as on Hetzner: the provider-neutral base and every component (the platform's secrets, Cloudflare DNS and Origin CA, Dex, Headlamp, image automation, alert routing, OpenTelemetry). Before Flux starts, Terraform writes what it expects (`flux.tf`): the namespaces, `cluster-config`, `cluster-secrets`, `backup-s3`, the age key `sops-age` and the production database password. A GKE and a Hetzner cluster never run at the same time: they share the DNS names, and image automation writes to the same branch.
+
+- **Settings:** `SOPS_AGE_KEY_FILE` (the platform's age key - no default; `make settings` checks that its public key is a recipient in `.sops.yaml`, so a wrong key stops here, not inside the cluster) and optionally `TF_VAR_uptrace_dsn`, in `.env.gcp`.
+- **kubectl** goes through `gke-gcloud-auth-plugin`, which signs in as gcloud's active account. `make preflight` (before plan, apply and destroy) stops when that account is not `TF_VAR_expected_principal`.
+- **Backups** go to Cloudflare R2 (the plan for every provider): a bucket of its own, not the state bucket, with a key scoped to it. The endpoint and region `auto` are in `terraform.tfvars`; `TF_VAR_backup_s3_bucket`, `TF_VAR_backup_s3_access_key_id` and `TF_VAR_backup_s3_secret_access_key` are required in `.env.gcp` (`make settings` names a missing one). An empty endpoint fails the plan: the CNPG ObjectStore would reject it and no database would be created.
+- **Destroy:** before the node pools go, `flux-pre-destroy.sh` suspends Flux and deletes the workload namespaces with their volumes, and the `traefik` namespace with its LoadBalancer Service - GKE deletes the load balancer's forwarding rule, address and firewall rules only with the Service. A persistent disk or a load balancer left behind keeps costing; `make leftovers` names it.
 
 `make leftovers` lists what can outlive a cluster and keep costing money: disks of PersistentVolumes, load balancer forwarding rules and addresses, NEGs, firewall rules, routers, networks and clusters. It exits 1 when anything is left. Delete what it names, then run it again.

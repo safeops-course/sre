@@ -177,7 +177,7 @@ fi
 # label: some CNIs never apply policies to the API server (on kind it lives in the node's host
 # network - NetworkPolicy leaves that undefined), and then the rule is not exercised at all - SKIP,
 # not a pass. Where the control is blocked, the labelled probe must get through: the rule allows TCP
-# 6443, so a provider whose API server listens elsewhere (443 on most managed clouds) fails here.
+# 6443 (kind, k3s) and 443 (managed clouds); a provider whose API server listens elsewhere fails here.
 # busybox's nslookup ignores search domains for a dotted name - hence the full name.
 api=kubernetes.default.svc.cluster.local
 k -n "$NS" apply -f "$np/allow-postgres-egress-apiserver.yaml" >/dev/null

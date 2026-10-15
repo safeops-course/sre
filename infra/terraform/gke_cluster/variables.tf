@@ -94,3 +94,107 @@ variable "deletion_protection" {
   description = "Refuse terraform destroy of the cluster. Keep true for a cluster that matters; the course's per-cycle cluster sets false."
   type        = bool
 }
+
+# ─── Flux ─────────────────────────────────────────────────────────────────────
+# The same inputs as the Hetzner cluster's (infra/terraform/hcloud_cluster/variables.tf).
+
+variable "flux_operator_version" {
+  description = "Flux Operator release to install (install.yaml from its GitHub release)."
+  type        = string
+  # renovate: datasource=github-releases depName=controlplaneio-fluxcd/flux-operator
+  default = "0.61.0"
+}
+
+variable "flux_version" {
+  description = "Flux version the FluxInstance installs. Pinned, so a rebuild gets the same Flux."
+  type        = string
+  # renovate: datasource=github-releases depName=fluxcd/flux2
+  default = "2.9.6"
+}
+
+variable "flux_git_repository_url" {
+  description = "Git repository Flux follows (https://github.com/<owner>/<repo>.git)."
+  type        = string
+}
+
+variable "flux_git_repository_branch" {
+  description = "Git branch Flux follows. Not in terraform.tfvars on purpose: a cycle that tests a branch sets TF_VAR_flux_git_repository_branch, and a tfvars value would win over it."
+  type        = string
+  default     = "main"
+}
+
+variable "flux_kustomization_path" {
+  description = "The Flux profile this cluster reconciles (./flux/bootstrap/profiles/gke)."
+  type        = string
+}
+
+variable "sops_age_key" {
+  description = "age private key for SOPS decryption in Flux: the key line or the whole age key file. Ephemeral: needed for every plan and apply, never stored in the plan or the state. The Makefile reads it from SOPS_AGE_KEY_FILE."
+  type        = string
+  sensitive   = true
+  ephemeral   = true
+
+  validation {
+    condition     = strcontains(var.sops_age_key, "AGE-SECRET-KEY-")
+    error_message = "sops_age_key must contain an age private key (AGE-SECRET-KEY-...): Flux cannot decrypt flux/secrets/** without it."
+  }
+}
+
+variable "sops_age_key_revision" {
+  description = "Bump after rotating sops_age_key: the key is write-only, so Terraform re-sends it only when this number changes."
+  type        = number
+  default     = 1
+}
+
+variable "uptrace_dsn" {
+  description = "Uptrace DSN for the OpenTelemetry collector (cluster-secrets). Empty: the collector runs and its exports fail."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "image_registry" {
+  description = "Container image registry prefix of the platform's images (cluster-config)."
+  type        = string
+}
+
+variable "git_owner" {
+  description = "GitHub organization or user that owns the repositories (cluster-config; image automation, signature checks)."
+  type        = string
+}
+
+# CNPG backups: every cluster, of every provider, backs up to Cloudflare R2 - a bucket of its own, never
+# the state bucket, with a token scoped to that bucket.
+variable "backup_s3_endpoint" {
+  description = "S3 endpoint of the CNPG backups (ConfigMap backup-s3), e.g. https://<account>.r2.cloudflarestorage.com."
+  type        = string
+
+  # The CNPG ObjectStore rejects an empty endpointURL, and Flux then refuses the whole cnpg-cluster-<env>
+  # Kustomization - no database at all (seen 2026-10-15). Fail the plan instead.
+  validation {
+    condition     = startswith(var.backup_s3_endpoint, "https://")
+    error_message = "backup_s3_endpoint is \"${var.backup_s3_endpoint}\"; set the https:// endpoint of the backup bucket - an empty one leaves the cluster without databases."
+  }
+}
+
+variable "backup_s3_bucket" {
+  description = "Bucket of the CNPG backups (ConfigMap backup-s3, Secret cnpg-backup-s3). Set TF_VAR_backup_s3_bucket."
+  type        = string
+}
+
+variable "backup_s3_region" {
+  description = "Region of the backup bucket (\"auto\" for R2)."
+  type        = string
+}
+
+variable "backup_s3_access_key_id" {
+  description = "Access key of the backup bucket (Secret cnpg-backup-s3). Set TF_VAR_backup_s3_access_key_id."
+  type        = string
+  sensitive   = true
+}
+
+variable "backup_s3_secret_access_key" {
+  description = "Secret key of the backup bucket (Secret cnpg-backup-s3). Set TF_VAR_backup_s3_secret_access_key."
+  type        = string
+  sensitive   = true
+}

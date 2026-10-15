@@ -27,6 +27,14 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: coredns
+        # NodeLocal DNSCache (GKE turns it on): a cache pod on every node answers the cluster DNS
+        # address - as in the platform's policy. On kind no pod has this label.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
       ports:
         - protocol: UDP
           port: 53

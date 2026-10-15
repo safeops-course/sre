@@ -356,14 +356,16 @@ EOF
 # Runs at destroy time (when = destroy): ../scripts/flux-pre-destroy.sh removes what
 # Flux created in these namespaces first, so the destroy does not race a controller
 # that recreates objects.
-resource "null_resource" "flux_pre_destroy" {
+# terraform_data with `input`, not null_resource with `triggers`: the hook must run only when the
+# cluster is destroyed - never because the namespace list or the kubeconfig path changed (moved below).
+resource "terraform_data" "flux_pre_destroy" {
   depends_on = [
     kind_cluster.sre,
     kubernetes_namespace_v1.bootstrap,
     null_resource.flux_instance,
   ]
 
-  triggers = {
+  input = {
     kubeconfig_path = local.kubeconfig_path
     namespaces      = "develop,staging,production,observability,traefik,minio"
   }
@@ -371,7 +373,7 @@ resource "null_resource" "flux_pre_destroy" {
   provisioner "local-exec" {
     when        = destroy
     on_failure  = continue
-    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.triggers.kubeconfig_path}\" \"${self.triggers.namespaces}\""
+    command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.input.kubeconfig_path}\" \"${self.input.namespaces}\""
     interpreter = ["/bin/bash", "-c"]
   }
 
@@ -379,6 +381,20 @@ resource "null_resource" "flux_pre_destroy" {
   # without it the replaced cluster came up without Flux.
   lifecycle {
     replace_triggered_by = [kind_cluster.sre]
+  }
+}
+
+# Was a null_resource: a change of its triggers (the namespace list, the kubeconfig path) REPLACED it,
+# and a replacement runs the destroy-time hook - against the live cluster, in an ordinary apply.
+# terraform_data takes those values as `input`, which changes in place (found in review, 2026-10-15).
+# `removed` with destroy = false, not `moved`: a move turns the old triggers into triggers_replace and
+# replaces the resource - running the hook once more (kind plan, 2026-10-15). Forgetting the old one
+# runs nothing; the new one does nothing on create.
+removed {
+  from = null_resource.flux_pre_destroy
+
+  lifecycle {
+    destroy = false
   }
 }
 

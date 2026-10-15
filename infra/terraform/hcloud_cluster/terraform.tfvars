@@ -47,9 +47,10 @@ kured_enabled = false
 # kured_end_time    = "05:00"     # default: 05:00
 
 # ─── Flux ────────────────────────────────────────────────────────────────────
-flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
-flux_git_repository_branch = "main"
-flux_kustomization_path    = "./flux/bootstrap/profiles/hetzner"
+flux_git_repository_url = "https://github.com/safeops-course/sre.git"
+# flux_git_repository_branch: the variable default ("main") - a tfvars value would win over
+# TF_VAR_flux_git_repository_branch when a cycle tests a branch.
+flux_kustomization_path = "./flux/bootstrap/profiles/hetzner"
 # flux_version             = "2.x"
 # flux_operator_version    = "0.60.0"
 

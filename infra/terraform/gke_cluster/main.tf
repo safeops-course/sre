@@ -344,9 +344,10 @@ resource "google_container_node_pool" "apps" {
 # No firewall rule for webhook ports (Kyverno and CloudNativePG serve on 9443). With the DNS endpoint
 # only, GKE runs Konnectivity: the control plane reaches webhooks through a tunnel ending in the
 # konnectivity-agent Pods (kube-system) inside the cluster - Pod to Pod, not from a control plane IP
-# (there is none to name: no IP endpoint). What the platform needs instead is a NetworkPolicy that
-# lets those agents reach the webhook Pods under default-deny (flux/bootstrap/profiles/gke).
-# Seen on the first cluster 2026-10-15: konnectivity-agent Pods running, privateEndpoint empty.
+# (there is none to name: no IP endpoint). No NetworkPolicy is needed either: default-deny covers only
+# develop, staging, production and minio, and no webhook runs there (Kyverno, cnpg-system and
+# cert-manager have none). cluster-conformance C7 proves it on every cycle - it passed on GKE,
+# 2026-10-15. A webhook in a default-deny namespace would need a policy admitting konnectivity-agent.
 
 # ─── kubeconfig ───────────────────────────────────────────────────────────────
 # The DNS endpoint and the auth plugin: kubectl asks gke-gcloud-auth-plugin for a short-lived token of
