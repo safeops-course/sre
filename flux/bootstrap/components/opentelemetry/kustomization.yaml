@@ -1,0 +1,6 @@
+# Traces and logs to Uptrace: the OpenTelemetry collector. Needs the Uptrace DSN (cluster-secrets,
+# created by Terraform).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - opentelemetry.yaml

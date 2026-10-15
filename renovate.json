@@ -48,7 +48,7 @@
     },
     {
       "description": [
-        "origin-ca-issuer's CRDs come from its Git repository pinned by commit (flux/bootstrap/flux-system/infrastructure.yaml).",
+        "origin-ca-issuer's CRDs come from its Git repository pinned by commit (flux/bootstrap/components/public-edge/public-edge.yaml).",
         "Renovate would follow the default branch's HEAD, not the release tags; the chart version (helm datasource) is the signal",
         "for a new release, and the CRD commit is moved to that release's tag by hand, in the same pull request."
       ],

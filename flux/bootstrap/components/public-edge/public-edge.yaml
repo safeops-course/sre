@@ -1,0 +1,111 @@
+---
+# Cloudflare Origin CA Issuer (platform only). CRDs from the upstream repo, pinned to the commit of
+# release v0.15.0 (a moved tag cannot change them); the controller from its OCI chart (same release).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: origin-ca-issuer
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://github.com/cloudflare/origin-ca-issuer
+  ref:
+    commit: 47728cb96bbbf3a7d23026cc001c69ef8a06cc9e # v0.15.0
+  # gitignore semantics: a path cannot be re-included while its parent is excluded, so
+  # re-include /deploy/, exclude its children, then re-include /deploy/crds/.
+  ignore: |
+    /*
+    !/deploy/
+    /deploy/*
+    !/deploy/crds/
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: origin-ca-issuer-crds
+  namespace: flux-system
+spec:
+  interval: 1h
+  sourceRef:
+    kind: GitRepository
+    name: origin-ca-issuer
+  path: ./deploy/crds
+  prune: false # removing a CRD deletes every issuer of that kind
+  wait: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: origin-ca-issuer
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/origin-ca-issuer
+  prune: true
+  wait: true
+  timeout: 10m0s
+  dependsOn:
+    - name: cert-manager
+    - name: origin-ca-issuer-crds
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dns-and-certificates
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/dns-and-certificates
+  prune: true
+  wait: true
+  timeout: 10m0s
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+  dependsOn:
+    - name: cert-manager
+    - name: origin-ca-issuer
+    - name: secrets-cloudflare
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dex
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/dex
+  prune: true
+  wait: true
+  timeout: 10m0s
+  dependsOn:
+    - name: cert-manager
+    - name: dns-and-certificates
+    - name: secrets-auth
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: headlamp
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./flux/infrastructure/security/headlamp
+  prune: true
+  wait: false
+  dependsOn:
+    - name: dex
+    - name: secrets-auth

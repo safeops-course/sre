@@ -49,7 +49,7 @@ kured_enabled = false
 # ─── Flux ────────────────────────────────────────────────────────────────────
 flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
-flux_kustomization_path    = "./flux/bootstrap/flux-system"
+flux_kustomization_path    = "./flux/bootstrap/profiles/hetzner"
 # flux_version             = "2.x"
 # flux_operator_version    = "0.60.0"
 

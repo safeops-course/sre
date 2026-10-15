@@ -23,7 +23,7 @@ Reference services are maintained as companion repos (`backend/`, `frontend/`) i
 
 ## Flux and Environment Model
 - Namespaces: `develop`, `staging`, `production`, plus `observability` and `flux-system`.
-- Bootstrap path: `flux/bootstrap/flux-system`.
+- Bootstrap path: the cluster's profile (`flux/bootstrap/profiles/{local,hetzner}`) = the provider-neutral base `flux/bootstrap/flux-system` + components (`flux/bootstrap/components/`) + provider patches.
 - App wiring per environment:
   - `flux/bootstrap/apps/develop/`
   - `flux/bootstrap/apps/staging/`
@@ -47,7 +47,7 @@ Reference services are maintained as companion repos (`backend/`, `frontend/`) i
 - Includes dashboards and alert rules for backend service metrics.
 - Alertmanager is disabled; alert delivery path is `k8s-ai-monitor` webhook routing.
 - `k8s-ai-monitor` is deployed via `flux/infrastructure/observability/k8s-ai-monitor/` and uses Prometheus + Kubernetes context for incident analysis.
-- OpenTelemetry collector manifests exist under `flux/infrastructure/observability/opentelemetry-collector/`; bootstrap wiring is currently disabled (commented in `flux/bootstrap/flux-system/infrastructure.yaml`).
+- OpenTelemetry collector manifests exist under `flux/infrastructure/observability/opentelemetry-collector/`; it is wired by the component `flux/bootstrap/components/opentelemetry` (Hetzner profile; needs the Uptrace DSN).
 
 ## Secrets and Security Model
 - Secrets are committed as SOPS-encrypted manifests under `flux/secrets/**`.

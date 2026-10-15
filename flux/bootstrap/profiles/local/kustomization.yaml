@@ -1,11 +1,8 @@
 # Local (kind) profile.
 #
-# Same GitOps tree as production, minus everything that needs a cloud account,
-# a DNS zone, an LLM key or the author's SOPS key. What is removed:
-#   - dns-and-certificates, dex, headlamp                            (Cloudflare DNS, OIDC sign-in)
-#   - opentelemetry-collector                                        (Uptrace DSN)
-#   - image-automation                                                (needs git write token)
-#   - secrets-*                                                       (encrypted for the platform key)
+# The base (flux/bootstrap/flux-system) and none of the components: each needs something kind does not
+# have - a DNS zone and a load balancer (public-edge), a Git write token (image-automation), alert
+# receivers (alerting), an Uptrace DSN (opentelemetry), the platform's SOPS key (platform-secrets).
 # What is added:
 #   - minio          S3-compatible target for CNPG backups instead of Hetzner Object Storage
 #   - secrets-local  the learner's own SOPS-encrypted secrets (secrets chapter)
@@ -33,57 +30,13 @@ patches:
         path: /spec/path
         value: ./flux/bootstrap/profiles/local
 
-  # --- remove cloud-only Kustomizations -------------------------------------
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: image-automation, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: dns-and-certificates, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: origin-ca-issuer-crds, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: origin-ca-issuer, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: source.toolkit.fluxcd.io/v1
-      kind: GitRepository
-      metadata: { name: origin-ca-issuer, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: dex, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: headlamp, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: opentelemetry-collector, namespace: flux-system }
-      $patch: delete
+  # --- the Guardian without image automation ---------------------------------
   # The Guardian (k8s-ai-monitor, Chapter 14) runs on kind too. Its Secret comes from Terraform
   # (guardian_llm_provider / guardian_llm_api_key), not from secrets-observability; and kind has no
   # image automation, so its ImagePolicy and ImageUpdateAutomation are left out - the tag changes
   # only by a commit, as for every app on kind (Chapter 10). LLM_DEBUG is on, for the lab.
   - target: { kind: Kustomization, name: k8s-ai-monitor }
     patch: |-
-      - op: replace
-        path: /spec/dependsOn
-        value:
-          - name: observability-resources
       - op: add
         path: /spec/patches
         value:
@@ -111,46 +64,6 @@ patches:
                         env:
                           - name: LLM_DEBUG
                             value: "true"
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: alerting, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-auth, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-flux-system, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-cloudflare, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-observability, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-develop, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-staging, namespace: flux-system }
-      $patch: delete
-  - patch: |-
-      apiVersion: kustomize.toolkit.fluxcd.io/v1
-      kind: Kustomization
-      metadata: { name: secrets-production, namespace: flux-system }
-      $patch: delete
 
   # --- cert-manager: certificates for the Barman Cloud plugin only ---------
   # On kind it signs the plugin's mTLS certificates and nothing else: the Ingresses carry the Hetzner
@@ -209,31 +122,19 @@ patches:
   # (ConfigMap flux-system/backup-s3, Secret cnpg-backup-s3).
   - target: { kind: Kustomization, name: cnpg-cluster-develop }
     patch: |-
-      - op: replace
-        path: /spec/dependsOn
-        value:
-          - name: cnpg-operator
-          - name: network-policies-develop
-          - name: resource-management-develop
-          - name: minio
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: minio }
   - target: { kind: Kustomization, name: cnpg-cluster-staging }
     patch: |-
-      - op: replace
-        path: /spec/dependsOn
-        value:
-          - name: cnpg-operator
-          - name: network-policies-staging
-          - name: resource-management-staging
-          - name: minio
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: minio }
   - target: { kind: Kustomization, name: cnpg-cluster-production }
     patch: |-
-      - op: replace
-        path: /spec/dependsOn
-        value:
-          - name: cnpg-operator
-          - name: network-policies-production
-          - name: resource-management-production
-          - name: minio
+      - op: add
+        path: /spec/dependsOn/-
+        value: { name: minio }
 
   # --- apps: no image automation locally -----------------------------------
   # apps-<env> renders flux/bootstrap/apps/<env>, which creates the

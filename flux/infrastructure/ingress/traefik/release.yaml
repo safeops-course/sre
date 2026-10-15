@@ -1,13 +1,13 @@
 # Traefik, the ingress of every cluster - installed by Flux, not by the cluster's Terraform, so each
 # provider gets the same ingress and its Terraform module stays "a cluster + Flux". What differs per
-# cluster is only how the Service is reached:
-#   - here (Hetzner, the base): a LoadBalancer Service that takes over the load balancer kube-hetzner
-#     creates and deletes (ingress_controller = "custom" - Terraform owns the billed resource, so a
-#     destroy leaves nothing behind). The ingress_lb_* variables come from cluster-config (Terraform).
-#   - kind: the local profile replaces the values - a NodePort Service on 30080/30443, which kind's
-#     port mappings publish as localhost:8080/8443.
-# These values are the ones kube-hetzner 3.2.1 set itself (its traefik_values_default), so the move
-# changes who installs Traefik, not how it behaves.
+# cluster is only how the Service is reached, and that is the profile's patch, not this file:
+#   - here (the base): a LoadBalancer Service with an HTTPS redirect, no provider annotations.
+#   - Hetzner (profiles/hetzner): the annotations that make it take over the load balancer
+#     kube-hetzner creates and deletes, and the PROXY protocol from it.
+#   - kind (profiles/local): a NodePort Service on 30080/30443, which kind's port mappings publish as
+#     localhost:8080/8443.
+# The Hetzner values are the ones kube-hetzner 3.2.1 set itself (its traefik_values_default), so the
+# move to Flux changed who installs Traefik, not how it behaves.
 # The chart publishes the Service's address in each Ingress status (publishedService, on by default) -
 # external-dns makes the DNS records from it.
 # releaseName: the Service stays traefik/traefik - Ingress status, external-dns and the PodMonitor
@@ -59,23 +59,7 @@ spec:
       limits:
         cpu: 300m
         memory: 150Mi
-    service:
-      # spec.type stays the chart's default, LoadBalancer.
-      annotations:
-        load-balancer.hetzner.cloud/name: "${ingress_lb_name}"
-        load-balancer.hetzner.cloud/location: "${ingress_lb_location}"
-        load-balancer.hetzner.cloud/type: "${ingress_lb_type}"
-        load-balancer.hetzner.cloud/use-private-ip: "true"
-        load-balancer.hetzner.cloud/disable-private-ingress: "true"
-        load-balancer.hetzner.cloud/disable-public-network: "false"
-        load-balancer.hetzner.cloud/ipv6-disabled: "true"
-        # The load balancer passes the client's address with the PROXY protocol; Traefik trusts it
-        # only from the private network (10.0.0.0/8) - see trustedIPs below.
-        load-balancer.hetzner.cloud/uses-proxyprotocol: "true"
-        load-balancer.hetzner.cloud/algorithm-type: round_robin
-        load-balancer.hetzner.cloud/health-check-interval: 15s
-        load-balancer.hetzner.cloud/health-check-timeout: 10s
-        load-balancer.hetzner.cloud/health-check-retries: "3"
+    # service.spec.type stays the chart's default, LoadBalancer; its annotations come from the profile.
     ports:
       web:
         http:
@@ -84,12 +68,3 @@ spec:
               to: websecure
               scheme: https
               permanent: true
-        proxyProtocol:
-          trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
-        forwardedHeaders:
-          trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
-      websecure:
-        proxyProtocol:
-          trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
-        forwardedHeaders:
-          trustedIPs: [127.0.0.1/32, 10.0.0.0/8]

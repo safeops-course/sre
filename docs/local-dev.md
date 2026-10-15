@@ -54,7 +54,7 @@ cp infra/terraform/kind_cluster/terraform.tfvars.example infra/terraform/kind_cl
 ```
 For the full platform profile, override for that run:
 ```bash
-export TF_VAR_flux_kustomization_path="./flux/bootstrap/flux-system"           # full platform (needs cloud secrets)
+export TF_VAR_flux_kustomization_path="./flux/bootstrap/profiles/hetzner"     # full platform (needs cloud secrets)
 export TF_VAR_local_profile=false                                              # skip the generated local secrets
 ```
 A Git token is needed in two cases: the full platform profile (image automation pushes tag updates - PAT with Contents: write) and a private fork (Flux must read it - Contents: read). Prompt for it instead of typing it into the command line, so it never lands in shell history:

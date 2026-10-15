@@ -42,14 +42,15 @@ reviews:
         - Secrets arrive as TF_VAR_* (load-env.sh / GitHub secrets); such variables must be sensitive = true with no real default.
         - helm/kubernetes providers read module.kube_hetzner.kubeconfig_data (hcloud) - do not switch them to a kubeconfig file.
         - Create-time local-exec must fail the apply. Only destroy-time provisioners may use on_failure = continue, and they need a bounded --timeout.
-        - ConfigMaps cluster-config and backup-s3 are consumed by Flux postBuild.substituteFrom: renaming a key breaks flux/bootstrap/flux-system/*.yaml.
+        - ConfigMaps cluster-config and backup-s3 are consumed by Flux postBuild.substituteFrom: renaming a key breaks flux/bootstrap/{flux-system,components,profiles}/**.
         - k3s_version is pinned and auto_upgrade_k3s = false; flag changes that let Kubernetes upgrade itself.
     - path: "infra/terraform/**/terraform.tfvars"
       instructions: |
         Committed on purpose and holds only non-secret values. Flag any token, key, password or private key here.
     - path: "flux/**"
       instructions: |
-        Flux Operator + Kustomizations. Entry: flux/bootstrap/flux-system (infrastructure.yaml, secrets.yaml, apps.yaml); flux/bootstrap/profiles/local = kind.
+        Flux Operator + Kustomizations. Entry: a profile per cluster, flux/bootstrap/profiles/{local,hetzner} = the provider-neutral base flux/bootstrap/flux-system (infrastructure.yaml, apps.yaml) + Kustomize components (flux/bootstrap/components/*) + provider patches.
+        - The base never names a provider and never depends on a component's Kustomization; a component adds its own dependsOn edges with patches.
         - dependsOn: namespace/operator before consumers; a Kustomization that uses a Secret from flux/secrets depends on its secrets-* Kustomization.
         - HelmRelease chart versions are exact (no ranges); Terraform modules exact, providers constrained; actions and tool downloads pinned. Images use a fixed tag or digest; backend:latest / frontend:latest in apps/*/base are
           placeholders replaced by the overlay images transformer; ":main" with a $imagepolicy marker is managed by image automation.

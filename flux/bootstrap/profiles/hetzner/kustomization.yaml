@@ -1,0 +1,67 @@
+# Hetzner profile: the full platform on the Hetzner Cloud cluster (infra/terraform/hcloud_cluster).
+#
+#   base         flux/bootstrap/flux-system - what every cluster runs
+#   components   every one: the platform's secrets, the public edge (Cloudflare DNS + Origin CA, Dex,
+#                Headlamp), image automation, alert routing, OpenTelemetry
+#   patches      what only Hetzner has: the load balancer kube-hetzner creates, taken over by Traefik
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../flux-system
+components:
+  - ../../components/platform-secrets
+  - ../../components/public-edge
+  - ../../components/image-automation
+  - ../../components/alerting
+  - ../../components/opentelemetry
+patches:
+  # Point the self-managing Kustomization at this profile.
+  - target: { kind: Kustomization, name: flux-system }
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./flux/bootstrap/profiles/hetzner
+
+  # --- Traefik: the Hetzner load balancer -----------------------------------
+  # kube-hetzner (ingress_controller = "custom") creates the load balancer and deletes it on destroy -
+  # Terraform owns the billed resource. These annotations make Traefik's Service take it over; the
+  # ingress_lb_* values come from cluster-config (Terraform). The load balancer passes the client's
+  # address with the PROXY protocol over the private network, so Traefik trusts PROXY and forwarded
+  # headers only from 10.0.0.0/8.
+  - target: { kind: Kustomization, name: traefik }
+    patch: |-
+      - op: add
+        path: /spec/patches
+        value:
+          - target: { kind: HelmRelease, name: traefik }
+            patch: |-
+              apiVersion: helm.toolkit.fluxcd.io/v2
+              kind: HelmRelease
+              metadata: { name: traefik }
+              spec:
+                values:
+                  service:
+                    annotations:
+                      load-balancer.hetzner.cloud/name: "${ingress_lb_name}"
+                      load-balancer.hetzner.cloud/location: "${ingress_lb_location}"
+                      load-balancer.hetzner.cloud/type: "${ingress_lb_type}"
+                      load-balancer.hetzner.cloud/use-private-ip: "true"
+                      load-balancer.hetzner.cloud/disable-private-ingress: "true"
+                      load-balancer.hetzner.cloud/disable-public-network: "false"
+                      load-balancer.hetzner.cloud/ipv6-disabled: "true"
+                      load-balancer.hetzner.cloud/uses-proxyprotocol: "true"
+                      load-balancer.hetzner.cloud/algorithm-type: round_robin
+                      load-balancer.hetzner.cloud/health-check-interval: 15s
+                      load-balancer.hetzner.cloud/health-check-timeout: 10s
+                      load-balancer.hetzner.cloud/health-check-retries: "3"
+                  ports:
+                    web:
+                      proxyProtocol:
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
+                      forwardedHeaders:
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
+                    websecure:
+                      proxyProtocol:
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
+                      forwardedHeaders:
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]

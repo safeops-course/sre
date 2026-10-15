@@ -3,6 +3,10 @@
 One CloudNativePG cluster per environment (`develop`, `staging`, `production`), named `app-postgres`,
 database and owner `app`, credentials in the Secret `app-postgres-app`.
 
+- **Flux never prunes them:** `kustomize.toolkit.fluxcd.io/prune: disabled` on each Cluster. A database
+  that leaves Git - a moved folder, a profile that no longer includes it, a bad revert - stays with its
+  data; deleting one on purpose is a `kubectl delete`.
+
 ## Backups
 
 - **Continuous WAL archiving and a daily base backup** (`scheduled-backup.yaml`), through the Barman

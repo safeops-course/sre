@@ -16,28 +16,6 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: image-automation
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/bootstrap/infrastructure/image-automation
-  prune: true
-  wait: false
-  postBuild:
-    substituteFrom:
-      - kind: ConfigMap
-        name: cluster-config
-  dependsOn:
-    - name: infrastructure
-    # the deploy key the automation pushes with (flux/secrets/flux-system)
-    - name: secrets-flux-system
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
   name: cert-manager
   namespace: flux-system
 spec:
@@ -52,8 +30,8 @@ spec:
   dependsOn:
     - name: infrastructure
 ---
-# Traefik, the ingress of every cluster (see release.yaml). cluster-config gives the load balancer
-# values on Hetzner; the local profile replaces them for kind.
+# Traefik, the ingress of every cluster (see release.yaml). Each profile patches how its Service is
+# reached (profiles/hetzner: the Hetzner load balancer; profiles/local: a NodePort on kind).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -74,81 +52,6 @@ spec:
         name: cluster-config
   dependsOn:
     - name: infrastructure
----
-# Cloudflare Origin CA Issuer (platform only). CRDs from the upstream repo, pinned to the commit of
-# release v0.15.0 (a moved tag cannot change them); the controller from its OCI chart (same release).
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
-metadata:
-  name: origin-ca-issuer
-  namespace: flux-system
-spec:
-  interval: 24h
-  url: https://github.com/cloudflare/origin-ca-issuer
-  ref:
-    commit: 47728cb96bbbf3a7d23026cc001c69ef8a06cc9e # v0.15.0
-  # gitignore semantics: a path cannot be re-included while its parent is excluded, so
-  # re-include /deploy/, exclude its children, then re-include /deploy/crds/.
-  ignore: |
-    /*
-    !/deploy/
-    /deploy/*
-    !/deploy/crds/
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: origin-ca-issuer-crds
-  namespace: flux-system
-spec:
-  interval: 1h
-  sourceRef:
-    kind: GitRepository
-    name: origin-ca-issuer
-  path: ./deploy/crds
-  prune: false # removing a CRD deletes every issuer of that kind
-  wait: true
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: origin-ca-issuer
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/security/origin-ca-issuer
-  prune: true
-  wait: true
-  timeout: 10m0s
-  dependsOn:
-    - name: cert-manager
-    - name: origin-ca-issuer-crds
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: dns-and-certificates
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/security/dns-and-certificates
-  prune: true
-  wait: true
-  timeout: 10m0s
-  postBuild:
-    substituteFrom:
-      - kind: ConfigMap
-        name: cluster-config
-  dependsOn:
-    - name: cert-manager
-    - name: origin-ca-issuer
-    - name: secrets-cloudflare
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -192,7 +95,6 @@ spec:
     - name: cnpg-operator
     - name: network-policies-develop
     - name: resource-management-develop
-    - name: secrets-develop
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -250,7 +152,6 @@ spec:
     - name: cnpg-operator
     - name: network-policies-staging
     - name: resource-management-staging
-    - name: secrets-staging
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -308,7 +209,6 @@ spec:
     - name: cnpg-operator
     - name: network-policies-production
     - name: resource-management-production
-    - name: secrets-production
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -375,24 +275,6 @@ spec:
   dependsOn:
     - name: observability
 ---
-# Platform only (removed by the local profile): Watchdog -> Healthchecks.io heartbeat.
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: alerting
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/observability/alerting
-  prune: true
-  wait: true
-  dependsOn:
-    - name: observability
-    - name: secrets-observability
----
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -412,7 +294,6 @@ spec:
         name: cluster-config
   dependsOn:
     - name: observability-resources
-    - name: secrets-observability
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -527,42 +408,6 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: dex
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/security/dex
-  prune: true
-  wait: true
-  timeout: 10m0s
-  dependsOn:
-    - name: cert-manager
-    - name: dns-and-certificates
-    - name: secrets-auth
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: headlamp
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/security/headlamp
-  prune: true
-  wait: false
-  dependsOn:
-    - name: dex
-    - name: secrets-auth
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
   name: oidc-rbac
   namespace: flux-system
 spec:
@@ -575,25 +420,3 @@ spec:
   wait: false
   dependsOn:
     - name: infrastructure
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: opentelemetry-collector
-  namespace: flux-system
-spec:
-  interval: 10m0s
-  sourceRef:
-    kind: GitRepository
-    name: flux-system
-  path: ./flux/infrastructure/observability/opentelemetry-collector
-  prune: true
-  wait: false
-  postBuild:
-    substituteFrom:
-      - kind: ConfigMap
-        name: cluster-config
-      - kind: Secret
-        name: cluster-secrets
-  dependsOn:
-    - name: observability
