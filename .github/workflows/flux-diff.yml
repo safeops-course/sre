@@ -21,6 +21,8 @@ jobs:
         # Pinned to the commit of the Flux release the platform runs (v2.9.6, as in hetzner-e2e.yml):
         # @main would run whatever lands on that branch next.
         uses: fluxcd/flux2/action@b9c17924adb533d3617ec7de97a7b0f4acc07b39 # v2.9.6
+        with:
+          version: 2.9.6   # without it the action installs the latest Flux CLI
 
       - name: Setup kubeconform
         run: |
@@ -33,7 +35,7 @@ jobs:
 
       # Rules the apps must keep (security review 2026-09-27): no ServiceAccount token, pprof off,
       # chaos off in production; no service links in any workload under flux/. kubectl and yq come
-      # with the ubuntu runner.
+      # with the ubuntu runner, the Flux CLI (flux build) from the step above.
       - name: App security rules
         run: scripts/check-app-security.sh
 

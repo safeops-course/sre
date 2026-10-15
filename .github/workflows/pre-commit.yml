@@ -48,6 +48,13 @@ jobs:
           echo "${KUBECTL_SHA256}  kubectl" | sha256sum -c -
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
+      # flux build for check-app-security.sh: it builds every Flux Kustomization the way the
+      # kustomize-controller does (no cluster). Pinned to the platform's Flux release, as in flux-diff.yml.
+      - name: Setup Flux CLI
+        uses: fluxcd/flux2/action@b9c17924adb533d3617ec7de97a7b0f4acc07b39 # v2.9.6
+        with:
+          version: 2.9.6   # without it the action installs the latest Flux CLI
+
       # Helm for the tool-versions-test hook: it asks the pinned charts what they install (helm show).
       # Pinned and checked against the release's sha256sum.
       - name: Setup Helm

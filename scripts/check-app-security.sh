@@ -3,11 +3,12 @@
 # workload written under flux/, the platform's own too. Renders every backend and frontend overlay and
 # fails when a rule is broken:
 #   - every Deployment: automountServiceAccountToken: false (the apps never call the Kubernetes API)
-#   - every workload written under flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob - apps and
-#     platform; not the pods Helm charts and operators create): enableServiceLinks: false, and no file
-#     under flux/ (a patch, an inline Kustomization patch) sets it to true. Kubernetes otherwise adds
-#     variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new pod;
-#     BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
+#   - every workload Flux deploys from flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob - apps
+#     and platform; not the pods Helm charts and operators create) has enableServiceLinks: false - the
+#     boolean - in the form Flux applies it: every Flux Kustomization is built with `flux build` (its
+#     patches too), so no patch can take it away. Kubernetes otherwise
+#     adds variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new
+#     pod; BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
 #     pod (frontend#25, caught on kind before it shipped). Without them no variable of the namespace's
 #     Services reaches the pod; names resolve through DNS. KUBERNETES_SERVICE_HOST / _PORT (the API
 #     server) are still added - the kubelet adds them either way
@@ -33,7 +34,8 @@
 #   - a Deployment targeted by an HPA sets no spec.replicas (the HPA owns the count; a value in Git
 #     makes Flux reset what the HPA scaled on every reconcile)
 #
-# Runs in pre-commit (flux/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`) and yq (v4).
+# Runs in pre-commit (flux/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`), yq (v4)
+# and the flux CLI (`flux build`, no cluster).
 # Usage: scripts/check-app-security.sh   (no arguments - it always checks all six overlays)
 # Read-only: it renders the overlays locally and changes no file and no cluster. Every problem is
 # collected first and printed together; exit 1 when there is at least one.
@@ -42,7 +44,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-for tool in kubectl yq; do
+for tool in kubectl yq flux; do
   command -v "${tool}" >/dev/null || { echo "check-app-security: ${tool} is required" >&2; exit 1; }
 done
 
@@ -190,50 +192,141 @@ for overlay in "${overlays[@]}"; do
   fi
 done
 
-# Rule: enableServiceLinks: false on every workload written under flux/, not only the apps (checked in
-# the source files: one message per missing line). Overlay patches are partial objects and need not
-# repeat it - the grep below makes sure none of them, and no inline Kustomization patch, turns it back
-# on. A top-level list (a JSON patch) is no workload; a CronJob's pod spec sits one level deeper.
-# yq's output is read into a variable first and its stderr kept apart: a file yq cannot parse fails the
-# check instead of ending the list early, and a warning on stderr is never read as a workload.
-workloads=0
-yq_err="$(mktemp)"
-trap 'rm -f "${yq_err}"' EXIT
-if ! workload_list="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
+# Rule: enableServiceLinks: false on every workload under flux/ - checked on what Flux would apply, not
+# on the source text, so no form of patch can take it away (a `TRUE` or `yes` that the API server reads
+# as true, a `remove`, `$patch: replace`, a patch a profile adds to a Flux Kustomization).
+# `flux build kustomization --dry-run` (no cluster) builds each Flux Kustomization the way the
+# kustomize-controller does: its path - with a generated kustomization.yaml when there is none - its
+# spec.patches and its postBuild substitutions. It starts from the Flux Kustomizations in each profile
+# (flux/bootstrap/profiles/*) and follows every Flux Kustomization those builds contain, until none is
+# new. In every build each Deployment, StatefulSet, DaemonSet, Job and CronJob must have the boolean
+# false in its pod spec; a workload (kind, namespace/name) is reported once.
+#   - A Flux Kustomization on another source than this repository cannot be built here. Each one must be
+#     in FOREIGN_SOURCES, checked by hand to deploy no workload of ours; any other fails the check.
+#   - A workload file no build reaches (an opt-in path such as the develop canary) is checked in the
+#     source file instead: the field must be there, as the boolean false.
+FOREIGN_SOURCES=(origin-ca-issuer-crds)   # origin-ca-issuer's CRDs (deploy/crds): no workload
+render_tmp="$(mktemp -d)"
+trap 'rm -rf "${render_tmp}"' EXIT
+links_rows="${render_tmp}/rows.tsv"   # kind, namespace/name, YAML tag + value, build - per workload per build
+queue="${render_tmp}/queue"           # the split Flux Kustomizations; pending lists the ones still to build
+mkdir -p "${queue}"
+: >"${links_rows}" && : >"${render_tmp}/seen"
+pending=()
+enqueued=0
+
+# enqueue YAML_FILE WHERE - add every Flux Kustomization in YAML_FILE (built by WHERE) that is new to
+# pending. New means a new combination of what shapes its build: name, namespace, source, path,
+# patches, components, target namespace, postBuild - the same one comes from several profiles.
+enqueue() {
+  local file api key
+  enqueued=$((enqueued + 1))
+  yq 'select(.kind == "Kustomization" and ((.apiVersion // "") | test("^kustomize\.toolkit\.fluxcd\.io/")))' \
+    "$1" >"${render_tmp}/ks.yaml"
+  [[ -s "${render_tmp}/ks.yaml" ]] || return 0
+  # yq -s writes one file per document; the `---` the yq above prints between documents keeps them apart.
+  (cd "${queue}" && yq -s '"ks-'"${enqueued}"'-" + $index' "${render_tmp}/ks.yaml")
+  for file in "${queue}/ks-${enqueued}-"*.yml; do
+    if ! IFS=$'\t' read -r api key < <(yq -N '[.apiVersion, ([.metadata.name, .metadata.namespace,
+        .spec.sourceRef, .spec.path, .spec.patches, .spec.components, .spec.targetNamespace,
+        .spec.postBuild] | @json)] | @tsv' "${file}"); then
+      failures+=("$2: a Flux Kustomization yq cannot read")
+      continue
+    fi
+    if [[ "${api}" != "kustomize.toolkit.fluxcd.io/v1" ]]; then
+      failures+=("$2: a Flux Kustomization with apiVersion ${api} - the check builds kustomize.toolkit.fluxcd.io/v1 only")
+      continue
+    fi
+    key="$(cksum <<<"${key}")"
+    grep -qxF "${key}" "${render_tmp}/seen" && continue
+    echo "${key}" >>"${render_tmp}/seen"
+    pending+=("${file}")
+  done
+}
+
+# collect_links BUILD BUILT_FILE - a row per workload in BUILT_FILE: kind, namespace/name, the field's YAML
+# tag and value ("!!null null" when it is missing), BUILD.
+# shellcheck disable=SC2016 # $p below is a yq variable, not a shell one
+collect_links() {
+  BUILD="$1" yq -N 'select(tag == "!!map")
+      | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
+      | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p
+      | [.kind, (.metadata.namespace // "-") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), env(BUILD)]
+      | @tsv' "$2" >>"${links_rows}"
+}
+
+for profile in flux/bootstrap/profiles/*/; do
+  if ! kubectl kustomize --load-restrictor=LoadRestrictionsNone "${profile}" >"${render_tmp}/profile.yaml" 2>"${render_tmp}/err"; then
+    failures+=("${profile}: kustomize build failed: $(cat "${render_tmp}/err")")
+    continue
+  fi
+  enqueue "${render_tmp}/profile.yaml" "${profile}"
+done
+builds=0
+next=0
+while ((next < ${#pending[@]})); do
+  file="${pending[next]}"
+  next=$((next + 1))
+  # Name, path (Flux's default: the source root) and source as kind/namespace/name - the source's
+  # namespace defaults to the Kustomization's own.
+  if ! IFS=$'\t' read -r name source path < <(yq -N '[.metadata.name,
+      .spec.sourceRef.kind + "/" + (.spec.sourceRef.namespace // .metadata.namespace // "flux-system") + "/" + .spec.sourceRef.name,
+      .spec.path // "./"] | @tsv' "${file}"); then
+    failures+=("${file##*/}: a Flux Kustomization yq cannot read")
+    continue
+  fi
+  if [[ "${source}" != "GitRepository/flux-system/flux-system" ]]; then
+    if [[ " ${FOREIGN_SOURCES[*]} " != *" ${name} "* ]]; then
+      failures+=("Flux Kustomization ${name}: its source ${source} is not this repository, so it cannot be built here - if it deploys no workload of ours, add it to FOREIGN_SOURCES")
+    fi
+    continue
+  fi
+  builds=$((builds + 1))
+  if ! flux build kustomization "${name}" --path "${path}" --kustomization-file "${file}" \
+    --dry-run >"${render_tmp}/built.yaml" 2>"${render_tmp}/err"; then
+    failures+=("Flux Kustomization ${name} (${path}): flux build failed: $(cat "${render_tmp}/err")")
+    continue
+  fi
+  collect_links "Flux Kustomization ${name} (${path})" "${render_tmp}/built.yaml"
+  enqueue "${render_tmp}/built.yaml" "Flux Kustomization ${name} (${path})"
+done
+
+# One line per workload (kind, namespace/name): the first build that shows a wrong value is enough to find it.
+workloads="$(cut -f1,2 "${links_rows}" | sort -u | grep -c . || true)"
+while IFS=$'\t' read -r kind name value build; do
+  [[ -z "${kind}" ]] && continue
+  failures+=("${build}: ${kind} ${name} has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
+done < <(awk -F'\t' '$3 != "!!bool false" && !seen[$1 FS $2]++' "${links_rows}")
+if ((workloads == 0)); then
+  failures+=("flux/: no workload built - nothing was checked for enableServiceLinks")
+fi
+
+# Workload files no build reached, checked in the source. A file is matched to a build by kind, namespace
+# and name; one without a namespace ("-": a base whose overlay sets it) cannot be matched, so it is checked in
+# the file as well. Overlay patches are partial objects, not workloads of their own.
+cut -f1,2 "${links_rows}" | sort -u >"${render_tmp}/built-names"
+unbuilt=0
+# shellcheck disable=SC2016 # $p below is a yq variable, not a shell one
+if ! sources="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
   xargs -0 yq -N 'select(tag == "!!map")
     | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
-    | [filename, .kind, .metadata.name, ((.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks | tostring)]
-    | @tsv' 2>"${yq_err}")"; then
-  failures+=("flux/: yq could not read the workloads: $(cat "${yq_err}")")
-  workload_list=""
+    | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p
+    | [.kind, (.metadata.namespace // "-"), .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
+  failures+=("flux/: yq could not read the workload files: $(cat "${render_tmp}/err")")
+  sources=""
 fi
-while IFS=$'\t' read -r file kind name links; do
-  [[ -z "${file}" ]] && continue
-  workloads=$((workloads + 1))
-  if [[ "${links}" != "false" ]]; then
-    failures+=("${file}: ${kind} ${name} must set enableServiceLinks: false in its pod spec (got: ${links})")
+while IFS=$'\t' read -r kind namespace name value file; do
+  [[ -z "${kind}" ]] && continue
+  [[ "${namespace}" != "-" ]] && grep -qxF "${kind}"$'\t'"${namespace}/${name}" "${render_tmp}/built-names" && continue
+  unbuilt=$((unbuilt + 1))
+  if [[ "${value}" != "!!bool false" ]]; then
+    failures+=("${file}: ${kind} ${namespace}/${name} (not matched to a build - checked in the file) has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
   fi
-done <<<"${workload_list}"
-if ((workloads == 0)); then
-  failures+=("flux/: no workload found - nothing was checked for enableServiceLinks")
-fi
-while IFS= read -r hit; do
-  [[ -n "${hit}" ]] && failures+=("${hit}: enableServiceLinks must stay false (a patch must not set it true or remove it - removed, it defaults to true)")
-done < <(
-  # the field set to true (a patch file, a strategic-merge patch inline in a Kustomization) ...
-  grep -rnE --include='*.yaml' --include='*.yml' 'enableServiceLinks:[[:space:]]*"?true' flux || true
-  # ... or a JSON patch op on it whose next line is not `value: false`: a replace/add to true, and a
-  # remove too (an absent field defaults to true). Printed as file:line of the `path:` line.
-  find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -exec awk '
-    FNR == 1 { if (p) print f ":" p; p = 0; f = FILENAME }
-    /path:.*\/enableServiceLinks/ { if (p) print f ":" p; p = FNR; next }
-    p { if ($0 !~ /value:[[:space:]]*"?false/) print f ":" p; p = 0 }
-    END { if (p) print f ":" p }' {} +
-)
+done <<<"${sources}"
 
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays, ${workloads} workloads under flux/)"
+echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${unbuilt} workload files not matched to a build, checked in the file)"
