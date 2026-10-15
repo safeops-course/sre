@@ -1,7 +1,7 @@
 # The GKE cluster - created for a test cycle and destroyed after it (docs/gcp.md). Settings come from
 # ENV_FILE (default .env.gcp in the repository root, git-ignored) or your shell: TF_VAR_expected_principal,
 # GOOGLE_APPLICATION_CREDENTIALS, the R2 state key (R2_* or AWS_*), SOPS_AGE_KEY_FILE (the platform's age
-# key Flux decrypts flux/secrets with; default ~/.ssh/age.agekey), optionally TF_VAR_uptrace_dsn.
+# key Flux decrypts flux/secrets with), optionally TF_VAR_uptrace_dsn.
 SHELL := /bin/bash
 TF    := terraform
 
@@ -13,8 +13,10 @@ ENV_FILE ?= ../../../.env.gcp
 export TF_VAR_expected_principal GOOGLE_APPLICATION_CREDENTIALS TF_VAR_uptrace_dsn
 # The age key goes to Terraform as an ephemeral variable (never in the plan or the state); every run
 # needs it - plan, apply and destroy. Read from the file, so it is never typed or kept in an env file.
-SOPS_AGE_KEY_FILE ?= $(HOME)/.ssh/age.agekey
-export TF_VAR_sops_age_key = $(shell cat "$(SOPS_AGE_KEY_FILE)" 2>/dev/null)
+# No default path: a workstation can hold several age keys, and the wrong one fails only inside the
+# cluster, when Flux cannot decrypt. `settings` checks the key against the recipients in .sops.yaml.
+export TF_VAR_sops_age_key = $(if $(SOPS_AGE_KEY_FILE),$(shell cat "$(SOPS_AGE_KEY_FILE)" 2>/dev/null))
+SOPS_CONFIG := ../../../.sops.yaml
 ifneq ($(R2_ACCESS_KEY_ID),)
 export AWS_ACCESS_KEY_ID     := $(R2_ACCESS_KEY_ID)
 export AWS_SECRET_ACCESS_KEY := $(R2_SECRET_ACCESS_KEY)
@@ -31,8 +33,11 @@ help: ## List available targets
 settings: ## Check that every setting is there (no cloud calls)
 	@missing=""; \
 	for v in TF_VAR_expected_principal AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do [ -n "$${!v:-}" ] || missing="$$missing $$v"; done; \
-	[ -n "$${TF_VAR_sops_age_key:-}" ] || missing="$$missing SOPS_AGE_KEY_FILE($(SOPS_AGE_KEY_FILE) not readable)"; \
+	[ -n "$${TF_VAR_sops_age_key:-}" ] || missing="$$missing SOPS_AGE_KEY_FILE($(if $(SOPS_AGE_KEY_FILE),$(SOPS_AGE_KEY_FILE) not readable,not set))"; \
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.gcp.example)" >&2; exit 2; }
+	@command -v age-keygen >/dev/null || { echo "missing: age-keygen (to check SOPS_AGE_KEY_FILE against .sops.yaml)" >&2; exit 2; }
+	@recipient="$$(age-keygen -y "$(SOPS_AGE_KEY_FILE)")"; \
+	grep -qF "$$recipient" "$(SOPS_CONFIG)" || { echo "SOPS_AGE_KEY_FILE ($(SOPS_AGE_KEY_FILE)) is $$recipient - not a recipient in .sops.yaml: Flux could not decrypt flux/secrets" >&2; exit 2; }
 
 # kubectl through kubeconfig.yaml - the Flux bootstrap and the pre-destroy hook (flux.tf) - needs the
 # auth plugin, and the plugin signs in as gcloud's active account: it must be the expected identity,
