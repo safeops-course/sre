@@ -32,7 +32,8 @@ jobs:
           rm kubeconform-linux-amd64.tar.gz
 
       # Rules the apps must keep (security review 2026-09-27): no ServiceAccount token, pprof off,
-      # chaos off in production. kubectl and yq come with the ubuntu runner.
+      # chaos off in production; no service links in any workload under flux/. kubectl and yq come
+      # with the ubuntu runner.
       - name: App security rules
         run: scripts/check-app-security.sh
 

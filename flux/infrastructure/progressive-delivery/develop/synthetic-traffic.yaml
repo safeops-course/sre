@@ -23,9 +23,7 @@ spec:
       labels:
         app: frontend-synthetic-traffic
     spec:
-      # Only the environment written here: no service links, the variables Kubernetes adds for every
-      # Service in the namespace (BACKEND_PORT=tcp://<ip>:80, ...). One collided with a frontend
-      # setting and crash-looped it (frontend#25). Names resolve through DNS; KUBERNETES_SERVICE_HOST stays.
+      # No <SERVICE>_PORT=tcp://... variables, only the env set here (scripts/check-app-security.sh says why).
       enableServiceLinks: false
       automountServiceAccountToken: false
       securityContext:

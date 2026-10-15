@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Guardrail for the app manifests (security review 2026-09-27). Renders every backend and frontend
-# overlay and fails when a rule is broken:
+# Guardrail for the app manifests (security review 2026-09-27) - and, for service links, for every
+# workload written under flux/, the platform's own too. Renders every backend and frontend overlay and
+# fails when a rule is broken:
 #   - every Deployment: automountServiceAccountToken: false (the apps never call the Kubernetes API)
-#     and enableServiceLinks: false
-#   - every workload written under flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob; overlay
-#     patches aside - the rendered overlays above cover them): enableServiceLinks: false. Kubernetes
-#     otherwise adds variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... -
-#     and one collided with a frontend setting and crash-looped it (frontend#25). Only the environment
-#     written in the manifest; names resolve through DNS (KUBERNETES_SERVICE_HOST is added either way)
+#   - every workload written under flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob - apps and
+#     platform; not the pods Helm charts and operators create): enableServiceLinks: false, and no file
+#     under flux/ (a patch, an inline Kustomization patch) sets it to true. Kubernetes otherwise adds
+#     variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new pod;
+#     BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
+#     pod (frontend#25, caught on kind before it shipped). Only the environment the manifest sets; names
+#     resolve through DNS (KUBERNETES_SERVICE_HOST is added either way)
 #   - every container (and init container): runAsNonRoot, readOnlyRootFilesystem, no privilege
 #     escalation, capabilities drop ALL, seccomp RuntimeDefault - the container value wins over
 #     the pod's, as in Kubernetes. Pod Security "restricted" (enforced on develop, staging and
@@ -80,20 +82,16 @@ for overlay in "${overlays[@]}"; do
     continue
   fi
 
-  # Rule: automountServiceAccountToken and enableServiceLinks false on every Deployment - and count
-  # the Deployments, so an overlay that renders none fails instead of passing with nothing checked.
+  # Rule: automountServiceAccountToken: false on every Deployment - and count the Deployments,
+  # so an overlay that renders none fails instead of passing with nothing checked.
   deployments=0
-  while IFS=$'\t' read -r name automount links; do
+  while IFS=$'\t' read -r name automount; do
     [[ -z "${name}" ]] && continue
     deployments=$((deployments + 1))
     if [[ "${automount}" != "false" ]]; then
       failures+=("${overlay}: Deployment ${name} must set automountServiceAccountToken: false (got: ${automount})")
     fi
-    if [[ "${links}" != "false" ]]; then
-      failures+=("${overlay}: Deployment ${name} must set enableServiceLinks: false (got: ${links})")
-    fi
-  done < <(yq 'select(.kind == "Deployment") | [.metadata.name, (.spec.template.spec.automountServiceAccountToken | tostring),
-      (.spec.template.spec.enableServiceLinks | tostring)] | @tsv' <<<"${rendered}")
+  done < <(yq 'select(.kind == "Deployment") | [.metadata.name, (.spec.template.spec.automountServiceAccountToken | tostring)] | @tsv' <<<"${rendered}")
   if ((deployments == 0)); then
     failures+=("${overlay}: renders no Deployment - nothing was checked")
   fi
@@ -191,17 +189,21 @@ for overlay in "${overlays[@]}"; do
   fi
 done
 
-# Rule: enableServiceLinks: false on every workload written under flux/, not only the apps. Overlay
-# patches are partial objects (the rendered overlays above are checked whole); a top-level list (a JSON
-# patch) is no workload. A CronJob's pod spec sits one level deeper.
-# Read into a variable first: a file yq cannot parse must fail the check, not end the list early.
+# Rule: enableServiceLinks: false on every workload written under flux/, not only the apps (checked in
+# the source files: one message per missing line). Overlay patches are partial objects and need not
+# repeat it - the grep below makes sure none of them, and no inline Kustomization patch, turns it back
+# on. A top-level list (a JSON patch) is no workload; a CronJob's pod spec sits one level deeper.
+# yq's output is read into a variable first and its stderr kept apart: a file yq cannot parse fails the
+# check instead of ending the list early, and a warning on stderr is never read as a workload.
 workloads=0
+yq_err="$(mktemp)"
+trap 'rm -f "${yq_err}"' EXIT
 if ! workload_list="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
   xargs -0 yq -N 'select(tag == "!!map")
     | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
     | [filename, .kind, .metadata.name, ((.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks | tostring)]
-    | @tsv' 2>&1)"; then
-  failures+=("flux/: yq could not read the workloads: ${workload_list}")
+    | @tsv' 2>"${yq_err}")"; then
+  failures+=("flux/: yq could not read the workloads: $(cat "${yq_err}")")
   workload_list=""
 fi
 while IFS=$'\t' read -r file kind name links; do
@@ -214,6 +216,17 @@ done <<<"${workload_list}"
 if ((workloads == 0)); then
   failures+=("flux/: no workload found - nothing was checked for enableServiceLinks")
 fi
+while IFS= read -r hit; do
+  [[ -n "${hit}" ]] && failures+=("${hit}: enableServiceLinks must stay false (a patch must not turn it back on)")
+done < <(
+  # the field set to true (a patch file, a strategic-merge patch inline in a Kustomization) ...
+  grep -rnE --include='*.yaml' --include='*.yml' 'enableServiceLinks:[[:space:]]*"?true' flux || true
+  # ... or a JSON patch op: `path: .../enableServiceLinks` with `value: true` on the next line
+  find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -exec awk '
+    /path:.*\/enableServiceLinks/ { p = FNR; next }
+    p && FNR == p + 1 && /value:[[:space:]]*"?true/ { print FILENAME ":" FNR }
+    { p = 0 }' {} +
+)
 
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
