@@ -1,5 +1,6 @@
 .DS_Store
 .env.local
+.env.gcp
 /bin/
 /node_modules/
 /.venv/

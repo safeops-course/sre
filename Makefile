@@ -45,6 +45,8 @@ tf: ## List the Terraform modules and how to run them
 	@echo "  kind    $(KIND_DIR)    local kind cluster        make kind-plan | kind-apply | kind-drift | kind-destroy"
 	@echo "  hcloud  $(HCLOUD_DIR)  Hetzner cluster (Cloud)   make hcloud-plan | hcloud-apply | hcloud-drift | hcloud-destroy"
 	@echo "                                                     (needs the TF_VAR_* from load-env.sh; normally CI applies it)"
+	@echo "  gcp     infra/terraform/gcp_foundation   Google Cloud foundation   once, by a person: make -C infra/terraform/gcp_foundation plan | apply"
+	@echo "                                                     (APIs, service accounts, GitHub Workload Identity, alert e-mail, budget)"
 	@echo "  lab     infra/terraform/state-lab        Chapter 02 state lab      run by hand, as the lab says"
 	@echo "Check without credentials: make validate"
 
