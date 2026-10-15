@@ -153,7 +153,7 @@ repos:
         name: App manifests keep the security rules (no SA token, no pprof, no chaos in production)
         entry: scripts/check-app-security.sh
         language: script
-        files: ^flux/apps/.*\.ya?ml$
+        files: ^(flux/.*\.ya?ml|scripts/check-app-security\.sh)$
         pass_filenames: false
         stages: [pre-commit]
 

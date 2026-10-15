@@ -2,6 +2,12 @@
 # Guardrail for the app manifests (security review 2026-09-27). Renders every backend and frontend
 # overlay and fails when a rule is broken:
 #   - every Deployment: automountServiceAccountToken: false (the apps never call the Kubernetes API)
+#     and enableServiceLinks: false
+#   - every workload written under flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob; overlay
+#     patches aside - the rendered overlays above cover them): enableServiceLinks: false. Kubernetes
+#     otherwise adds variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... -
+#     and one collided with a frontend setting and crash-looped it (frontend#25). Only the environment
+#     written in the manifest; names resolve through DNS (KUBERNETES_SERVICE_HOST is added either way)
 #   - every container (and init container): runAsNonRoot, readOnlyRootFilesystem, no privilege
 #     escalation, capabilities drop ALL, seccomp RuntimeDefault - the container value wins over
 #     the pod's, as in Kubernetes. Pod Security "restricted" (enforced on develop, staging and
@@ -24,7 +30,7 @@
 #   - a Deployment targeted by an HPA sets no spec.replicas (the HPA owns the count; a value in Git
 #     makes Flux reset what the HPA scaled on every reconcile)
 #
-# Runs in pre-commit (flux/apps/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`) and yq (v4).
+# Runs in pre-commit (flux/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`) and yq (v4).
 # Usage: scripts/check-app-security.sh   (no arguments - it always checks all six overlays)
 # Read-only: it renders the overlays locally and changes no file and no cluster. Every problem is
 # collected first and printed together; exit 1 when there is at least one.
@@ -74,16 +80,20 @@ for overlay in "${overlays[@]}"; do
     continue
   fi
 
-  # Rule: automountServiceAccountToken: false on every Deployment - and count the Deployments,
-  # so an overlay that renders none fails instead of passing with nothing checked.
+  # Rule: automountServiceAccountToken and enableServiceLinks false on every Deployment - and count
+  # the Deployments, so an overlay that renders none fails instead of passing with nothing checked.
   deployments=0
-  while IFS=$'\t' read -r name automount; do
+  while IFS=$'\t' read -r name automount links; do
     [[ -z "${name}" ]] && continue
     deployments=$((deployments + 1))
     if [[ "${automount}" != "false" ]]; then
       failures+=("${overlay}: Deployment ${name} must set automountServiceAccountToken: false (got: ${automount})")
     fi
-  done < <(yq 'select(.kind == "Deployment") | [.metadata.name, (.spec.template.spec.automountServiceAccountToken | tostring)] | @tsv' <<<"${rendered}")
+    if [[ "${links}" != "false" ]]; then
+      failures+=("${overlay}: Deployment ${name} must set enableServiceLinks: false (got: ${links})")
+    fi
+  done < <(yq 'select(.kind == "Deployment") | [.metadata.name, (.spec.template.spec.automountServiceAccountToken | tostring),
+      (.spec.template.spec.enableServiceLinks | tostring)] | @tsv' <<<"${rendered}")
   if ((deployments == 0)); then
     failures+=("${overlay}: renders no Deployment - nothing was checked")
   fi
@@ -181,9 +191,33 @@ for overlay in "${overlays[@]}"; do
   fi
 done
 
+# Rule: enableServiceLinks: false on every workload written under flux/, not only the apps. Overlay
+# patches are partial objects (the rendered overlays above are checked whole); a top-level list (a JSON
+# patch) is no workload. A CronJob's pod spec sits one level deeper.
+# Read into a variable first: a file yq cannot parse must fail the check, not end the list early.
+workloads=0
+if ! workload_list="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
+  xargs -0 yq -N 'select(tag == "!!map")
+    | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
+    | [filename, .kind, .metadata.name, ((.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks | tostring)]
+    | @tsv' 2>&1)"; then
+  failures+=("flux/: yq could not read the workloads: ${workload_list}")
+  workload_list=""
+fi
+while IFS=$'\t' read -r file kind name links; do
+  [[ -z "${file}" ]] && continue
+  workloads=$((workloads + 1))
+  if [[ "${links}" != "false" ]]; then
+    failures+=("${file}: ${kind} ${name} must set enableServiceLinks: false in its pod spec (got: ${links})")
+  fi
+done <<<"${workload_list}"
+if ((workloads == 0)); then
+  failures+=("flux/: no workload found - nothing was checked for enableServiceLinks")
+fi
+
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays)"
+echo "check-app-security: OK (${#overlays[@]} overlays, ${workloads} workloads under flux/)"

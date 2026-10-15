@@ -18,6 +18,10 @@ spec:
       annotations:
         safeops.io/secrets-rotated: "2026-10-12T17:05:26Z"
     spec:
+      # Only the environment written here: no service links, the variables Kubernetes adds for every
+      # Service in the namespace (BACKEND_PORT=tcp://<ip>:80, ...). One collided with a frontend
+      # setting and crash-looped it (frontend#25). Names resolve through DNS; KUBERNETES_SERVICE_HOST stays.
+      enableServiceLinks: false
       serviceAccountName: k8s-ai-monitor
       # Restricted Pod Security, like the apps: the image's user monitor (uid 1000), and fsGroup
       # so that user can write the volume.

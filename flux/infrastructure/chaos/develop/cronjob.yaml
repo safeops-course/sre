@@ -37,6 +37,10 @@ spec:
             app.kubernetes.io/name: chaos-monkey
             app.kubernetes.io/component: chaos
         spec:
+          # Only the environment written here: no service links, the variables Kubernetes adds for every
+          # Service in the namespace (BACKEND_PORT=tcp://<ip>:80, ...). One collided with a frontend
+          # setting and crash-looped it (frontend#25). Names resolve through DNS; KUBERNETES_SERVICE_HOST stays.
+          enableServiceLinks: false
           serviceAccountName: chaos-monkey
           restartPolicy: Never
           securityContext:

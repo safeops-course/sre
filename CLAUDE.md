@@ -142,6 +142,9 @@ scripts/             # Pre-commit hooks, automation scripts
 - NetworkPolicies use `default-deny-all` — new services need explicit ingress/egress rules from `traefik` namespace
 - App security rules (enforced by `scripts/check-app-security.sh` in pre-commit and Flux Diff): every app
   Deployment sets `automountServiceAccountToken: false` and, when an HPA targets it, no `spec.replicas`;
+  every workload written under `flux/` (apps and platform: Guardian, MinIO, chaos, synthetic traffic) sets
+  `enableServiceLinks: false` - only the environment in the manifest; Kubernetes' `<SERVICE>_PORT=tcp://...`
+  variables collided with a frontend setting (frontend#25);
   every container runs non-root with a read-only root filesystem, no privilege escalation, capabilities
   drop ALL and seccomp RuntimeDefault (Pod Security restricted enforces all but the read-only root filesystem
   at admission); every emptyDir has a sizeLimit; every app container has `lifecycle.preStop.sleep` >= 5 s,
