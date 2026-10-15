@@ -79,6 +79,7 @@ frontend/            # Vue 3 SRE dashboard (Vite + Tailwind + nginx)
 labs/                # Lab manifests applied by hand (never by Flux): labs/network-policies (Chapter 06), labs/security-context (Chapter 07), labs/resource-management (Chapter 08), labs/availability (Chapter 09), labs/promotion (Chapter 10)
 scripts/             # Pre-commit hooks, automation scripts
   docs/                # Platform runbooks, architecture notes, and repo pointers
+                       # docs/providers.md: the checklist for adding a cloud provider (AWS, Azure, ...)
 ```
 
 ## Key Technologies
