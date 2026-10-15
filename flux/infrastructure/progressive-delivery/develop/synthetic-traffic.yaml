@@ -23,6 +23,9 @@ spec:
       labels:
         app: frontend-synthetic-traffic
     spec:
+      # No <SERVICE>_PORT=tcp://... variables for the namespace's Services; KUBERNETES_SERVICE_* stay
+      # (scripts/check-app-security.sh says why).
+      enableServiceLinks: false
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
-# Guardrail for the app manifests (security review 2026-09-27). Renders every backend and frontend
-# overlay and fails when a rule is broken:
+# Guardrail for the app manifests (security review 2026-09-27) - and, for service links, for every
+# workload written under flux/, the platform's own too. Renders every backend and frontend overlay and
+# fails when a rule is broken:
 #   - every Deployment: automountServiceAccountToken: false (the apps never call the Kubernetes API)
+#   - every workload written under flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob - apps and
+#     platform; not the pods Helm charts and operators create): enableServiceLinks: false, and no file
+#     under flux/ (a patch, an inline Kustomization patch) sets it to true. Kubernetes otherwise adds
+#     variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new pod;
+#     BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
+#     pod (frontend#25, caught on kind before it shipped). Without them no variable of the namespace's
+#     Services reaches the pod; names resolve through DNS. KUBERNETES_SERVICE_HOST / _PORT (the API
+#     server) are still added - the kubelet adds them either way
 #   - every container (and init container): runAsNonRoot, readOnlyRootFilesystem, no privilege
 #     escalation, capabilities drop ALL, seccomp RuntimeDefault - the container value wins over
 #     the pod's, as in Kubernetes. Pod Security "restricted" (enforced on develop, staging and
@@ -24,7 +33,7 @@
 #   - a Deployment targeted by an HPA sets no spec.replicas (the HPA owns the count; a value in Git
 #     makes Flux reset what the HPA scaled on every reconcile)
 #
-# Runs in pre-commit (flux/apps/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`) and yq (v4).
+# Runs in pre-commit (flux/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`) and yq (v4).
 # Usage: scripts/check-app-security.sh   (no arguments - it always checks all six overlays)
 # Read-only: it renders the overlays locally and changes no file and no cluster. Every problem is
 # collected first and printed together; exit 1 when there is at least one.
@@ -181,9 +190,50 @@ for overlay in "${overlays[@]}"; do
   fi
 done
 
+# Rule: enableServiceLinks: false on every workload written under flux/, not only the apps (checked in
+# the source files: one message per missing line). Overlay patches are partial objects and need not
+# repeat it - the grep below makes sure none of them, and no inline Kustomization patch, turns it back
+# on. A top-level list (a JSON patch) is no workload; a CronJob's pod spec sits one level deeper.
+# yq's output is read into a variable first and its stderr kept apart: a file yq cannot parse fails the
+# check instead of ending the list early, and a warning on stderr is never read as a workload.
+workloads=0
+yq_err="$(mktemp)"
+trap 'rm -f "${yq_err}"' EXIT
+if ! workload_list="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
+  xargs -0 yq -N 'select(tag == "!!map")
+    | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
+    | [filename, .kind, .metadata.name, ((.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks | tostring)]
+    | @tsv' 2>"${yq_err}")"; then
+  failures+=("flux/: yq could not read the workloads: $(cat "${yq_err}")")
+  workload_list=""
+fi
+while IFS=$'\t' read -r file kind name links; do
+  [[ -z "${file}" ]] && continue
+  workloads=$((workloads + 1))
+  if [[ "${links}" != "false" ]]; then
+    failures+=("${file}: ${kind} ${name} must set enableServiceLinks: false in its pod spec (got: ${links})")
+  fi
+done <<<"${workload_list}"
+if ((workloads == 0)); then
+  failures+=("flux/: no workload found - nothing was checked for enableServiceLinks")
+fi
+while IFS= read -r hit; do
+  [[ -n "${hit}" ]] && failures+=("${hit}: enableServiceLinks must stay false (a patch must not set it true or remove it - removed, it defaults to true)")
+done < <(
+  # the field set to true (a patch file, a strategic-merge patch inline in a Kustomization) ...
+  grep -rnE --include='*.yaml' --include='*.yml' 'enableServiceLinks:[[:space:]]*"?true' flux || true
+  # ... or a JSON patch op on it whose next line is not `value: false`: a replace/add to true, and a
+  # remove too (an absent field defaults to true). Printed as file:line of the `path:` line.
+  find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -exec awk '
+    FNR == 1 { if (p) print f ":" p; p = 0; f = FILENAME }
+    /path:.*\/enableServiceLinks/ { if (p) print f ":" p; p = FNR; next }
+    p { if ($0 !~ /value:[[:space:]]*"?false/) print f ":" p; p = 0 }
+    END { if (p) print f ":" p }' {} +
+)
+
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays)"
+echo "check-app-security: OK (${#overlays[@]} overlays, ${workloads} workloads under flux/)"

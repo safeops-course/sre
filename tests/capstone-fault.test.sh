@@ -32,9 +32,9 @@ fi
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
 # No background git maintenance in the throw-away repositories: `git commit` / `fetch` may start a
 # detached `git maintenance run --auto`, which can still write into a repository while the EXIT trap
-# deletes it ("rm: cannot remove .../repo: Directory not empty" - once in CI on 2026-10-15, every
-# assertion ok; the likely cause, not reproduced). Config from the environment reaches every git call,
-# capstone-fault.sh's too.
+# deletes it ("rm: cannot remove ...: Directory not empty", every assertion ok). Config from the
+# environment reaches every git call, capstone-fault.sh's too - but not receive-pack on a local push:
+# the bare repository below turns it off in its own config (reproduced 2/2 without that, 2026-10-15).
 export GIT_CONFIG_COUNT=2
 export GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
 export GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
@@ -157,6 +157,12 @@ github_repo_with_origin() {
   rm -rf "${WORK}/learner" "${WORK}/gh.log"
   mkdir -p "${WORK}/learner"
   git clone -q --bare "${WORK}/repo" "${WORK}/learner/sre.git"
+  # A push to a local path starts receive-pack with GIT_CONFIG_COUNT cleared (git does that for local
+  # transports), and receive-pack then runs a detached auto gc / maintenance in this repository that
+  # can still write objects while the EXIT trap deletes it. Turned off in the repository's own config.
+  git -C "${WORK}/learner/sre.git" config receive.autogc false
+  git -C "${WORK}/learner/sre.git" config maintenance.auto false
+  git -C "${WORK}/learner/sre.git" config gc.auto 0
   git -C "${WORK}/repo" config "url.${WORK}/learner/sre.git.insteadOf" "${url}"
   git -C "${WORK}/repo" remote add origin "${url}"
   git -C "${WORK}/repo" fetch -q origin

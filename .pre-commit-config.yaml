@@ -68,6 +68,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: check-app-security-test
+        name: app-security check tests (throw-away copy of flux/, no cluster)
+        entry: tests/check-app-security.test.sh
+        language: script
+        files: ^(scripts/check-app-security\.sh|tests/check-app-security\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-image-tags-test
         name: image-tag check tests (throw-away copy of flux/apps)
         entry: tests/check-image-tags.test.sh
@@ -150,10 +158,10 @@ repos:
         stages: [pre-commit]
 
       - id: app-security
-        name: App manifests keep the security rules (no SA token, no pprof, no chaos in production)
+        name: App manifests keep the security rules (no SA token, no pprof, no chaos in production); no service links in any flux/ workload
         entry: scripts/check-app-security.sh
         language: script
-        files: ^flux/apps/.*\.ya?ml$
+        files: ^(flux/.*\.ya?ml|scripts/check-app-security\.sh)$
         pass_filenames: false
         stages: [pre-commit]
 

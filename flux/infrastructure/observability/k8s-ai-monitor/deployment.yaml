@@ -18,6 +18,9 @@ spec:
       annotations:
         safeops.io/secrets-rotated: "2026-10-12T17:05:26Z"
     spec:
+      # No <SERVICE>_PORT=tcp://... variables for the namespace's Services; KUBERNETES_SERVICE_* stay
+      # (scripts/check-app-security.sh says why).
+      enableServiceLinks: false
       serviceAccountName: k8s-ai-monitor
       # Restricted Pod Security, like the apps: the image's user monitor (uid 1000), and fsGroup
       # so that user can write the volume.

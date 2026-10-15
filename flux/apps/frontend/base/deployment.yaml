@@ -27,6 +27,9 @@ spec:
         app.kubernetes.io/name: frontend
         app.kubernetes.io/component: web
     spec:
+      # No <SERVICE>_PORT=tcp://... variables for the namespace's Services; KUBERNETES_SERVICE_* stay
+      # (scripts/check-app-security.sh says why).
+      enableServiceLinks: false
       # nginx never calls the Kubernetes API: no ServiceAccount token in the pod.
       automountServiceAccountToken: false
       securityContext:
