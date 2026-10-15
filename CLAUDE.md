@@ -60,6 +60,9 @@ infra/terraform/
   gcp_foundation/    # Google Cloud: APIs, node + deployer service accounts, GitHub Workload Identity
                      # Federation, alert e-mail channel, budget - applied once by a person, nothing billed
                      # (docs/gcp.md; `make -C infra/terraform/gcp_foundation bootstrap`, settings in .env.gcp)
+  gke_cluster/       # GKE Standard, per test cycle (created, tested, destroyed): own VPC, private nodes +
+                     # Cloud NAT, DNS endpoint only, pools "platform" + "apps"; `make plan|apply|destroy|leftovers`,
+                     # kubeconfig.yaml context gke-sre-control-plane (no credentials; gke-gcloud-auth-plugin)
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap (kustomizations, secrets)
