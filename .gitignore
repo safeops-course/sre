@@ -27,3 +27,5 @@ age.agekey
 
 # State lab: the second engineer's copy of infra/terraform/state-lab
 infra/terraform/state-lab-b/
+# gke-gcloud-auth-plugin caches its access token next to the kubeconfig - a credential
+gke_gcloud_auth_plugin_cache

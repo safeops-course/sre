@@ -1,13 +1,13 @@
-# Google Cloud (GKE) - foundation runbook
+# Google Cloud (GKE) - runbook
 
 The Google Cloud side of the platform comes in two Terraform modules:
 
 | Module | Lifetime | Who applies it | Costs |
 |---|---|---|---|
 | `infra/terraform/gcp_foundation` | once per project, stays | a person, from a workstation | nothing |
-| `infra/terraform/gke_cluster` (next) | per cycle: created, tested, destroyed | GitHub Actions, with approval | while it exists |
+| `infra/terraform/gke_cluster` | per cycle: created, tested, destroyed | a person today; later GitHub Actions, with approval | while it exists |
 
-This page covers the foundation: what it creates, why, and how to set it up with one command.
+This page covers the foundation (what it creates, why, one-command setup) and then [a cluster cycle](#a-cluster-cycle).
 
 ## What the foundation creates, and why
 
@@ -109,3 +109,37 @@ gcloud billing budgets list --billing-account=YOUR_BILLING_ACCOUNT
 | `SERVICE_DISABLED` right after the first apply | Enabling an API takes a minute to reach every Google system | Run `make plan` again after a minute. |
 | `missing: ...` from preflight | A setting is not in `.env.gcp` or your shell | Add it (template: `.env.gcp.example`). |
 | A deleted Workload Identity pool or provider "already exists" | Google keeps a deleted pool or provider for 30 days | Restore it (`gcloud iam workload-identity-pools undelete`) or wait. The foundation is applied once, not per cycle. |
+
+## A cluster cycle
+
+`infra/terraform/gke_cluster` builds a GKE Standard cluster for a test cycle, and the cluster is destroyed after it. It needs the foundation (the APIs, the `gke-nodes` account, the alert e-mail channel) and reads the same `.env.gcp`.
+
+### What it builds, and why
+
+| Piece | What | Why |
+|---|---|---|
+| Network | Its own VPC `sre`, one subnet with named Pod and Service ranges, Private Google Access | Never the `default` VPC. VPC-native: firewall rules and NetworkPolicies see real Pod IPs. Nodes reach Google APIs without NAT. |
+| Egress | Private nodes (no public IP); Cloud NAT with dynamic ports, error logs only, two alerts | No node can be reached from the internet. The alerts mean that connections out are failing right now. |
+| Control plane | DNS endpoint only, no IP endpoint | IAM decides who gets in, from a laptop or a GitHub runner alike. No IP allow-list to keep up to date. |
+| Cluster | Dataplane V2, Workload Identity, shielded nodes with secure boot, no kubelet read-only port, no client certificates, anonymous access limited to health checks | Google's hardening guide. Dataplane V2 enforces NetworkPolicies, egress included. |
+| Node pools | `platform` (fixed size) and `apps` (autoscaling), both running as `gke-nodes` | Split by role. `spot` is a setting per pool, `true` in the course's tfvars only because the cluster lives for one cycle. A cluster that matters sets `false`. |
+| Webhooks | No firewall rule | With the DNS endpoint only, GKE reaches admission webhooks through Konnectivity: Pod to Pod from `konnectivity-agent` (kube-system). Under default-deny that needs a NetworkPolicy, not a firewall rule. |
+| kubeconfig | `kubeconfig.yaml`, context `gke-sre-control-plane` | The DNS endpoint and `gke-gcloud-auth-plugin`, which gets a short-lived token for whoever runs kubectl. No credentials in the file. |
+
+Not here, on purpose:
+- **Customer-managed encryption keys (Cloud KMS).** Google encrypts etcd and disks by default. An own key is a compliance requirement, not a security gain for this platform, and it is billed per key and per operation.
+- **Google Managed Prometheus.** The platform runs its own Prometheus, and running both would collect everything twice.
+
+### Run a cycle
+
+The cluster costs money from the first minute: nodes, their disks and the NAT gateway. GKE's free tier credit covers the fee of one zonal cluster per billing account.
+
+```bash
+gcloud components install gke-gcloud-auth-plugin   # once
+make -C infra/terraform/gke_cluster plan            # read it
+make -C infra/terraform/gke_cluster apply           # about 10 minutes
+kubectl --kubeconfig infra/terraform/gke_cluster/kubeconfig.yaml get nodes
+make -C infra/terraform/gke_cluster destroy         # asks first, then runs make leftovers
+```
+
+`make leftovers` lists what can outlive a cluster and keep costing money: disks of PersistentVolumes, load balancer forwarding rules and addresses, NEGs, firewall rules, routers, networks and clusters. It exits 1 when anything is left. Delete what it names, then run it again.

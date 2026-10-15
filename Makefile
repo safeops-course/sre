@@ -47,7 +47,9 @@ tf: ## List the Terraform modules and how to run them
 	@echo "                                                     (needs the TF_VAR_* from load-env.sh; normally CI applies it)"
 	@echo "  gcp     infra/terraform/gcp_foundation   Google Cloud foundation   once, by a person: make -C infra/terraform/gcp_foundation plan | apply"
 	@echo "                                                     (APIs, service accounts, GitHub Workload Identity, alert e-mail, budget)"
-	@echo "  lab     infra/terraform/state-lab        Chapter 02 state lab      run by hand, as the lab says"
+	@echo "  gke     infra/terraform/gke_cluster      GKE cluster (Cloud)       per test cycle: make -C infra/terraform/gke_cluster plan | apply | destroy"
+	@echo "                                                     (destroy ends with make leftovers: nothing billable may stay)"
+	@echo "  lab     infra/terraform/state-lab       Chapter 02 state lab      run by hand, as the lab says"
 	@echo "Check without credentials: make validate"
 
 kind-plan: ## kind: plan and save it (read it before kind-apply)

@@ -18,7 +18,7 @@ set -e
 #
 # Providers are downloaded once into a shared plugin cache (TF_PLUGIN_CACHE_DIR, default
 # ~/.terraform.d/plugin-cache) and linked from there. Without it every run downloaded every provider
-# of all three modules again - half a minute per commit, and one flaky download from GitHub failed
+# of every module again - half a minute per commit, and one flaky download from GitHub failed
 # the hook (found in the Chapter 05 lab, 2026-10-04).
 # A git hook runs with GIT_INDEX_FILE (and GIT_DIR, GIT_WORK_TREE) set to the commit's own - with
 # `git commit -a` a temporary index. terraform init downloads registry modules with git clone, which
@@ -68,7 +68,7 @@ release_lock() {
 data_dir=""
 # On every exit: the current module's data dir (init or validate may fail) and the lock.
 trap 'if [ -n "${data_dir}" ]; then rm -rf "${data_dir}"; fi; release_lock' EXIT
-for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation infra/terraform/state-lab; do
+for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation infra/terraform/gke_cluster infra/terraform/state-lab; do
   echo "terraform validate: ${dir}"
   data_dir="$(mktemp -d)"
   TF_DATA_DIR="${data_dir}" terraform -chdir="${dir}" init -input=false -backend=false >/dev/null
