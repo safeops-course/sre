@@ -30,6 +30,14 @@ fi
 # A git hook (pre-commit) exports GIT_INDEX_FILE and friends for this repository; the throw-away
 # repositories below must not inherit them - a worktree there would open this repository's index.
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
+# No background git maintenance in the throw-away repositories: `git commit` / `fetch` may start a
+# detached `git maintenance run --auto`, which can still write into a repository while the EXIT trap
+# deletes it ("rm: cannot remove .../repo: Directory not empty" - once in CI on 2026-10-15, every
+# assertion ok; the likely cause, not reproduced). Config from the environment reaches every git call,
+# capstone-fault.sh's too.
+export GIT_CONFIG_COUNT=2
+export GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
+export GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 FAILED=0
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
