@@ -15,7 +15,10 @@ export TF_VAR_expected_principal GOOGLE_APPLICATION_CREDENTIALS TF_VAR_uptrace_d
 # needs it - plan, apply and destroy. Read from the file, so it is never typed or kept in an env file.
 # No default path: a workstation can hold several age keys, and the wrong one fails only inside the
 # cluster, when Flux cannot decrypt. `settings` checks the key against the recipients in .sops.yaml.
-export TF_VAR_sops_age_key = $(if $(SOPS_AGE_KEY_FILE),$(shell cat "$(SOPS_AGE_KEY_FILE)" 2>/dev/null))
+# Only the AGE-SECRET-KEY-... line: the file also holds comment lines, and $(shell) joins lines with
+# spaces - the whole file became one line starting with "#", which age cannot read (seen 2026-10-15:
+# every secrets-* Kustomization failed with "cannot get sops data key").
+export TF_VAR_sops_age_key = $(if $(SOPS_AGE_KEY_FILE),$(shell grep -o 'AGE-SECRET-KEY-[A-Z0-9]*' "$(SOPS_AGE_KEY_FILE)" 2>/dev/null))
 SOPS_CONFIG := ../../../.sops.yaml
 ifneq ($(R2_ACCESS_KEY_ID),)
 export AWS_ACCESS_KEY_ID     := $(R2_ACCESS_KEY_ID)

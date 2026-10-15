@@ -43,9 +43,8 @@ alert_channel_display_name = "Platform alerts (e-mail)"
 deletion_protection = false
 
 # Flux follows the platform repository and reconciles the GKE profile - the same platform as Hetzner.
-flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
-flux_git_repository_branch = "main"
-flux_kustomization_path    = "./flux/bootstrap/profiles/gke"
-image_registry             = "ghcr.io/safeops-course"
-git_owner                  = "safeops-course"
+flux_git_repository_url = "https://github.com/safeops-course/sre.git"
+flux_kustomization_path = "./flux/bootstrap/profiles/gke"
+image_registry          = "ghcr.io/safeops-course"
+git_owner               = "safeops-course"
 # No backup bucket yet (as on Hetzner): backup_s3_endpoint / backup_s3_bucket stay empty.

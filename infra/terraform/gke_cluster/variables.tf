@@ -118,8 +118,9 @@ variable "flux_git_repository_url" {
 }
 
 variable "flux_git_repository_branch" {
-  description = "Git branch Flux follows."
+  description = "Git branch Flux follows. Not in terraform.tfvars on purpose: a cycle that tests a branch sets TF_VAR_flux_git_repository_branch, and a tfvars value would win over it."
   type        = string
+  default     = "main"
 }
 
 variable "flux_kustomization_path" {
