@@ -5,8 +5,12 @@
 #      remove their own finalizers (HelmRelease, ImagePolicy, ...) when those objects are deleted;
 #      stop Kyverno and remove all admission webhooks - teardown needs none, and a webhook without a
 #      running backend (failurePolicy Fail) blocks every delete in the namespaces;
+#      remove every PodDisruptionBudget outside kube-system - in a teardown it only makes a drain or an
+#      eviction wait (GKE waits up to an hour per node pool, billed);
 #   2. delete the target namespaces except flux-system - with them go the workloads, CNPG clusters
-#      and their PVCs, so no controller recreates a PVC; then every other PVC in the cluster;
+#      and their PVCs, so no controller recreates a PVC; then stop their pods at once (grace period
+#      0): CloudNativePG gives Postgres up to 30 minutes to shut down, and a running pod keeps its
+#      disk attached; a terminating namespace takes no new pod; then every other PVC in the cluster;
 #   3. wait until the PersistentVolumes are gone - volumes with reclaimPolicy Delete (hcloud-volumes)
 #      are removed by the CSI driver only while it runs; after the nodes are gone they stay, billed;
 #   4. wait for those namespaces; only for what is still stuck, clear the finalizers on the objects
@@ -21,8 +25,8 @@
 #   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and gke_cluster/flux.tf - not meant to be run by hand.
 # Needs kubectl (and jq only for the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
-# Changes the cluster: it suspends Flux, stops Kyverno, deletes the webhooks, the given namespaces
-# and every PVC. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT (seconds, default 300 / 180).
+# Changes the cluster: it suspends Flux, stops Kyverno, deletes the webhooks, every PodDisruptionBudget
+# outside kube-system, the given namespaces (their pods at once) and every PVC. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT (seconds, default 300 / 180).
 # Without kubectl, the kubeconfig or a reachable cluster it warns and exits 0 - nothing to clean.
 
 set -o errexit
@@ -117,6 +121,33 @@ remove_admission_webhooks() {
   kc delete validatingwebhookconfigurations,mutatingwebhookconfigurations --all >/dev/null 2>&1 || true
 }
 
+# remove_disruption_budgets - delete every PodDisruptionBudget outside kube-system (the provider's own
+# stay). Nothing is kept running in a teardown, and a budget at 0 allowed disruptions holds a drain:
+# GKE waited for them when it deleted a node pool (2026-10-15, ~1 h billed).
+remove_disruption_budgets() {
+  local pdbs ns name
+  pdbs="$(kc get pdb -A -o jsonpath='{range .items[*]}{.metadata.namespace} {.metadata.name}{"\n"}{end}' 2>/dev/null)" || {
+    warn "could not list PodDisruptionBudgets - a drain may wait for them"
+    return 0
+  }
+  while read -r ns name; do
+    [[ -z "${ns}" || "${ns}" == kube-system ]] && continue
+    log "removing PodDisruptionBudget ${ns}/${name}"
+    kc -n "${ns}" delete pdb "${name}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+  done <<<"${pdbs}"
+}
+
+# stop_pods NS... - delete every pod in these (already terminating) namespaces with grace period 0.
+# Their data goes with the cluster; waiting for a graceful stop only keeps disks attached - Postgres
+# (CloudNativePG) may take 30 minutes - while the PVs wait and the nodes are billed.
+stop_pods() {  # namespace...
+  local ns
+  for ns in "$@"; do
+    log "stopping the pods in ${ns} now (grace period 0)"
+    kc -n "${ns}" delete pods --all --grace-period=0 --force --wait=false >/dev/null 2>&1 || true
+  done
+}
+
 # delete_volumes - delete every PVC and wait until the PersistentVolumes are gone; on timeout list
 # the ones left (on Hetzner they would outlive the cluster and keep being billed).
 delete_volumes() {
@@ -188,7 +219,7 @@ unblock_namespace() {
 # --- main ---
 # Without kubectl, a kubeconfig or a reachable API there is nothing this script can clean: warn and
 # let Terraform go on (exit 0), as the provisioner continues on failure anyway.
-SKIPPED="skipped: suspend Flux, stop Kyverno, remove admission webhooks, delete the namespaces and PVCs, wait for the PersistentVolumes, clear stuck finalizers, remove Flux"
+SKIPPED="skipped: suspend Flux, stop Kyverno, remove admission webhooks and PodDisruptionBudgets, delete the namespaces, their pods and PVCs, wait for the PersistentVolumes, clear stuck finalizers, remove Flux"
 if ! command -v kubectl >/dev/null 2>&1; then
   warn "kubectl not found - no cluster-side cleanup (${SKIPPED}); volumes created by the cluster may be left behind"
   exit 0
@@ -236,8 +267,10 @@ done
 # volumes while the cluster can still clean up, and remove Flux last.
 suspend_flux
 remove_admission_webhooks
+remove_disruption_budgets
 if (( ${#app_namespaces[@]} > 0 )); then
   delete_namespaces "${app_namespaces[@]}"
+  stop_pods "${app_namespaces[@]}"
 fi
 delete_volumes
 if (( ${#app_namespaces[@]} > 0 )); then
