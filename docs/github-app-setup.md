@@ -71,7 +71,7 @@ github_app_private_key_file = "~/.ssh/flux-github-app.pem" # Path to downloaded 
 # GitOps Configuration (already configured)
 flux_git_repository_url    = "https://github.com/safeops-course/sre.git"
 flux_git_repository_branch = "main"
-flux_kustomization_path    = "./flux/bootstrap/profiles/hetzner"
+flux_kustomization_path    = "./flux/bootstrap/profiles/local"   # the kind profile (the default)
 ```
 
 **Important:** Terraform will automatically create the Kubernetes secret from these variables.

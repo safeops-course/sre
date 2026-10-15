@@ -52,7 +52,7 @@ GitOps reconciliation is on by default (course repo, local profile, anonymous HT
 cp infra/terraform/kind_cluster/terraform.tfvars.example infra/terraform/kind_cluster/terraform.tfvars
 # edit flux_git_repository_url = "https://github.com/<you>/sre.git"
 ```
-For the full platform profile, override for that run:
+For the full platform on kind - the Hetzner profile, for checking the whole tree before a Hetzner cycle - override for that run. It needs the platform's SOPS key (`TF_VAR_sops_age_key`), and Traefik's LoadBalancer Service stays `pending`: kind has no load balancer.
 ```bash
 export TF_VAR_flux_kustomization_path="./flux/bootstrap/profiles/hetzner"     # full platform (needs cloud secrets)
 export TF_VAR_local_profile=false                                              # skip the generated local secrets

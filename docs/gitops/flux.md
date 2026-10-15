@@ -23,7 +23,7 @@ GitOps reconciliation is enabled by default against the course repo and the loca
 ```bash
 export TF_VAR_flux_git_repository_url="https://github.com/safeops-course/sre.git"
 export TF_VAR_flux_git_repository_branch="main"
-export TF_VAR_flux_kustomization_path="./flux/bootstrap/profiles/hetzner"   # default: ./flux/bootstrap/profiles/local
+export TF_VAR_flux_kustomization_path="./flux/bootstrap/profiles/local"   # the default; a profile per cluster under flux/bootstrap/profiles/
 ```
 Terraform will create a `GitRepository` and `Kustomization` in `flux-system` pointing to the specified path. Adjust the URL/path to match your desired GitOps layout.
 Terraform sets the `sync` block on `FluxInstance`; Flux then manages `GitRepository`/`Kustomization` resources in-cluster.

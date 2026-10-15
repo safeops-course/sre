@@ -5,7 +5,14 @@ database and owner `app`, credentials in the Secret `app-postgres-app`.
 
 - **Flux never prunes them:** `kustomize.toolkit.fluxcd.io/prune: disabled` on each Cluster. A database
   that leaves Git - a moved folder, a profile that no longer includes it, a bad revert - stays with its
-  data; deleting one on purpose is a `kubectl delete`.
+  data. Deleting one on purpose takes three steps, in this order:
+  1. remove the Cluster from Git (pull request, merge);
+  2. let its Kustomization reconcile (`flux reconcile kustomization cnpg-cluster-<env> --with-source`) -
+     Flux drops it from the inventory and leaves it running;
+  3. `kubectl -n <env> delete cluster.postgresql.cnpg.io app-postgres`.
+
+  A `kubectl delete` while the Cluster is still in Git is undone at the next reconcile - with a new,
+  empty database.
 
 ## Backups
 
