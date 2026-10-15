@@ -50,6 +50,8 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 	@$(GUARD_TF) apply --dir . --out tfplan --max-age-minutes $(TF_MAX_AGE)
 
 # The project matches the code (no drift) and holds no default VPC. 0 = yes, 1 = not.
+# `networks list` exits 0 with nothing printed when there is no such network and non-zero on any error
+# (expired login, API off) - an error never reads as "no default VPC".
 # Drift = a resource the plan would create, change or delete. Not -detailed-exitcode: the data source
 # in the check block is re-read on every apply, so that exit code would always say "changes".
 verify: preflight init ## The foundation matches the code and the project has no default VPC
@@ -58,9 +60,9 @@ verify: preflight init ## The foundation matches the code and the project has no
 	rm -f verify.tfplan; \
 	if [ -n "$$changes" ]; then echo "FAIL drift: $$changes - run make plan and read it" >&2; exit 1; fi; \
 	echo "OK   no drift: the project matches the code"
-	@if gcloud compute networks describe default --project=$(GCP_PROJECT) >/dev/null 2>&1; then \
-	  echo "FAIL $(GCP_PROJECT) has a default VPC: make delete-default-network CONFIRM=yes" >&2; exit 1; \
-	else echo "OK   no default VPC"; fi
+	@net="$$(gcloud compute networks list --project=$(GCP_PROJECT) --filter=name=default --format='value(name)')" || { echo "FAIL could not list the networks of $(GCP_PROJECT) (gcloud error above)" >&2; exit 1; }; \
+	if [ -n "$$net" ]; then echo "FAIL $(GCP_PROJECT) has a default VPC: make delete-default-network CONFIRM=yes" >&2; exit 1; fi; \
+	echo "OK   no default VPC"
 
 # The "default" VPC Google creates with the Compute API opens SSH and RDP to the internet; nothing here
 # uses it (main.tf, check "no_default_network"). Its firewall rules go first - a network with rules
@@ -70,8 +72,8 @@ delete-default-network: ## One-time: delete the "default" VPC and its firewall r
 	@test "$(CONFIRM)" = yes || { echo "deletes the default VPC of $(GCP_PROJECT) and its firewall rules - run again with CONFIRM=yes" >&2; exit 2; }
 	@rules="$$(gcloud compute firewall-rules list --project=$(GCP_PROJECT) --filter='network~/default$$' --format='value(name)')"; \
 	  if [ -n "$$rules" ]; then gcloud compute firewall-rules delete --project=$(GCP_PROJECT) --quiet $$rules; fi
-	@if gcloud compute networks describe default --project=$(GCP_PROJECT) >/dev/null 2>&1; then \
-	  gcloud compute networks delete default --project=$(GCP_PROJECT) --quiet; \
+	@net="$$(gcloud compute networks list --project=$(GCP_PROJECT) --filter=name=default --format='value(name)')" || exit 1; \
+	if [ -n "$$net" ]; then gcloud compute networks delete default --project=$(GCP_PROJECT) --quiet; \
 	else echo "no default network in $(GCP_PROJECT)"; fi
 
 # The whole first setup, in order: the default VPC exists only after the apply turned the Compute

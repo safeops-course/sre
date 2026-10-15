@@ -20,16 +20,24 @@ variable "expected_principal" {
 variable "billing_account_id" {
   description = "Billing account of the project (XXXXXX-XXXXXX-XXXXXX), for the budget. Set TF_VAR_billing_account_id."
   type        = string
+  sensitive   = true # kept out of plan output, like out of the repository
 }
 
 variable "alert_email" {
   description = "Where budget and platform alerts go (a Cloud Monitoring e-mail channel). Set TF_VAR_alert_email."
   type        = string
+  sensitive   = true
 }
 
 variable "budget_amount" {
   description = "Monthly budget, in the billing account's own currency. Alerts at 50, 90 and 100 percent of actual spend and at 100 percent of the forecast. A budget only alerts - it never stops spending."
   type        = number
+
+  # The budget API takes whole units (specified_amount.units); a fraction would fail only at apply.
+  validation {
+    condition     = var.budget_amount > 0 && floor(var.budget_amount) == var.budget_amount
+    error_message = "budget_amount is ${var.budget_amount}; use a whole number above 0 (the budget API takes whole currency units)."
+  }
 }
 
 variable "github_repository_id" {
