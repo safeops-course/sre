@@ -251,7 +251,7 @@ collect_links() {
   BUILD="$1" yq -N 'select(tag == "!!map")
       | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
       | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p
-      | [.kind, (.metadata.namespace // "") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), env(BUILD)]
+      | [.kind, (.metadata.namespace // "-") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), env(BUILD)]
       | @tsv' "$2" >>"${links_rows}"
 }
 
@@ -301,25 +301,26 @@ if ((workloads == 0)); then
   failures+=("flux/: no workload built - nothing was checked for enableServiceLinks")
 fi
 
-# Workload files no build reached (matched by kind and name), checked in the source. Overlay patches are
-# partial objects, not workloads of their own.
-awk -F'\t' '{ sub(/^[^\/]*\//, "", $2); print $1 "\t" $2 }' "${links_rows}" | sort -u >"${render_tmp}/built-names"
+# Workload files no build reached, checked in the source. A file is matched to a build by kind, namespace
+# and name; one without a namespace ("-": a base whose overlay sets it) cannot be matched, so it is checked in
+# the file as well. Overlay patches are partial objects, not workloads of their own.
+cut -f1,2 "${links_rows}" | sort -u >"${render_tmp}/built-names"
 unbuilt=0
 # shellcheck disable=SC2016 # $p below is a yq variable, not a shell one
 if ! sources="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
   xargs -0 yq -N 'select(tag == "!!map")
     | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
     | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p
-    | [.kind, .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
+    | [.kind, (.metadata.namespace // "-"), .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
   failures+=("flux/: yq could not read the workload files: $(cat "${render_tmp}/err")")
   sources=""
 fi
-while IFS=$'\t' read -r kind name value file; do
+while IFS=$'\t' read -r kind namespace name value file; do
   [[ -z "${kind}" ]] && continue
-  grep -qxF "${kind}"$'\t'"${name}" "${render_tmp}/built-names" && continue
+  [[ "${namespace}" != "-" ]] && grep -qxF "${kind}"$'\t'"${namespace}/${name}" "${render_tmp}/built-names" && continue
   unbuilt=$((unbuilt + 1))
   if [[ "${value}" != "!!bool false" ]]; then
-    failures+=("${file}: ${kind} ${name} (no profile deploys it - checked in the file) has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
+    failures+=("${file}: ${kind} ${namespace}/${name} (not matched to a build - checked in the file) has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
   fi
 done <<<"${sources}"
 
@@ -328,4 +329,4 @@ if ((${#failures[@]} > 0)); then
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${unbuilt} workload files no profile deploys, checked in the file)"
+echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${unbuilt} workload files not matched to a build, checked in the file)"

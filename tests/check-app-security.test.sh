@@ -263,6 +263,25 @@ spec:
     name: flux-system'
   yq -i '.resources += ["old.yaml"]' "${R}/${PROFILE}"
 }
+# A file no build deploys, with the kind and name of a built workload (Deployment minio) in another namespace.
+case_28() {
+  write_file flux/infrastructure/data/minio-copy/deployment.yaml 'apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: other
+spec:
+  selector:
+    matchLabels: {app: minio}
+  template:
+    metadata:
+      labels: {app: minio}
+    spec:
+      enableServiceLinks: true
+      containers:
+        - name: minio
+          image: minio'
+}
 
 # CASES - function|expected verdict|reason a fail must name (empty: the rule itself)|name
 CASES=(
@@ -290,9 +309,10 @@ CASES=(
   'case_22|fail||a workload in a path without kustomization.yaml (Flux generates one) is checked'
   'case_23|fail|build failed|a kustomization that does not build fails the check'
   'case_24|fail||a patch two Flux Kustomizations deep (profile -> apps-develop -> backend-develop) fails'
-  'case_25|fail|no profile deploys it|a workload file no profile deploys (the opt-in canary) is checked in the file'
+  'case_25|fail|not matched to a build|a workload file no profile deploys (the opt-in canary) is checked in the file'
   'case_26|fail|add it to FOREIGN_SOURCES|a Flux Kustomization on an unknown other source fails'
   'case_27|fail|builds kustomize.toolkit.fluxcd.io/v1 only|a Flux Kustomization with another apiVersion fails'
+  'case_28|fail|not matched to a build|a file no build deploys, named like a built workload in another namespace, is checked in the file'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or
