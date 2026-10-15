@@ -133,6 +133,25 @@ spec:
 verdict "an inline JSON patch that keeps it false passes" pass
 
 fresh_copy
+write_file flux/infrastructure/inline-patch.yaml 'apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: example
+spec:
+  patches:
+    - patch: |
+        - op: remove
+          path: /spec/template/spec/enableServiceLinks
+      target:
+        kind: Deployment'
+verdict "an inline JSON patch that removes it fails (an absent field defaults to true)" fail
+
+fresh_copy
+write_file flux/infrastructure/data/minio/patches/remove.yaml '- op: remove
+  path: /spec/template/spec/enableServiceLinks'
+verdict "a JSON patch file ending with the remove fails" fail
+
+fresh_copy
 write_file flux/infrastructure/broken.yaml 'kind: Deployment
   bad: ['
 verdict "a YAML file yq cannot read fails the check" fail

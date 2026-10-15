@@ -143,8 +143,9 @@ scripts/             # Pre-commit hooks, automation scripts
 - App security rules (enforced by `scripts/check-app-security.sh` in pre-commit and Flux Diff): every app
   Deployment sets `automountServiceAccountToken: false` and, when an HPA targets it, no `spec.replicas`;
   every workload written under `flux/` (apps and platform: Guardian, MinIO, chaos, synthetic traffic) sets
-  `enableServiceLinks: false` (and no patch sets it true) - only the environment in the manifest; Kubernetes'
-  `BACKEND_PORT=tcp://...` would have crash-looped the frontend (frontend#25, caught on kind); Helm/operator pods are not covered;
+  `enableServiceLinks: false` (and no patch sets it true or removes it) - no variables for the namespace's Services
+  (`KUBERNETES_SERVICE_HOST`/`_PORT` are still added); `BACKEND_PORT=tcp://...` would have crash-looped the frontend
+  (frontend#25, caught on kind); Helm/operator pods are not covered;
   every container runs non-root with a read-only root filesystem, no privilege escalation, capabilities
   drop ALL and seccomp RuntimeDefault (Pod Security restricted enforces all but the read-only root filesystem
   at admission); every emptyDir has a sizeLimit; every app container has `lifecycle.preStop.sleep` >= 5 s,

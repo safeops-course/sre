@@ -8,8 +8,9 @@
 #     under flux/ (a patch, an inline Kustomization patch) sets it to true. Kubernetes otherwise adds
 #     variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new pod;
 #     BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
-#     pod (frontend#25, caught on kind before it shipped). Only the environment the manifest sets; names
-#     resolve through DNS (KUBERNETES_SERVICE_HOST is added either way)
+#     pod (frontend#25, caught on kind before it shipped). Without them no variable of the namespace's
+#     Services reaches the pod; names resolve through DNS. KUBERNETES_SERVICE_HOST / _PORT (the API
+#     server) are still added - the kubelet adds them either way
 #   - every container (and init container): runAsNonRoot, readOnlyRootFilesystem, no privilege
 #     escalation, capabilities drop ALL, seccomp RuntimeDefault - the container value wins over
 #     the pod's, as in Kubernetes. Pod Security "restricted" (enforced on develop, staging and
@@ -217,15 +218,17 @@ if ((workloads == 0)); then
   failures+=("flux/: no workload found - nothing was checked for enableServiceLinks")
 fi
 while IFS= read -r hit; do
-  [[ -n "${hit}" ]] && failures+=("${hit}: enableServiceLinks must stay false (a patch must not turn it back on)")
+  [[ -n "${hit}" ]] && failures+=("${hit}: enableServiceLinks must stay false (a patch must not set it true or remove it - removed, it defaults to true)")
 done < <(
   # the field set to true (a patch file, a strategic-merge patch inline in a Kustomization) ...
   grep -rnE --include='*.yaml' --include='*.yml' 'enableServiceLinks:[[:space:]]*"?true' flux || true
-  # ... or a JSON patch op: `path: .../enableServiceLinks` with `value: true` on the next line
+  # ... or a JSON patch op on it whose next line is not `value: false`: a replace/add to true, and a
+  # remove too (an absent field defaults to true). Printed as file:line of the `path:` line.
   find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -exec awk '
-    /path:.*\/enableServiceLinks/ { p = FNR; next }
-    p && FNR == p + 1 && /value:[[:space:]]*"?true/ { print FILENAME ":" FNR }
-    { p = 0 }' {} +
+    FNR == 1 { if (p) print f ":" p; p = 0; f = FILENAME }
+    /path:.*\/enableServiceLinks/ { if (p) print f ":" p; p = FNR; next }
+    p { if ($0 !~ /value:[[:space:]]*"?false/) print f ":" p; p = 0 }
+    END { if (p) print f ":" p }' {} +
 )
 
 if ((${#failures[@]} > 0)); then
