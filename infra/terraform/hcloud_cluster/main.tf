@@ -387,9 +387,11 @@ resource "null_resource" "flux_operator_install" {
 # branch and path to follow. A change of any trigger re-applies it.
 # https://fluxcd.control-plane.io/operator/fluxinstance/
 resource "null_resource" "flux_instance" {
+  # cluster-config first: the Kustomizations substitute from it (${cluster_ipv6_range} and others).
   depends_on = [
     null_resource.flux_operator_install,
     kubernetes_secret_v1.flux_git_credentials,
+    kubernetes_config_map_v1.cluster_config,
   ]
 
   triggers = {

@@ -269,6 +269,9 @@ EOF
   fi
 fi
 
+# lb_hostnames ADDRS - the load balancer entries that are names, not IP addresses (one per line).
+lb_hostnames() { tr ' ' '\n' <<<"$1" | grep -v ':' | grep '[a-zA-Z]' || true; }
+
 # C5 - the ingress gets an address: Traefik's Service (Flux) has one from the provider's load balancer.
 # No new load balancer is created - it would cost money and could outlive the run.
 svc="$(k -n traefik get service traefik -o json 2>/dev/null || echo '{}')"
@@ -277,8 +280,22 @@ case "$(jq -r '.spec.type // "missing"' <<<"$svc")" in
     addrs="$(jq -r '[.status.loadBalancer.ingress[]? | .ip // .hostname] | join(" ")' <<<"$svc")"
     if [ -z "$addrs" ]; then
       fail C5 "Traefik's Service has no load balancer address"
-    elif [ "$dual" = true ] && [ -n "$(tr ' ' '\n' <<<"$addrs" | grep -v ':' | grep '[a-zA-Z]' || true)" ]; then
-      pass C5 "load balancer for the ingress: $addrs (a hostname - its address families are the provider's, not checked)"
+    elif [ "$dual" = true ] && [ -n "$(lb_hostnames "$addrs")" ]; then
+      # A hostname (AWS NLB): each one must resolve to an IPv4 and an IPv6 address.
+      if ! command -v dig >/dev/null 2>&1; then
+        skip C5 "load balancer for the ingress: $addrs - a hostname, dig not found to check its A and AAAA records"
+      else
+        missing=""
+        for h in $(lb_hostnames "$addrs"); do
+          [ -n "$(dig +short A "$h" | grep -E '^[0-9.]+$' || true)" ] || missing+=" $h (A)"
+          [ -n "$(dig +short AAAA "$h" | grep ':' || true)" ] || missing+=" $h (AAAA)"
+        done
+        if [ -z "$missing" ]; then
+          pass C5 "load balancer for the ingress: $addrs (A and AAAA records)"
+        else
+          fail C5 "load balancer for the ingress - the cluster is dual-stack, records missing:$missing"
+        fi
+      fi
     elif [ "$dual" = true ] && [ "$(families_of "$addrs")" != "yes yes" ]; then
       fail C5 "load balancer for the ingress has one family only ($addrs) - the cluster is dual-stack, the ingress must be too"
     else

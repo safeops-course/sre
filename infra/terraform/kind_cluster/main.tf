@@ -371,9 +371,11 @@ resource "null_resource" "flux_operator_install" {
 # The FluxInstance: which Flux version to run, and which Git repository, branch and
 # path to follow. From here on Git drives what runs in the cluster (Chapter 03).
 resource "null_resource" "flux_instance" {
+  # cluster-config first: the Kustomizations substitute from it (${cluster_ipv6_range} and others).
   depends_on = [
     null_resource.flux_operator_install,
-    kubernetes_secret_v1.flux_git_auth
+    kubernetes_secret_v1.flux_git_auth,
+    kubernetes_config_map_v1.cluster_config,
   ]
 
   triggers = {
