@@ -99,8 +99,20 @@ suspend_flux() {
   done
 }
 
-# Last: the FluxInstance (flux-operator uninstalls the controllers on its deletion), then flux-system.
+# Last: the operator's own objects, the FluxInstance (flux-operator uninstalls the controllers on its
+# deletion), then flux-system. ResourceSets and ResourceSetInputProviders carry a finalizer that only
+# flux-operator removes - delete them while it still runs: deleting flux-system took the operator with
+# it, the three backend input providers kept the namespace terminating, and the 180 s fallback below had
+# to clear their finalizers (GKE cycle 2026-10-16).
 remove_flux() {
+  local kind
+  for kind in resourcesets.fluxcd.controlplane.io resourcesetinputproviders.fluxcd.controlplane.io; do
+    api_exists "${kind}" || continue
+    log "removing the ${kind%%.*} while flux-operator runs"
+    kc delete "${kind}" --all --all-namespaces --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    wait_until_empty 120 get "${kind}" --all-namespaces -o name \
+      || warn "${kind%%.*} still present after 120s - their finalizers are cleared with the namespace"
+  done
   if api_exists fluxinstances.fluxcd.controlplane.io; then
     log "removing the FluxInstance"
     kc -n flux-system delete fluxinstance flux --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
