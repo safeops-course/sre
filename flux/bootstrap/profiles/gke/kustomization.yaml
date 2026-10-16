@@ -4,8 +4,9 @@
 #
 #   base         flux/bootstrap/flux-system - what every cluster runs
 #   components   every one, as on Hetzner
-#   patches      none for Traefik: the base's LoadBalancer Service is what GKE needs - GKE creates
-#                a passthrough network load balancer for it, and deletes it with the Service (the
+#   patches      Traefik's LoadBalancer Service gets GKE's backend-service load balancer class - the
+#                only one with a dual-stack (IPv4 + IPv6) external passthrough load balancer before GKE
+#                1.37, where it becomes the default. GKE deletes the load balancer with the Service (the
 #                destroy removes the Service first: infra/terraform/gke_cluster/flux.tf)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -24,3 +25,24 @@ patches:
       - op: replace
         path: /spec/path
         value: ./flux/bootstrap/profiles/gke
+
+  # --- Traefik: a dual-stack load balancer -----------------------------------
+  # The base Service asks for both families (RequireDualStack). GKE gives a LoadBalancer Service an IPv6
+  # forwarding rule only with the backend-service based external passthrough load balancer; before 1.37
+  # that needs this class (immutable - set when the Service is created, as every cycle does).
+  # https://cloud.google.com/kubernetes-engine/docs/concepts/service-load-balancer-parameters
+  - target: { kind: Kustomization, name: traefik }
+    patch: |-
+      - op: add
+        path: /spec/patches
+        value:
+          - target: { kind: HelmRelease, name: traefik }
+            patch: |-
+              apiVersion: helm.toolkit.fluxcd.io/v2
+              kind: HelmRelease
+              metadata: { name: traefik }
+              spec:
+                values:
+                  service:
+                    spec:
+                      loadBalancerClass: networking.gke.io/l4-regional-external

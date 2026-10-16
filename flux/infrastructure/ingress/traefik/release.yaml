@@ -60,6 +60,12 @@ spec:
         cpu: 300m
         memory: 150Mi
     # service.spec.type stays the chart's default, LoadBalancer; its annotations come from the profile.
+    # Both families, or the Service fails loudly: the load balancer gets an IPv6 address too, and
+    # external-dns publishes its AAAA record next to the A record.
+    service:
+      spec:
+        ipFamilyPolicy: RequireDualStack
+        ipFamilies: [IPv4, IPv6]
     ports:
       web:
         http:

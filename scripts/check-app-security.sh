@@ -33,7 +33,8 @@
 #     "false" in production
 #   - production: no container sets RANDOM_ERROR_RATE (fault injection - backend Ch15, frontend Ch19)
 #   - every overlay renders at least one Deployment (an empty render must not pass as OK)
-#   - every NetworkPolicy rule under flux/ that opens 0.0.0.0/0 also opens ::/0, and the reverse: an
+#   - every NetworkPolicy rule under flux/ that opens 0.0.0.0/0 also opens ::/0, and the reverse (/0 or its
+#     two /1 halves - the form a rule takes when it must reach the nodes under Cilium): an
 #     ipBlock covers one family, so on a dual-stack cluster 0.0.0.0/0 alone leaves IPv6 closed under
 #     default-deny (a host with an AAAA record times out) and ::/0 alone opens IPv6 only. When the IPv4
 #     block cuts out private ranges, the IPv6 one cuts out fc00::/7 (unique local), fe80::/10
@@ -374,26 +375,34 @@ while IFS=$'\t' read -r policy rule blocks file; do
   ip_rules=$((ip_rules + 1))
   # Every block counts - a rule may list the same CIDR twice, and the peers add up: one block without an
   # except opens what another one cuts out.
-  v4_excepts=() v6_excepts=()
+  # A wide block opens (nearly) every address of its family: /0, or a /1 half - the form a rule takes when
+  # it must reach the nodes under Cilium, which reads exactly /0 as "world", without the nodes. Every wide
+  # block is checked on its own: excepts of one block never cover another.
+  v4_wide=() v6_wide=()
   for block in ${blocks}; do
-    [[ "${block%%|*}" == "0.0.0.0/0" ]] && v4_excepts+=("${block#*|}")
-    [[ "${block%%|*}" == "::/0" ]] && v6_excepts+=("${block#*|}")
+    case "${block%%|*}" in
+      */0 | */1) if [[ "${block%%|*}" == *:* ]]; then v6_wide+=("${block}"); else v4_wide+=("${block}"); fi ;;
+    esac
   done
   where="${file}: NetworkPolicy ${policy} ${rule}"
-  if ((${#v4_excepts[@]} > 0 && ${#v6_excepts[@]} == 0)); then
-    failures+=("${where} opens 0.0.0.0/0 but not ::/0 - on a dual-stack cluster IPv6 stays closed; add the IPv6 twin")
-  elif ((${#v4_excepts[@]} == 0 && ${#v6_excepts[@]} > 0)); then
-    failures+=("${where} opens ::/0 but not 0.0.0.0/0 - one rule for both families, or neither")
-  elif ((${#v4_excepts[@]} > 0)); then
-    # IPv4 keeps private ranges out only when every IPv4 block cuts something out; then every IPv6 block
-    # must cut out the private IPv6 ranges - one ::/0 without them opens IPv6 whatever the others say.
+  if ((${#v4_wide[@]} > 0 && ${#v6_wide[@]} == 0)); then
+    failures+=("${where} opens all IPv4 (${v4_wide[0]%%|*}) but not IPv6 - on a dual-stack cluster IPv6 stays closed; add the IPv6 twin (::/0, or ::/1 + 8000::/1)")
+  elif ((${#v4_wide[@]} == 0 && ${#v6_wide[@]} > 0)); then
+    failures+=("${where} opens all IPv6 (${v6_wide[0]%%|*}) but not IPv4 - one rule for both families, or neither")
+  elif ((${#v4_wide[@]} > 0)); then
+    # IPv4 keeps private ranges out only when every wide IPv4 block cuts something out; then every wide
+    # IPv6 block must be ::/0 cutting out the private IPv6 ranges (a /1 half cannot hold them all).
     v4_cuts=yes
-    for excepts in "${v4_excepts[@]}"; do [[ -n "${excepts}" ]] || v4_cuts=no; done
+    for block in "${v4_wide[@]}"; do [[ -n "${block#*|}" ]] || v4_cuts=no; done
     if [[ "${v4_cuts}" == yes ]]; then
-      for excepts in "${v6_excepts[@]}"; do
+      for block in "${v6_wide[@]}"; do
+        if [[ "${block%%|*}" != "::/0" ]]; then
+          failures+=("${where} cuts private ranges out of IPv4 but opens IPv6 with ${block%%|*} - use ::/0 with the private IPv6 ranges cut out")
+          continue
+        fi
         for range in fc00::/7 fe80::/10 64:ff9b::/96 64:ff9b:1::/48; do
-          [[ ",${excepts}," == *",${range},"* ]] ||
-            failures+=("${where} cuts private ranges out of 0.0.0.0/0 but a ::/0 block does not cut out ${range} - IPv6 would be a way around them")
+          [[ ",${block#*|}," == *",${range},"* ]] ||
+            failures+=("${where} cuts private ranges out of IPv4 but a ::/0 block does not cut out ${range} - IPv6 would be a way around them")
         done
       done
     fi

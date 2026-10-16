@@ -35,6 +35,9 @@ spec:
               - ::1/128
               - 64:ff9b::/96
               - 64:ff9b:1::/48
+              # The cluster's own pod IPv6 range (cluster-config, set by each provider's Terraform): on GKE it is
+              # global, not unique local - without this line the backend would reach other pods on 443 over IPv6.
+              - ${cluster_ipv6_range}
       ports:
         - protocol: TCP
           port: 443

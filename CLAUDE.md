@@ -88,6 +88,13 @@ scripts/             # Pre-commit hooks, automation scripts
 - **GitOps**: FluxCD (Flux Operator + FluxInstance, Kustomizations, HelmReleases)
 - **Secrets**: SOPS with AGE encryption
 - **DNS/TLS**: external-dns (Cloudflare, proxied records) + cert-manager with Cloudflare Origin CA (origin-ca-issuer); zone SSL mode Full (strict)
+- **Network**: dual-stack (IPv4 + IPv6 for every node, pod and Service) on every cluster, Cilium as the CNI and
+  NetworkPolicy engine - kind (`helm_release.cilium`, kindnet off; pods fd00:10:244::/56), Hetzner (kube-hetzner
+  `cni_plugin = "cilium"`, pinned `cilium_version` = kind's (1.20.3); pods fdf9:a717:c7cc::/56, Services fdf9:a717:c7cc:100::/112,
+  a random ULA), GKE (Dataplane V2 is Cilium; `stack_type = "IPV4_IPV6"`, EXTERNAL = global pod IPv6). Each Terraform
+  writes its pod IPv6 range to cluster-config `cluster_ipv6_range`; `allow-backend-egress-https` cuts it out of `::/0`
+  (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
+  (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly
 - **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
   `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
 - **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)
@@ -142,7 +149,9 @@ scripts/             # Pre-commit hooks, automation scripts
 - NetworkPolicies use `default-deny-all` — new services need explicit ingress/egress rules from `traefik` namespace.
   IPv4 and IPv6 alike (the platform is moving to dual-stack): a rule that opens `0.0.0.0/0` also opens `::/0` and the
   reverse, and IPv4 private ranges cut out mean `fc00::/7`, `fe80::/10` and the NAT64 prefixes cut out of `::/0`
-  (`scripts/check-app-security.sh`). IPv6 is secured like IPv4, not switched off to look safe
+  (`scripts/check-app-security.sh`). IPv6 is secured like IPv4, not switched off to look safe. Under Cilium `0.0.0.0/0`
+  and `::/0` mean "world" (outside the cluster, never a node); a rule that must reach a node (the API server on kind
+  and k3s) uses the /1 halves (`0.0.0.0/1` + `128.0.0.0/1`, `::/1` + `8000::/1`) - only allow-postgres-egress-apiserver
 - App security rules (enforced by `scripts/check-app-security.sh` in pre-commit and Flux Diff): every app
   Deployment sets `automountServiceAccountToken: false` and, when an HPA targets it, no `spec.replicas`;
   every workload written under `flux/` (apps and platform: Guardian, MinIO, chaos, synthetic traffic) sets
@@ -181,9 +190,9 @@ scripts/             # Pre-commit hooks, automation scripts
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)
 - `make hcloud-plan` / `hcloud-apply` / `hcloud-destroy` — the same for Hetzner (aliases of
   `terraform-hcloud-plan|apply|destroy`; CI calls `terraform-hcloud-destroy`); `make hcloud-drift` - drift check
-- `make cluster-conformance` — the cluster contract C1-C12 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
+- `make cluster-conformance` — the cluster contract C1-C13 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
   pinned Kubernetes version exactly (a managed cluster without a pin: kind's minor), NetworkPolicies enforced (egress too), API-server egress rule, default StorageClass,
-  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures; PASS/FAIL/SKIP with a
+  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures, dual-stack (C13; C2 and C5 then check both families); PASS/FAIL/SKIP with a
   reason. Creates and deletes the namespace `conformance` (a real disk for ~1 min on a cloud); nightly on kind
 - `make capstone-fault` — Chapter 23: a colleague's pull request with one random fault (f1 sign-up limit,
   f2 database network policies, f3 backend CPU), merged in the learner's repository; `scripts/capstone-fault.sh --local` commits only

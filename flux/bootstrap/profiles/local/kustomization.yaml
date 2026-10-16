@@ -98,6 +98,9 @@ patches:
                   service:
                     spec:
                       type: NodePort
+                      # as in the base (these values replace it whole): both families, or a loud failure
+                      ipFamilyPolicy: RequireDualStack
+                      ipFamilies: [IPv4, IPv6]
                   ports:
                     web:
                       nodePort: 30080

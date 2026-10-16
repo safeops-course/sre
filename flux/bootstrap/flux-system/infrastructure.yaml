@@ -109,6 +109,11 @@ spec:
   path: ./flux/infrastructure/network-policies/develop
   prune: true
   wait: false
+  # ${cluster_ipv6_range}: the pods' IPv6 range, cut out of allow-backend-egress-https (cluster-config).
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: infrastructure
 ---
@@ -166,6 +171,11 @@ spec:
   path: ./flux/infrastructure/network-policies/staging
   prune: true
   wait: false
+  # ${cluster_ipv6_range}: the pods' IPv6 range, cut out of allow-backend-egress-https (cluster-config).
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: infrastructure
 ---
@@ -223,6 +233,11 @@ spec:
   path: ./flux/infrastructure/network-policies/production
   prune: true
   wait: false
+  # ${cluster_ipv6_range}: the pods' IPv6 range, cut out of allow-backend-egress-https (cluster-config).
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
   dependsOn:
     - name: infrastructure
 ---

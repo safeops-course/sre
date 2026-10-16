@@ -4,7 +4,7 @@
 # ipBlock for any address on those two ports. The residual risk is small: 443 is open to Postgres anyway
 # (allow-postgres-egress-https, the backups), and every request to the API server still needs the
 # pod's own RBAC. cluster-conformance C3 checks that this rule, not another one, lets it through.
-# IPv6 too (::/0): an ipBlock covers one family, and on a dual-stack cluster the API server may be reached over IPv6.
+# IPv6 too: an ipBlock covers one family, and on a dual-stack cluster the API server may be reached over IPv6.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -20,11 +20,19 @@ spec:
   policyTypes:
     - Egress
   egress:
+    # Every address, written as two halves per family: Cilium (kind, Hetzner) reads exactly 0.0.0.0/0 and
+    # ::/0 as "world", which leaves the nodes out - and on kind and k3s the API server runs on a node.
+    # Half-ranges are plain CIDRs; with Cilium's policyCIDRMatchMode=nodes they select node addresses too
+    # (tested on kind 2026-10-16: /0 blocked, the halves open). The same addresses on every other CNI.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 0.0.0.0/1
         - ipBlock:
-            cidr: ::/0
+            cidr: 128.0.0.0/1
+        - ipBlock:
+            cidr: ::/1
+        - ipBlock:
+            cidr: 8000::/1
       ports:
         - protocol: TCP
           port: 6443
