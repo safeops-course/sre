@@ -204,6 +204,8 @@ done
 # false in its pod spec; a workload (kind, namespace/name) is reported once per build check.
 #   - A Flux Kustomization on another source than this repository cannot be built here. Each one must be
 #     in FOREIGN_SOURCES, checked by hand to deploy no workload of ours; any other fails the check.
+#   - Every kustomize directory under flux/ (kustomization.yaml, not a Component) is also rendered on its
+#     own with `kubectl kustomize`, so a patch in an overlay no profile reaches yet is checked too.
 #   - Every workload document under flux/ is also checked as written, built or not: the field must be
 #     there, as the boolean false - "every workload you write sets it" (Ch07 agent rule 5). That covers
 #     a file no build reaches (the develop canary, an opt-in copy of a deployed workload); a matching
@@ -299,8 +301,24 @@ while ((next < ${#pending[@]})); do
   enqueue "${render_tmp}/built.yaml" "Flux Kustomization ${name} (${path})"
 done
 
-# One line per workload (kind, namespace/name): the first build that shows a wrong value is enough to find it.
 workloads="$(cut -f1,2 "${links_rows}" | sort -u | grep -c . || true)"
+
+# Every kustomize directory under flux/ rendered on its own too, reached by a profile or not: a patch in an
+# opt-in overlay no profile deploys yet is rendered and checked here (the file check skips patches/).
+# Components are no build of their own - their patches are rendered where an overlay uses them.
+dirs=0
+while IFS= read -r -d '' kfile; do
+  [[ "$(yq '.kind // "Kustomization"' "${kfile}")" == Component ]] && continue
+  dirs=$((dirs + 1))
+  if ! kubectl kustomize --load-restrictor=LoadRestrictionsNone "$(dirname "${kfile}")" \
+    >"${render_tmp}/dir.yaml" 2>"${render_tmp}/err"; then
+    failures+=("$(dirname "${kfile}"): kustomize build failed: $(cat "${render_tmp}/err")")
+    continue
+  fi
+  collect_links "kustomize $(dirname "${kfile}")" "${render_tmp}/dir.yaml"
+done < <(find flux -name kustomization.yaml -print0 | sort -z)
+
+# One line per workload (kind, namespace/name): the first build that shows a wrong value is enough to find it.
 while IFS=$'\t' read -r kind name value build; do
   [[ -z "${kind}" ]] && continue
   failures+=("${build}: ${kind} ${name} has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
@@ -331,4 +349,4 @@ if ((${#failures[@]} > 0)); then
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${documents} workload documents checked as written)"
+echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${dirs} kustomize directories rendered; ${documents} workload documents checked as written)"

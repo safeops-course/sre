@@ -287,15 +287,27 @@ spec:
 case_29() {
   yq 'del(.spec.template.spec.enableServiceLinks)' "${R}/${MINIO}/deployment.yaml" >"${R}/${MINIO}-opt-in.yaml"
 }
+# An opt-in overlay no profile deploys, with a patch that sets the field TRUE: no Flux build reaches it and
+# the file check skips patches/, so only rendering the directory on its own sees it.
+case_30() {
+  write_file flux/infrastructure/data/minio-opt-in/kustomization.yaml 'apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../minio
+patches:
+  - path: patches/links.yaml'
+  write_file flux/infrastructure/data/minio-opt-in/patches/links.yaml "$(smp TRUE)"
+}
 
 # CASES - function|expected verdict|reason a fail must name (empty: the rule itself)|name. A case that edits a
 # workload file names the build's own line (kind namespace/name), which the file check never prints - so
-# it proves the build check, not only the check of the file as written.
+# it proves the build check, not only the check of the file as written ("): " ends the build's prefix;
+# a directory's kustomize render prints "kustomize DIR: " instead).
 CASES=(
   'case_01|pass||the repository as it is passes'
-  'case_02|fail|Deployment minio/minio has enableServiceLinks|a platform Deployment without the field fails'
-  'case_03|fail|CronJob flux-system/chaos-monkey has enableServiceLinks|a CronJob without the field (pod spec one level deeper) fails'
-  'case_04|fail|Deployment develop/backend has enableServiceLinks|an app base Deployment without the field fails'
+  'case_02|fail|): Deployment minio/minio has enableServiceLinks|a platform Deployment without the field fails'
+  'case_03|fail|): CronJob flux-system/chaos-monkey has enableServiceLinks|a CronJob without the field (pod spec one level deeper) fails'
+  'case_04|fail|): Deployment develop/backend has enableServiceLinks|an app base Deployment without the field fails'
   'case_05|pass||a patch that leaves the field out passes'
   'case_06|fail||a patch file with true fails'
   'case_07|fail||a patch file with TRUE fails (YAML reads it as the boolean true)'
@@ -313,7 +325,7 @@ CASES=(
   'case_19|fail||a profile'"'"'s patch on a Flux Kustomization with TRUE fails'
   'case_20|fail||a profile'"'"'s JSON patch on a Flux Kustomization that removes it fails'
   'case_21|pass||a profile'"'"'s patch on a Flux Kustomization that keeps it false passes'
-  'case_22|fail|/newapp has enableServiceLinks|a workload in a path without kustomization.yaml (Flux generates one) is checked'
+  'case_22|fail|): Deployment minio/newapp has enableServiceLinks|a workload in a path without kustomization.yaml (Flux generates one) is checked'
   'case_23|fail|build failed|a kustomization that does not build fails the check'
   'case_24|fail||a patch two Flux Kustomizations deep (profile -> apps-develop -> backend-develop) fails'
   'case_25|fail|checked in the file|a workload file no profile deploys (the opt-in canary) is checked in the file'
@@ -321,6 +333,7 @@ CASES=(
   'case_27|fail|builds kustomize.toolkit.fluxcd.io/v1 only|a Flux Kustomization with another apiVersion fails'
   'case_28|fail|checked in the file|a file no build deploys, named like a built workload in another namespace, is checked in the file'
   'case_29|fail|checked in the file|an unbuilt copy of a deployed workload (same kind, namespace and name) is checked in the file'
+  'case_30|fail|kustomize flux/infrastructure/data/minio-opt-in|a patch in an overlay no profile deploys is rendered and checked'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or
