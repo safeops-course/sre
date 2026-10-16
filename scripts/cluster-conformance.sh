@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # cluster-conformance.sh - does this cluster give what the platform needs?
 #
-# The platform runs on any cluster that keeps a short contract (C1-C12): the Kubernetes version Git
+# The platform runs on any cluster that keeps a short contract (C1-C13): the Kubernetes version Git
 # pins (on a managed cluster without a pin: the platform's minor), NetworkPolicies that are enforced (egress too), a default StorageClass, a load balancer for
 # the ingress, metrics-server, reachable admission webhooks, backups to S3, images for the nodes'
-# architecture. This script checks the contract on a running cluster with the platform installed -
+# architecture, dual-stack networking (IPv4 and IPv6 for every node, pod and Service - C2 and C5 then
+# check both families). This script checks the contract on a running cluster with the platform installed -
 # the layer below tests/smoke-test.sh (do the apps answer?). One line per item: PASS, FAIL or SKIP
 # with the reason. A SKIP is never a quiet pass: it names what was not checked and why.
 #
@@ -126,11 +127,23 @@ kind: Service
 metadata:
   name: server
 spec:
+  # Both families where the cluster has them (C13 reads its clusterIPs); one where it has not.
+  ipFamilyPolicy: PreferDualStack
   selector: { app: server }
   ports: [{ port: 8080, targetPort: 8080 }]
 EOF
 server_ready=true
 k -n "$NS" wait --for=condition=Ready pod/server --timeout=120s >/dev/null 2>&1 || server_ready=false
+
+# Dual-stack (C13, printed last): every node has a pod range of each family, and the test Service got
+# an address of each. Decided here, because C2 and C5 check both families when the cluster has them.
+families_of() { local v4=no v6=no x; for x in $1; do case "$x" in *:*) v6=yes ;; *.*) v4=yes ;; esac; done; echo "$v4 $v6"; }
+node_cidrs="$(k get nodes -o json | jq -r '.items[] | "\(.metadata.name) \((.spec.podCIDRs // []) | join(" "))"')" || node_cidrs=""
+single_nodes="$(while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "yes yes" ] || echo "$name"; done <<<"$node_cidrs")"
+svc_ips="$(k -n "$NS" get service server -o jsonpath='{.spec.clusterIPs[*]}' 2>/dev/null)" || svc_ips=""
+dual=false
+[ -n "$node_cidrs" ] && [ -z "$single_nodes" ] && [ "$(families_of "$svc_ips")" = "yes yes" ] && dual=true
+families=4; [ "$dual" = true ] && families="4 6"
 
 # C2 - NetworkPolicies are enforced, egress included. Four probes from a pod labelled app=client:
 # open with no policy; blocked by the platform's own default-deny-all (+ DNS); still blocked once the
@@ -140,9 +153,9 @@ np="$ROOT/flux/infrastructure/network-policies/base"
 if [ "$server_ready" = false ]; then
   fail C2 "the test server pod was not Ready within 2 min - no probe possible"
 else
-  r1="$(probe open -l app=client server 8080)"
+  r1=""; for f in $families; do r1+="$(probe open -l app=client "-$f" server 8080) "; done
   k -n "$NS" apply -f "$np/default-deny-all.yaml" -f "$np/allow-dns-egress.yaml" >/dev/null
-  r2="$(probe blocked -l app=client server 8080)"
+  r2=""; for f in $families; do r2+="$(probe blocked -l app=client "-$f" server 8080) "; done
   k -n "$NS" apply -f - >/dev/null <<'EOF'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -153,7 +166,7 @@ spec:
   policyTypes: [Ingress]
   ingress: [{ from: [{ podSelector: { matchLabels: { app: client } } }], ports: [{ port: 8080 }] }]
 EOF
-  r3="$(probe blocked -l app=client server 8080)"
+  r3=""; for f in $families; do r3+="$(probe blocked -l app=client "-$f" server 8080) "; done
   k -n "$NS" apply -f - >/dev/null <<'EOF'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -164,11 +177,14 @@ spec:
   policyTypes: [Egress]
   egress: [{ to: [{ podSelector: { matchLabels: { app: server } } }], ports: [{ port: 8080 }] }]
 EOF
-  r4="$(probe open -l app=client server 8080)"
-  if [ "$r1 $r2 $r3 $r4" = "open blocked blocked open" ]; then
-    pass C2 "NetworkPolicies enforced: no policy open, default-deny blocked, ingress-only blocked (egress enforced), both allowed open"
+  r4=""; for f in $families; do r4+="$(probe open -l app=client "-$f" server 8080) "; done
+  # One verdict per family in each step; every family must give the same answer.
+  want=""; for step in open blocked blocked open; do for f in $families; do want+="$step "; done; done
+  fams="IPv${families// /, IPv}"
+  if [ "$r1$r2$r3$r4" = "$want" ]; then
+    pass C2 "NetworkPolicies enforced ($fams): no policy open, default-deny blocked, ingress-only blocked (egress enforced), both allowed open"
   else
-    fail C2 "NetworkPolicies - expected open/blocked/blocked/open, got $r1/$r2/$r3/$r4"
+    fail C2 "NetworkPolicies ($fams) - expected open/blocked/blocked/open per family, got ${r1% }/${r2% }/${r3% }/${r4% }"
   fi
 fi
 
@@ -258,8 +274,14 @@ fi
 svc="$(k -n traefik get service traefik -o json 2>/dev/null || echo '{}')"
 case "$(jq -r '.spec.type // "missing"' <<<"$svc")" in
   LoadBalancer)
-    addr="$(jq -r '.status.loadBalancer.ingress[0].ip // .status.loadBalancer.ingress[0].hostname // empty' <<<"$svc")"
-    if [ -n "$addr" ]; then pass C5 "load balancer for the ingress: $addr"; else fail C5 "Traefik's Service has no load balancer address"; fi ;;
+    addrs="$(jq -r '[.status.loadBalancer.ingress[]? | .ip // .hostname] | join(" ")' <<<"$svc")"
+    if [ -z "$addrs" ]; then
+      fail C5 "Traefik's Service has no load balancer address"
+    elif [ "$dual" = true ] && [ "$(families_of "$addrs")" != "yes yes" ]; then
+      fail C5 "load balancer for the ingress has one family only ($addrs) - the cluster is dual-stack, the ingress must be too"
+    else
+      pass C5 "load balancer for the ingress: $addrs"
+    fi ;;
   NodePort) skip C5 "kind: Traefik is a NodePort (localhost:8080/8443), no load balancer by design" ;;
   *) fail C5 "no Service traefik/traefik - the ingress is missing" ;;
 esac
@@ -329,6 +351,17 @@ fi
 
 # C12 - nothing billed is left after a destroy: a check after the cluster is gone, not on it.
 skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers; kind: nothing billed)"
+
+# C13 - dual-stack: IPv4 and IPv6 for every node's pods and for Services (decided before C2).
+if [ "$dual" = true ]; then
+  pass C13 "dual-stack: every node has an IPv4 and an IPv6 pod range; a Service gets $svc_ips"
+elif [ -z "$node_cidrs" ]; then
+  fail C13 "dual-stack - could not read the nodes' pod ranges"
+elif [ -n "$single_nodes" ]; then
+  fail C13 "not dual-stack: nodes without a pod range of each family: $(tr '\n' ' ' <<<"$single_nodes")"
+else
+  fail C13 "not dual-stack: a PreferDualStack Service got ${svc_ips:-no address} - one family only"
+fi
 
 echo
 if [ "$FAILS" -eq 0 ]; then echo "Contract kept on $CONTEXT"; else echo "$FAILS item(s) FAIL on $CONTEXT"; fi

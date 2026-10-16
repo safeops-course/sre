@@ -204,6 +204,13 @@ variable "kind_node_image" {
   default = "kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed"
 }
 
+variable "cilium_version" {
+  description = "Cilium Helm chart version - the CNI. Keep it equal to kube-hetzner's cilium_version (hcloud_cluster), so kind proves what Hetzner runs."
+  type        = string
+  # renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io/
+  default = "1.19.3"
+}
+
 variable "metrics_server_chart_version" {
   description = "metrics-server Helm chart version."
   type        = string

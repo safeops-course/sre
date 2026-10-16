@@ -61,6 +61,10 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cluster_name       = var.cluster_name
     image_registry     = var.image_registry
     git_owner          = var.git_owner
+    # The subnet's global IPv6 range (EXTERNAL): nodes and Pods get their IPv6 from it. Pod IPv6 is not in
+    # fc00::/7 here, so the GKE profile cuts this range out of allow-backend-egress-https's ::/0 - as
+    # 10.0.0.0/8 is cut out of 0.0.0.0/0 - or the backend could reach other Pods on 443 over IPv6.
+    cluster_ipv6_range = google_compute_subnetwork.nodes.external_ipv6_prefix
   }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]

@@ -151,7 +151,7 @@ variable "workers_count" {
 # ─── Autoscaling ─────────────────────────────────────────────────────────────
 
 variable "autoscaling_enabled" {
-  description = "Enable cluster autoscaler for the workers pool. When true, workers_count is ignored and min/max nodes apply instead."
+  description = "Enable cluster autoscaler for the workers pool. When true, workers_count is ignored and min/max nodes apply instead. Not with dual-stack today: kube-hetzner 3.2.1 refuses autoscaler pools with IPv6 cluster ranges (its plan stops)."
   type        = bool
   default     = false
 }

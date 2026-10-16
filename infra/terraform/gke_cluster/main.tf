@@ -56,6 +56,14 @@ resource "google_compute_subnetwork" "nodes" {
   ip_cidr_range            = var.nodes_cidr
   private_ip_google_access = true
 
+  # Dual-stack: nodes, Pods and Services get an IPv6 address too, as on kind and Hetzner. EXTERNAL = global
+  # addresses from Google's range (2600:1900::/28): the only way Pods reach the IPv6 internet - Cloud NAT
+  # is IPv4-only - and one subnet serves the dual-stack load balancer. "Private nodes" covers IPv4 only:
+  # inbound IPv6 is stopped by the VPC's implied deny-ingress rule and GKE's own rules. Google sizes the
+  # IPv6 ranges itself (a /64 here, a /96 per node, a /112 for each node's Pods); free of charge.
+  stack_type       = "IPV4_IPV6"
+  ipv6_access_type = "EXTERNAL"
+
   secondary_ip_range {
     range_name    = "pods"
     ip_cidr_range = var.pods_cidr
@@ -171,6 +179,8 @@ resource "google_container_cluster" "this" {
   ip_allocation_policy {
     cluster_secondary_range_name  = "pods"
     services_secondary_range_name = "services"
+    # Dual-stack Pods and Services (the subnet above is IPV4_IPV6). A new cluster only - set at creation.
+    stack_type = "IPV4_IPV6"
   }
 
   # The node pools below replace the default one (which would run as the Compute default account).

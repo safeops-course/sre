@@ -48,7 +48,9 @@ patches:
                       load-balancer.hetzner.cloud/use-private-ip: "true"
                       load-balancer.hetzner.cloud/disable-private-ingress: "true"
                       load-balancer.hetzner.cloud/disable-public-network: "false"
-                      load-balancer.hetzner.cloud/ipv6-disabled: "true"
+                      # The load balancer has a public IPv6 too (the Service is dual-stack); its targets
+                      # stay on the private IPv4 network, the client address arrives in the PROXY header.
+                      load-balancer.hetzner.cloud/ipv6-disabled: "false"
                       load-balancer.hetzner.cloud/uses-proxyprotocol: "true"
                       load-balancer.hetzner.cloud/algorithm-type: round_robin
                       load-balancer.hetzner.cloud/health-check-interval: 15s

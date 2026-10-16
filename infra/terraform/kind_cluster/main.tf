@@ -3,11 +3,14 @@
 # What this file creates. Terraform works out the order from the references
 # between resources (kind_cluster.sre.endpoint in a provider block, depends_on):
 #   1. kind_cluster.sre                     the cluster: each node is a Docker container
-#   2. merge_kubeconfig, wait_for_cluster   its kubeconfig merged into ~/.kube/config, a short wait for the API
-#   3. helm_release.metrics_server          metrics for kubectl top and the HPA (Traefik, the ingress, comes from Flux)
-#   4. namespaces, ConfigMaps, Secrets      what Flux expects to find when it starts deploying -
+#   2. merge_kubeconfig                     its kubeconfig merged into ~/.kube/config
+#   3. helm_release.cilium                  the network (CNI): dual-stack, NetworkPolicies - the same engine as
+#                                           Hetzner (kube-hetzner's Cilium) and GKE (Dataplane V2 is Cilium)
+#      wait_for_cluster                     a short wait for the API before everything below
+#   4. helm_release.metrics_server          metrics for kubectl top and the HPA (Traefik, the ingress, comes from Flux)
+#   5. namespaces, ConfigMaps, Secrets      what Flux expects to find when it starts deploying -
 #                                           incl. flux_git_auth, the Git token (private forks only)
-#   5. flux_operator_install, flux_instance Flux, following your fork - from here on Git drives the cluster
+#   6. flux_operator_install, flux_instance Flux, following your fork - from here on Git drives the cluster
 # local-profile.tf adds the generated secrets of the local profile; variables.tf holds the inputs.
 #
 # Run it through the guard - plan, read, apply that plan: make kind-plan, then make kind-apply.
@@ -105,8 +108,10 @@ resource "terraform_data" "minio_data_dir" {
 resource "kind_cluster" "sre" {
   depends_on = [terraform_data.minio_data_dir]
 
-  name            = "sre-control-plane"
-  wait_for_ready  = true
+  name = "sre-control-plane"
+  # kind's own wait waits for Ready nodes, and a node is Ready only once a CNI runs - ours (Cilium) is
+  # installed right after, so waiting here would never end. helm_release.cilium waits for it instead.
+  wait_for_ready  = false
   kubeconfig_path = local.kubeconfig_path
   node_image      = var.kind_node_image
 
@@ -114,10 +119,17 @@ resource "kind_cluster" "sre" {
     api_version = "kind.x-k8s.io/v1alpha4"
     kind        = "Cluster"
 
+    # Dual-stack: every pod and Service gets an IPv4 and an IPv6 address, as on Hetzner and GKE. kind's
+    # own CNI (kindnet) is off - Cilium is installed below, the policy engine the clouds run too.
+    # The IPv6 ranges are unique local (fd00::/8, not routed on the internet) - kind's own defaults.
     networking {
-      api_server_address = "127.0.0.1"
-      api_server_port    = 6443
-      kube_proxy_mode    = "iptables"
+      api_server_address  = "127.0.0.1"
+      api_server_port     = 6443
+      kube_proxy_mode     = "iptables"
+      ip_family           = "dual"
+      pod_subnet          = "10.244.0.0/16,fd00:10:244::/56"
+      service_subnet      = "10.96.0.0/16,fd00:10:96::/112"
+      disable_default_cni = true
     }
 
     containerd_config_patches = [
@@ -190,7 +202,7 @@ resource "null_resource" "merge_kubeconfig" {
 # Give the API server a moment before Helm and Kubernetes resources talk to it.
 # https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep
 resource "time_sleep" "wait_for_cluster" {
-  depends_on      = [null_resource.merge_kubeconfig]
+  depends_on      = [helm_release.cilium]
   create_duration = "30s"
 
   # A new kind cluster (for example a new node_image) needs this step again;
@@ -233,6 +245,43 @@ removed {
 removed {
   from = kubernetes_namespace_v1.traefik
   lifecycle { destroy = false }
+}
+
+# Cilium: the cluster's network (CNI) and its NetworkPolicy engine, dual-stack. The values follow
+# kube-hetzner's own Cilium (hcloud_cluster, cni_plugin = "cilium"), so kind proves what Hetzner runs:
+# Kubernetes-assigned pod ranges of both families, tunnel (VXLAN) routing, kube-proxy kept (iptables),
+# no Hubble. One operator replica: two nodes. wait: the release is done when Cilium runs and the nodes
+# are Ready - everything after wait_for_cluster needs a working network.
+# https://docs.cilium.io/en/stable/installation/kind/
+resource "helm_release" "cilium" {
+  name       = "cilium"
+  repository = "https://helm.cilium.io/"
+  chart      = "cilium"
+  namespace  = "kube-system"
+  version    = var.cilium_version
+  wait       = true
+  timeout    = 600
+
+  depends_on = [null_resource.merge_kubeconfig]
+
+  values = [yamlencode({
+    ipam                 = { mode = "kubernetes" }
+    k8s                  = { requireIPv4PodCIDR = true, requireIPv6PodCIDR = true }
+    ipv4                 = { enabled = true }
+    ipv6                 = { enabled = true }
+    kubeProxyReplacement = false
+    routingMode          = "tunnel"
+    endpointRoutes       = { enabled = true }
+    bpf                  = { masquerade = false }
+    rollOutCiliumPods    = true
+    operator             = { replicas = 1 }
+    hubble               = { enabled = false }
+    # An ipBlock matches node addresses too, as in Kubernetes' own model: Cilium leaves nodes out of CIDR
+    # rules by default, and the API server runs on a node here (kind, k3s) - without this, Postgres'
+    # instance manager (allow-postgres-egress-apiserver) could not reach it. cluster-conformance C3 checks.
+    policyCIDRMatchMode = "nodes"
+    image               = { pullPolicy = "IfNotPresent" }
+  })]
 }
 
 # metrics-server: CPU and memory metrics for kubectl top and the HPA (Chapter 09).

@@ -28,16 +28,18 @@ provider "hcloud" {
 # https://developer.hashicorp.com/terraform/language/expressions/conditionals
 
 locals {
+  # Every node has a public IPv6 (kube-hetzner's default, enable_public_ipv6 = true): dual-stack needs it -
+  # Hetzner networks are IPv4-only, so a node's IPv6 is its public one. (A `disable_ipv6` line here was the
+  # v2 field: v3 has no such field, Terraform dropped it silently, and the nodes had IPv6 all along.)
   # Control plane — always one pool.
   control_plane_nodepools = [
     {
-      name         = "cp"
-      server_type  = var.control_plane_server_type
-      location     = var.location
-      labels       = ["project=sre", "managed-by=terraform"]
-      taints       = []
-      count        = var.control_plane_count
-      disable_ipv6 = true
+      name        = "cp"
+      server_type = var.control_plane_server_type
+      location    = var.location
+      labels      = ["project=sre", "managed-by=terraform"]
+      taints      = []
+      count       = var.control_plane_count
     },
   ]
 
@@ -45,13 +47,12 @@ locals {
   # When autoscaling is ON the workers pool moves to autoscaler_nodepools.
   static_agent_pools = var.autoscaling_enabled ? [] : [
     {
-      name         = "workers"
-      server_type  = var.workers_server_type
-      location     = var.location
-      labels       = ["role=workers", "project=sre", "managed-by=terraform"]
-      taints       = []
-      count        = var.workers_count
-      disable_ipv6 = true
+      name        = "workers"
+      server_type = var.workers_server_type
+      location    = var.location
+      labels      = ["role=workers", "project=sre", "managed-by=terraform"]
+      taints      = []
+      count       = var.workers_count
     },
   ]
 
@@ -119,13 +120,30 @@ module "kube_hetzner" {
   # Load balancer
   load_balancer_type        = var.load_balancer_type
   load_balancer_location    = var.location
-  load_balancer_enable_ipv6 = false
+  load_balancer_enable_ipv6 = true
 
   # Ingress: Traefik comes from Flux (flux/infrastructure/ingress/traefik), as on every cluster.
   # "custom" = the module installs no ingress controller but still creates the load balancer
   # (<cluster_name>-custom, on the private network) and deletes it on destroy - the billed resource
   # stays in Terraform's state. Traefik's Service takes it over by name (cluster-config below).
   ingress_controller = "custom"
+
+  # Network: Cilium, dual-stack - every pod and Service gets an IPv4 and an IPv6 address, as on kind and
+  # GKE. kube-hetzner supports IPv6 cluster ranges with Cilium only (validation-contract.tf), so Cilium is
+  # the CNI and the NetworkPolicy engine (k3s's own policy controller is then off). The IPv6 ranges are a
+  # random unique local prefix (fdf9:a717:c7cc::/48, RFC 4193): not routed on the internet, so pod and
+  # Service addresses fall in fc00::/7, which the egress NetworkPolicies cut out like 10.0.0.0/8. Pod
+  # traffic between nodes stays in Cilium's tunnel over the private IPv4 network. A fresh cluster only:
+  # k3s cannot add IPv6 to a running IPv4 cluster. The IPv4 ranges stay kube-hetzner's defaults.
+  cni_plugin        = "cilium"
+  cluster_ipv6_cidr = "fdf9:a717:c7cc::/56"
+  service_ipv6_cidr = "fdf9:a717:c7cc:100::/112"
+  # An ipBlock matches node addresses too, as in Kubernetes' own model: Cilium leaves nodes out of CIDR
+  # rules by default, and k3s's API server runs on a node - without this, Postgres' instance manager
+  # (allow-postgres-egress-apiserver) could not reach it. The same value as kind's Cilium; conformance C3.
+  cilium_merge_values = <<-EOT
+    policyCIDRMatchMode: nodes
+  EOT
 
   # K3s versioning
   k3s_channel                      = var.k3s_channel
