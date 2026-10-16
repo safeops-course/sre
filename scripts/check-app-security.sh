@@ -6,7 +6,8 @@
 #   - every workload Flux deploys from flux/ (Deployment, StatefulSet, DaemonSet, Job, CronJob - apps
 #     and platform; not the pods Helm charts and operators create) has enableServiceLinks: false - the
 #     boolean - in the form Flux applies it: every Flux Kustomization is built with `flux build` (its
-#     patches too), so no patch can take it away. Kubernetes otherwise
+#     patches too), so no patch can take it away - and in every workload file as written, so a file
+#     no build reaches (an opt-in manifest, an alternate copy of a deployed one) is checked too. Kubernetes otherwise
 #     adds variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new
 #     pod; BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
 #     pod (frontend#25, caught on kind before it shipped). Without them no variable of the namespace's
@@ -200,11 +201,17 @@ done
 # spec.patches and its postBuild substitutions. It starts from the Flux Kustomizations in each profile
 # (flux/bootstrap/profiles/*) and follows every Flux Kustomization those builds contain, until none is
 # new. In every build each Deployment, StatefulSet, DaemonSet, Job and CronJob must have the boolean
-# false in its pod spec; a workload (kind, namespace/name) is reported once.
+# false in its pod spec; a workload (kind, namespace/name) is reported once per build check.
 #   - A Flux Kustomization on another source than this repository cannot be built here. Each one must be
 #     in FOREIGN_SOURCES, checked by hand to deploy no workload of ours; any other fails the check.
-#   - A workload file no build reaches (an opt-in path such as the develop canary) is checked in the
-#     source file instead: the field must be there, as the boolean false.
+#   - Every kustomize directory under flux/ (kustomization.yaml, not a Component) is also rendered on its
+#     own with `kubectl kustomize`, so a patch in an overlay no profile reaches yet is checked too.
+#   - Every workload document under flux/ is also checked as written, built or not: the field must be
+#     there, as the boolean false - "every workload you write sets it" (Ch07 agent rule 5). That covers
+#     a file no build reaches (the develop canary, an opt-in copy of a deployed workload); a matching
+#     build is no proof the build used that file. So the field is written in the workload itself, never
+#     only by an overlay patch or a postBuild variable, and a partial workload (a patch) lives in a
+#     patches/ directory. A missing field in a built workload is reported twice: by its build and its file.
 FOREIGN_SOURCES=(origin-ca-issuer-crds)   # origin-ca-issuer's CRDs (deploy/crds): no workload
 render_tmp="$(mktemp -d)"
 trap 'rm -rf "${render_tmp}"' EXIT
@@ -244,14 +251,17 @@ enqueue() {
   done
 }
 
+# The yq that picks the workloads out of a YAML stream and binds $p to their pod spec's field - shared by
+# the build check and the file check, so both cover the same kinds.
+# shellcheck disable=SC2016 # $p is a yq variable, not a shell one
+WORKLOAD_LINKS='select(tag == "!!map")
+  | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
+  | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p'
+
 # collect_links BUILD BUILT_FILE - a row per workload in BUILT_FILE: kind, namespace/name, the field's YAML
 # tag and value ("!!null null" when it is missing), BUILD.
-# shellcheck disable=SC2016 # $p below is a yq variable, not a shell one
 collect_links() {
-  BUILD="$1" yq -N 'select(tag == "!!map")
-      | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
-      | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p
-      | [.kind, (.metadata.namespace // "-") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), env(BUILD)]
+  BUILD="$1" yq -N "${WORKLOAD_LINKS}"' | [.kind, (.metadata.namespace // "-") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), env(BUILD)]
       | @tsv' "$2" >>"${links_rows}"
 }
 
@@ -291,8 +301,24 @@ while ((next < ${#pending[@]})); do
   enqueue "${render_tmp}/built.yaml" "Flux Kustomization ${name} (${path})"
 done
 
-# One line per workload (kind, namespace/name): the first build that shows a wrong value is enough to find it.
 workloads="$(cut -f1,2 "${links_rows}" | sort -u | grep -c . || true)"
+
+# Every kustomize directory under flux/ rendered on its own too, reached by a profile or not: a patch in an
+# opt-in overlay no profile deploys yet is rendered and checked here (the file check skips patches/).
+# Components are no build of their own - their patches are rendered where an overlay uses them.
+dirs=0
+while IFS= read -r -d '' kfile; do
+  [[ "$(yq '.kind // "Kustomization"' "${kfile}")" == Component ]] && continue
+  dirs=$((dirs + 1))
+  if ! kubectl kustomize --load-restrictor=LoadRestrictionsNone "$(dirname "${kfile}")" \
+    >"${render_tmp}/dir.yaml" 2>"${render_tmp}/err"; then
+    failures+=("$(dirname "${kfile}"): kustomize build failed: $(cat "${render_tmp}/err")")
+    continue
+  fi
+  collect_links "kustomize $(dirname "${kfile}")" "${render_tmp}/dir.yaml"
+done < <(find flux -name kustomization.yaml -print0 | sort -z)
+
+# One line per workload (kind, namespace/name): the first build that shows a wrong value is enough to find it.
 while IFS=$'\t' read -r kind name value build; do
   [[ -z "${kind}" ]] && continue
   failures+=("${build}: ${kind} ${name} has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
@@ -301,32 +327,29 @@ if ((workloads == 0)); then
   failures+=("flux/: no workload built - nothing was checked for enableServiceLinks")
 fi
 
-# Workload files no build reached, checked in the source. A file is matched to a build by kind, namespace
-# and name; one without a namespace ("-": a base whose overlay sets it) cannot be matched, so it is checked in
-# the file as well. Overlay patches are partial objects, not workloads of their own.
-cut -f1,2 "${links_rows}" | sort -u >"${render_tmp}/built-names"
-unbuilt=0
-# shellcheck disable=SC2016 # $p below is a yq variable, not a shell one
+# Every workload document, checked as written - whether a build reached it or not (see the rule above).
+# Overlay patches are partial objects, not workloads.
+documents=0
+# shellcheck disable=SC2016 # $p is a yq variable, not a shell one
 if ! sources="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
-  xargs -0 yq -N 'select(tag == "!!map")
-    | select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob")
-    | (.spec.jobTemplate.spec.template.spec // .spec.template.spec).enableServiceLinks as $p
-    | [.kind, (.metadata.namespace // "-"), .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
+  xargs -0 -r yq -N "${WORKLOAD_LINKS}"' | [.kind, (.metadata.namespace // "-") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
   failures+=("flux/: yq could not read the workload files: $(cat "${render_tmp}/err")")
   sources=""
 fi
-while IFS=$'\t' read -r kind namespace name value file; do
+while IFS=$'\t' read -r kind name value file; do
   [[ -z "${kind}" ]] && continue
-  [[ "${namespace}" != "-" ]] && grep -qxF "${kind}"$'\t'"${namespace}/${name}" "${render_tmp}/built-names" && continue
-  unbuilt=$((unbuilt + 1))
+  documents=$((documents + 1))
   if [[ "${value}" != "!!bool false" ]]; then
-    failures+=("${file}: ${kind} ${namespace}/${name} (not matched to a build - checked in the file) has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
+    failures+=("${file}: ${kind} ${name} (checked in the file) has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
   fi
 done <<<"${sources}"
+if ((documents == 0)); then
+  failures+=("flux/: no workload document found - nothing was checked as written for enableServiceLinks")
+fi
 
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${unbuilt} workload files not matched to a build, checked in the file)"
+echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${dirs} kustomize directories rendered; ${documents} workload documents checked as written)"
