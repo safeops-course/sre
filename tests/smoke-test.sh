@@ -122,14 +122,18 @@ run_test "Backend /healthz responds in develop" smoke_curl
 # endpoints_answer NS SERVICE PATH - true when the Service has ready addresses and every one answers
 # PATH on its pod port (from the EndpointSlice); prints the URLs that did not. One exec per Service.
 endpoints_answer() {
-  local ns="$1" svc="$2" path="$3" urls bad list
+  local ns="$1" svc="$2" path="$3" urls bad list u out
   urls="$(k -n "$ns" get endpointslices -l "kubernetes.io/service-name=$svc" -o json | jq -r --arg p "$path" '
     .items[] | .ports[0].port as $port | .endpoints[]? | select(.conditions.ready != false) | .addresses[]
     | if test(":") then "http://[\(.)]:\($port)\($p)" else "http://\(.):\($port)\($p)" end')" || return 1
   [ -n "$urls" ] || { echo "no ready addresses"; return 1; }
-  mapfile -t list <<< "$urls"
+  list=()
+  while IFS= read -r u; do list+=("$u"); done <<< "$urls"
+  # The pod prints "done" last: without it the exec itself failed, and nothing was checked.
   # shellcheck disable=SC2016 # $u is expanded by the shell in Traefik's pod, not here
-  bad="$(k -n traefik exec deploy/traefik -- sh -c 'for u; do wget -q -T 5 -O /dev/null "$u" || echo " $u"; done' sh "${list[@]}" 2>/dev/null)" || true
+  out="$(k -n traefik exec deploy/traefik -- sh -c 'for u; do wget -q -T 5 -O /dev/null "$u" || echo " $u"; done; echo done' sh "${list[@]}" 2>/dev/null)" || true
+  [ "$(tail -n 1 <<< "$out")" = "done" ] || { echo "the probe in Traefik's pod did not finish"; return 1; }
+  bad="$(sed '$d' <<< "$out")"
   [ -z "$bad" ] || { echo "no answer from:$(tr -d '\n' <<< "$bad")"; return 1; }
 }
 # The probe itself first: a Traefik pod that cannot run wget is a probe problem, not 6 app failures.

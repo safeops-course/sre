@@ -194,14 +194,18 @@ delete_load_balancers() {
 # deletes only records with its own owner ID (one per provider); a record left behind points at a load
 # balancer that is gone, and the next cluster - another owner - skips it (found 2026-10-16: dex and
 # headlamp, whose namespace auth is not deleted here, kept their records). Flux is suspended, so nothing
-# recreates the Ingresses. external-dns runs every minute; on a timeout the hosts left are named.
+# recreates the Ingresses. external-dns runs every minute; on a timeout the hosts left are named. It reads
+# external-dns's log (text format, the chart's default) - the cluster has no Cloudflare token to ask.
 delete_dns_records() {
   local ingresses hosts host start left=""
   kc -n external-dns get deployment external-dns >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || { warn "jq not found - DNS records are not deleted and may stay in Cloudflare"; return 0; }
   ingresses="$(kc get ingress -A -o json 2>/dev/null)" || { warn "could not list Ingresses - DNS records may stay in Cloudflare"; return 0; }
-  hosts="$(jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled") | .spec.rules[]?.host // empty' <<<"${ingresses}" | sort -u)"
+  hosts="$(jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled") | .spec.rules[]?.host // empty' <<<"${ingresses}" | sort -u)" \
+    || { warn "could not read the Ingress hosts - DNS records may stay in Cloudflare"; return 0; }
   [[ -z "${hosts}" ]] && return 0
-  start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  # A minute early: the node's clock may be behind this machine's, and a DELETE line before start is missed.
+  start="$(date -u -r $(( $(date +%s) - 60 )) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '-60 seconds' +%Y-%m-%dT%H:%M:%SZ)"
   log "deleting the published Ingresses, then waiting for external-dns to delete the records of: $(tr '\n' ' ' <<<"${hosts}")"
   jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled") | "\(.metadata.namespace) \(.metadata.name)"' <<<"${ingresses}" \
     | while read -r ns name; do
@@ -212,9 +216,9 @@ delete_dns_records() {
   while (( SECONDS < deadline )); do
     logs="$(kc -n external-dns logs deployment/external-dns --since-time="${start}" 2>/dev/null)" || logs=""
     left=""
-    for host in ${hosts}; do
+    while IFS= read -r host; do
       grep -qF "action=DELETE record=${host} " <<<"${logs}" || left+=" ${host}"
-    done
+    done <<<"${hosts}"
     [[ -z "${left}" ]] && { log "external-dns deleted the DNS records"; return 0; }
     sleep 10
   done

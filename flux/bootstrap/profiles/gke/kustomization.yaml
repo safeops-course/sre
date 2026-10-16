@@ -1,6 +1,7 @@
 # GKE profile: the full platform on the GKE cluster (infra/terraform/gke_cluster) - the same as on
-# Hetzner. Clusters of the two providers never run at the same time: they share the DNS names (one
-# external-dns owner) and image automation writes to the same branch.
+# Hetzner. Clusters of the two providers never run at the same time: they share the DNS names (each
+# provider has its own external-dns owner ID, from cluster-config cloud_provider, so the first one keeps
+# them) and image automation writes to the same branch.
 #
 #   base         flux/bootstrap/flux-system - what every cluster runs
 #   components   every one, as on Hetzner

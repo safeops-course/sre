@@ -305,6 +305,18 @@ case "$(jq -r '.spec.type // "missing"' <<<"$svc")" in
   *) fail C5 "no Service traefik/traefik - the ingress is missing" ;;
 esac
 
+# C5 - the DNS records of the ingress have an owner of this provider: external-dns's owner ID is
+# k8s-external-dns-<cluster_name>-<cloud_provider> (cluster-config). Flux leaves a missing key empty
+# without an error - an ID ending in "-" would share records with any other cluster missing it.
+owner="$(k -n external-dns get deployment external-dns -o json 2>/dev/null | jq -r '.spec.template.spec.containers[0].args[]? | select(startswith("--txt-owner-id=")) | sub("^--txt-owner-id="; "")')" || owner=""
+if ! k -n external-dns get deployment external-dns >/dev/null 2>&1; then
+  skip C5 "DNS owner - no external-dns on this cluster"
+elif [ -z "$owner" ] || [ "${owner%-}" != "$owner" ]; then
+  fail C5 "DNS owner '${owner}' - cluster-config needs cloud_provider (the module's Terraform writes it)"
+else
+  pass C5 "DNS records owned by $owner"
+fi
+
 # C6 - metrics-server answers (kubectl top, the HPA in Chapter 09).
 if top="$(k top nodes --no-headers 2>/dev/null)" && [ -n "$top" ]; then
   pass C6 "metrics-server: kubectl top nodes answers ($(grep -c . <<<"$top") nodes)"

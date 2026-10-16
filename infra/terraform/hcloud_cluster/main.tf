@@ -126,9 +126,14 @@ module "kube_hetzner" {
   # IPv6 address is its public one, and kube-hetzner's firewall dropped what one node sent to another
   # there: Cilium reported "1/2 reachable" for ever (2026-10-16; pods are not affected - Cilium tunnels both
   # families over the private IPv4 network). Opened: only the health check (TCP 4240) and ping (ICMP, also
-  # ICMPv6), only from Hetzner's IPv6 range of the location - not from the internet. The nodes' own /128s
-  # would be tighter but are known only after the servers exist (a dependency cycle), and a separate
-  # firewall is detached again by kube-hetzner's servers (they set firewall_ids) on every apply.
+  # ICMPv6), only from Hetzner's IPv6 range of the location - every Hetzner server there, any customer's,
+  # can reach them (the health endpoint answers /hello, no data); not the rest of the internet. Accepted:
+  # the nodes' own /128s are known only after the servers exist (a dependency cycle), and a separate
+  # firewall is detached again by kube-hetzner's servers (they set firewall_ids) on every apply. If a node
+  # ever gets an address outside the range, Cilium shows "1/2 reachable" again (cilium-health status).
+  # kube-hetzner keys its rules by direction-protocol-port: these replace its own "in-icmp-" rule
+  # (allow_inbound_icmp, off here) and "in-tcp-4240" (multinetwork, off here) - turning those on needs
+  # their sources added here.
   # https://docs.cilium.io/en/stable/operations/system_requirements/#firewall-rules
   extra_firewall_rules = [
     {
