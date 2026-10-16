@@ -136,7 +136,7 @@ paths. Flux sets back a changed policy it manages, but never removes a policy cr
 | Diagnose before proposing: run `scripts/np-probe.sh` (DNS and TCP separately) and report which policies select the source and the target. | Instruction only. |
 | Never give a pod the labels of another application to get through a policy. | Instruction only; on Hetzner the everyday OIDC sign-in can create pods only in `develop`. |
 | Experiments go into the namespace `lab`, and what you created there is deleted afterwards. | Instruction only. |
-| Every IP range in a policy comes with its twin of the other family - `0.0.0.0/0` with `::/0`, and the private IPv4 ranges cut out mean `fc00::/7`, `fe80::/10` and the NAT64 prefixes cut out of `::/0`. Only a rule that must reach a node uses the `/1` halves. Never switch IPv6 off or leave a twin out to make a policy look safe. | `scripts/check-app-security.sh` in pre-commit and CI. |
+| Every IP range in a policy comes with its twin of the other family - `0.0.0.0/0` with `::/0`, and the private IPv4 ranges cut out mean `fc00::/7`, `fe80::/10`, `::1/128`, the NAT64 prefixes and the cluster's own pod range (`${cluster_ipv6_range}` - global on GKE) cut out of `::/0`. Only a rule that must reach a node uses the `/1` halves. Never switch IPv6 off or leave a twin out to make a policy look safe. | `scripts/check-app-security.sh` in pre-commit and CI, for the rules that open every address: the twin, and `fc00::/7`, `fe80::/10` and the NAT64 prefixes cut out. Narrower twins, `::1`, the pod range and where the `/1` halves are used - instruction only. |
 
 ## Chapter 07 - A container gets only what it needs
 
