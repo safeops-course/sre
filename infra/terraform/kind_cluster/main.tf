@@ -6,7 +6,7 @@
 #   2. merge_kubeconfig                     its kubeconfig merged into ~/.kube/config
 #   3. helm_release.cilium                  the network (CNI): dual-stack, NetworkPolicies - the same engine as
 #                                           Hetzner (kube-hetzner's Cilium) and GKE (Dataplane V2 is Cilium)
-#      wait_for_cluster                     a short wait for the API before everything below
+#      wait_for_nodes, wait_for_cluster     Cilium rolled out and every node Ready, then a short wait for the API
 #   4. helm_release.metrics_server          metrics for kubectl top and the HPA (Traefik, the ingress, comes from Flux)
 #   5. namespaces, ConfigMaps, Secrets      what Flux expects to find when it starts deploying -
 #                                           incl. flux_git_auth, the Git token (private forks only)
@@ -199,24 +199,26 @@ resource "null_resource" "merge_kubeconfig" {
   }
 }
 
-# Give the API server a moment before Helm and Kubernetes resources talk to it.
-# https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep
-# Every node Ready, or the apply stops here with the nodes' state - not 10 minutes later in a Helm release
-# that times out for want of a network (metrics-server did, 2026-10-16).
+# Cilium's agents rolled out and every node Ready, or the apply stops here with the nodes' and agents'
+# state - not 10 minutes later in a Helm release that times out for want of a network (metrics-server
+# did, 2026-10-16). The DaemonSet rollout is checked too: a node stays Ready once Cilium wrote its CNI
+# config, even if a later agent (an upgrade) crash-loops. Run again for a new cluster and a new Cilium.
 resource "null_resource" "wait_for_nodes" {
   depends_on = [helm_release.cilium]
 
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" wait --for=condition=Ready nodes --all --timeout=300s || { kubectl --kubeconfig=\"${local.kubeconfig_path}\" get nodes; kubectl --kubeconfig=\"${local.kubeconfig_path}\" -n kube-system get pods -l k8s-app=cilium; exit 1; }"
+    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" -n kube-system rollout status ds/cilium --timeout=300s && kubectl --kubeconfig=\"${local.kubeconfig_path}\" wait --for=condition=Ready nodes --all --timeout=300s || { kubectl --kubeconfig=\"${local.kubeconfig_path}\" get nodes; kubectl --kubeconfig=\"${local.kubeconfig_path}\" -n kube-system get pods -l k8s-app=cilium; exit 1; }"
   }
 
   lifecycle {
-    replace_triggered_by = [kind_cluster.sre]
+    replace_triggered_by = [kind_cluster.sre, helm_release.cilium]
   }
 }
 
+# Give the API server a moment before Helm and Kubernetes resources talk to it.
+# https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep
 resource "time_sleep" "wait_for_cluster" {
   depends_on      = [null_resource.wait_for_nodes]
   create_duration = "30s"

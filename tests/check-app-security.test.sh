@@ -335,6 +335,11 @@ case_37() {
   yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/1" or .ipBlock.cidr == "8000::/1"))' \
     "${R}/${NP}/allow-postgres-egress-apiserver.yaml"
 }
+# Private IPv4 cut out (allow-backend-egress-https), but its ::/0 replaced by the two /1 halves.
+case_38() {
+  yq -i '.spec.egress[0].to = [.spec.egress[0].to[] | select(.ipBlock.cidr != "::/0")] + [{"ipBlock": {"cidr": "::/1"}}, {"ipBlock": {"cidr": "8000::/1"}}]' \
+    "${R}/${NP}/allow-backend-egress-https.yaml"
+}
 case_33() {
   yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "fe80::/10"))' \
     "${R}/${NP}/allow-backend-egress-https.yaml"
@@ -379,9 +384,10 @@ CASES=(
   'case_32|fail|one rule for both families|a NetworkPolicy rule with ::/0 and no 0.0.0.0/0 fails'
   'case_33|fail|does not cut out fe80::/10|IPv4 private ranges cut out but IPv6 link-local left open fails'
   'case_34|fail|does not cut out 64:ff9b::/96|IPv4 private ranges cut out but the NAT64 prefix left open fails'
-  'case_35|fail|ingress[0] opens 0.0.0.0/0 but not ::/0|an ingress rule is checked and named by its own index'
+  'case_35|fail|ingress[0] opens all IPv4 (0.0.0.0/0) but not IPv6|an ingress rule is checked and named by its own index'
   'case_36|fail|a ::/0 block does not cut out fc00::/7|an unrestricted ::/0 listed before the restricted one is still caught'
-  'case_37|fail|opens 0.0.0.0/0 but not ::/0|the IPv4 halves (0.0.0.0/1 + 128.0.0.0/1) without the IPv6 halves fail'
+  'case_37|fail|opens all IPv4 (0.0.0.0/1) but not IPv6|the IPv4 halves (0.0.0.0/1 + 128.0.0.0/1) without the IPv6 halves fail'
+  'case_38|fail|but opens IPv6 with 8000::/1|private IPv4 ranges cut out, IPv6 opened by /1 halves instead of a restricted ::/0, fails'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or

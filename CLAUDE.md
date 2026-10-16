@@ -149,7 +149,9 @@ scripts/             # Pre-commit hooks, automation scripts
 - NetworkPolicies use `default-deny-all` — new services need explicit ingress/egress rules from `traefik` namespace.
   IPv4 and IPv6 alike (the platform is moving to dual-stack): a rule that opens `0.0.0.0/0` also opens `::/0` and the
   reverse, and IPv4 private ranges cut out mean `fc00::/7`, `fe80::/10` and the NAT64 prefixes cut out of `::/0`
-  (`scripts/check-app-security.sh`). IPv6 is secured like IPv4, not switched off to look safe
+  (`scripts/check-app-security.sh`). IPv6 is secured like IPv4, not switched off to look safe. Under Cilium `0.0.0.0/0`
+  and `::/0` mean "world" (outside the cluster, never a node); a rule that must reach a node (the API server on kind
+  and k3s) uses the /1 halves (`0.0.0.0/1` + `128.0.0.0/1`, `::/1` + `8000::/1`) - only allow-postgres-egress-apiserver
 - App security rules (enforced by `scripts/check-app-security.sh` in pre-commit and Flux Diff): every app
   Deployment sets `automountServiceAccountToken: false` and, when an HPA targets it, no `spec.replicas`;
   every workload written under `flux/` (apps and platform: Guardian, MinIO, chaos, synthetic traffic) sets
