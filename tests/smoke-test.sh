@@ -13,7 +13,8 @@
 # Runs by hand as the baseline check of every chapter (Chapter 00), and in the Hetzner e2e workflow
 # with KUBE_CONTEXT=hetzner-sre-control-plane.
 # What it checks: Flux (every Kustomization Ready and none suspended), the backend and frontend in
-# develop, a request to the backend, the generated secrets, cert-manager Certificates (skipped where
+# develop, a request to the backend, every app pod answering on each of its addresses (IPv4 and
+# IPv6) in every environment, the generated secrets, cert-manager Certificates (skipped where
 # cert-manager is not installed) and the CNPG clusters. A check that cannot read its
 # objects, or finds none, fails - an empty answer is never "all healthy". It changes nothing in the cluster except
 # one short-lived probe pod (smoke-curl-<time>-<random> in develop), which it deletes again.
@@ -111,6 +112,36 @@ smoke_curl() {
   [ "$phase" = "Succeeded" ]
 }
 run_test "Backend /healthz responds in develop" smoke_curl
+
+# --- 3b. Every app endpoint answers on each address ---
+# A dual-stack Service sends a request to any of a pod's addresses. A pod that listens on IPv4 only
+# then fails every request that lands on IPv6 - through Traefik that was a 502 for about half of them
+# (2026-10-16: frontend images from before frontend#26 in develop and production, while the pods were
+# Ready - the kubelet probes one family). The request comes from Traefik's pod, the path visitors take,
+# straight to each ready address in the EndpointSlices of frontend and backend.
+# endpoints_answer NS SERVICE PATH - true when the Service has ready addresses and every one answers
+# PATH on port 8080; prints the addresses that did not.
+endpoints_answer() {
+  local ns="$1" svc="$2" path="$3" addrs addr url bad=""
+  addrs="$(k -n "$ns" get endpointslices -l "kubernetes.io/service-name=$svc" -o json \
+    | jq -r '.items[].endpoints[]? | select(.conditions.ready != false) | .addresses[]')" || return 1
+  [ -n "$addrs" ] || { echo "no ready addresses"; return 1; }
+  for addr in $addrs; do
+    case "$addr" in *:*) url="http://[$addr]:8080$path" ;; *) url="http://$addr:8080$path" ;; esac
+    k -n traefik exec deploy/traefik -- wget -q -T 5 -O /dev/null "$url" >/dev/null 2>&1 || bad+=" $addr"
+  done
+  [ -z "$bad" ] || { echo "no answer from:$bad"; return 1; }
+}
+for ns in develop staging production; do
+  for app in frontend backend; do
+    path=/health; [ "$app" = backend ] && path=/healthz
+    if out="$(endpoints_answer "$ns" "$app" "$path")"; then
+      pass "Every $app pod in $ns answers on each address (IPv4 and IPv6)"
+    else
+      fail "Every $app pod in $ns answers on each address (IPv4 and IPv6) - $out"
+    fi
+  done
+done
 
 # --- 4. Critical secrets present ---
 # (uptrace-secrets is not part of flux/secrets/develop; the DSN lives in backend-secrets)

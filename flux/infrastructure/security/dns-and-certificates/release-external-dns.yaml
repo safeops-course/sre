@@ -46,4 +46,6 @@ spec:
     policy: sync
     sources:
       - ingress
+    # Each cloud profile adds its provider (k8s-external-dns-sre-gke, -hetzner): one owner per provider,
+    # so two clusters never rewrite each other's records. A new provider adds the same patch.
     txtOwnerId: "k8s-external-dns-${cluster_name}"

@@ -201,7 +201,7 @@ locals {
   # kube-hetzner names the kubeconfig context after cluster_name ("sre") - too generic next to other
   # clusters in a merged kubeconfig. Rename only the context (cluster/user names, server and certs stay),
   # so it reads like kind's "kind-sre-control-plane". cluster_name itself must not change: it also names
-  # the servers, the etcd snapshot folder and the external-dns owner ID.
+  # the servers, the etcd snapshot folder and the external-dns owner ID (+ -hetzner, profiles/hetzner).
   # https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
   kubeconfig_context = "hetzner-${var.cluster_name}-control-plane"
   kubeconfig_parsed  = yamldecode(module.kube_hetzner.kubeconfig)
@@ -228,6 +228,43 @@ resource "local_sensitive_file" "kubeconfig" {
   content         = local.kubeconfig_named
   filename        = local.kubeconfig_path
   file_permission = "0600"
+}
+
+# Node-to-node IPv6 for Cilium's health check. Hetzner's private network carries IPv4 only, so a node's
+# IPv6 address is its public one - and kube-hetzner's firewall drops what one node sends to another
+# there. Pods are not affected (Cilium tunnels both families over the private IPv4 network), but Cilium
+# probes every node over each family and reported "1/2 reachable" for ever (2026-10-16). This firewall
+# opens only the health check (TCP 4240) and ping (ICMP, also ICMPv6), only from the cluster's own nodes
+# (each /128); a server may have several firewalls and gets the union of their rules.
+# https://docs.cilium.io/en/stable/operations/system_requirements/#firewall-rules
+# https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/firewall
+locals {
+  node_ids  = [for n in concat(module.kube_hetzner.control_plane_nodes, module.kube_hetzner.agent_nodes) : n.id]
+  node_ipv6 = [for ip in concat(module.kube_hetzner.control_planes_public_ipv6, module.kube_hetzner.agents_public_ipv6) : "${ip}/128"]
+}
+
+resource "hcloud_firewall" "node_ipv6_health" {
+  name = "${var.cluster_name}-node-ipv6-health"
+
+  rule {
+    description = "Cilium health check between the nodes over IPv6"
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "4240"
+    source_ips  = local.node_ipv6
+  }
+
+  rule {
+    description = "Ping between the nodes over IPv6 (Cilium health)"
+    direction   = "in"
+    protocol    = "icmp"
+    source_ips  = local.node_ipv6
+  }
+}
+
+resource "hcloud_firewall_attachment" "node_ipv6_health" {
+  firewall_id = hcloud_firewall.node_ipv6_health.id
+  server_ids  = local.node_ids
 }
 
 # Helm and Kubernetes providers, configured from the module's outputs: they always talk to
