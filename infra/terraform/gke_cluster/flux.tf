@@ -181,7 +181,7 @@ resource "null_resource" "flux_operator_install" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\""
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\" \"${var.flux_operator_manifest_sha256}\""
   }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]

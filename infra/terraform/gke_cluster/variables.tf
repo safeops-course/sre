@@ -105,6 +105,17 @@ variable "flux_operator_version" {
   default = "0.61.0"
 }
 
+variable "flux_operator_manifest_sha256" {
+  description = "SHA-256 of that release's install.yaml (its flux-operator_<version>_checksums.txt). Change it with flux_operator_version: the install refuses a manifest that does not match."
+  type        = string
+  default     = "550ebc8eec5fae00e55336cf5403a60846c51174095df3d8ca541b48481662af"
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.flux_operator_manifest_sha256))
+    error_message = "flux_operator_manifest_sha256 must be a SHA-256 in lowercase hex (64 characters)."
+  }
+}
+
 variable "flux_version" {
   description = "Flux version the FluxInstance installs. Pinned, so a rebuild gets the same Flux."
   type        = string

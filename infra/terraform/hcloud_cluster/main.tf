@@ -341,7 +341,7 @@ resource "null_resource" "flux_operator_install" {
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\""
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\" \"${var.flux_operator_manifest_sha256}\""
   }
 }
 

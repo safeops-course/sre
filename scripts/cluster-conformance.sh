@@ -328,7 +328,7 @@ else
 fi
 
 # C12 - nothing billed is left after a destroy: a check after the cluster is gone, not on it.
-skip C12 "teardown leftovers - after destroy: scripts/hcloud-leftovers.sh (Hetzner)"
+skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers; kind: nothing billed)"
 
 echo
 if [ "$FAILS" -eq 0 ]; then echo "Contract kept on $CONTEXT"; else echo "$FAILS item(s) FAIL on $CONTEXT"; fi

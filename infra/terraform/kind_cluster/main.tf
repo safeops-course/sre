@@ -259,12 +259,10 @@ resource "helm_release" "metrics_server" {
 resource "null_resource" "flux_operator_install" {
   depends_on = [time_sleep.wait_for_cluster]
 
+  # Only what the operator install depends on (as in gke and hcloud); the repository, branch and path are
+  # the FluxInstance's inputs and re-create only null_resource.flux_instance below.
   triggers = {
     kubeconfig_path = local.kubeconfig_path
-    repo_url        = var.flux_git_repository_url
-    repo_branch     = var.flux_git_repository_branch
-    repo_path       = var.flux_kustomization_path
-    provider        = "github"
     # reinstall when the pinned Flux Operator release changes
     operator_version = var.flux_operator_version
   }
@@ -272,7 +270,7 @@ resource "null_resource" "flux_operator_install" {
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\""
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\" \"${var.flux_operator_manifest_sha256}\""
   }
 
   # A new kind cluster (for example a new node_image) needs this step again;
