@@ -327,6 +327,10 @@ spec:
   ingress:
     - from: [{ipBlock: {cidr: 0.0.0.0/0}}]'
 }
+# An unrestricted ::/0 first, the restricted one after it: the check must not read only the last block.
+case_36() {
+  yq -i '.spec.egress[0].to = [{"ipBlock": {"cidr": "::/0"}}] + .spec.egress[0].to' "${R}/${NP}/allow-backend-egress-https.yaml"
+}
 case_33() {
   yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "fe80::/10"))' \
     "${R}/${NP}/allow-backend-egress-https.yaml"
@@ -372,6 +376,7 @@ CASES=(
   'case_33|fail|does not cut out fe80::/10|IPv4 private ranges cut out but IPv6 link-local left open fails'
   'case_34|fail|does not cut out 64:ff9b::/96|IPv4 private ranges cut out but the NAT64 prefix left open fails'
   'case_35|fail|ingress[0] opens 0.0.0.0/0 but not ::/0|an ingress rule is checked and named by its own index'
+  'case_36|fail|a ::/0 block does not cut out fc00::/7|an unrestricted ::/0 listed before the restricted one is still caught'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or

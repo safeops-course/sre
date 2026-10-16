@@ -372,21 +372,31 @@ fi
 while IFS=$'\t' read -r policy rule blocks file; do
   [[ -z "${policy}" ]] && continue
   ip_rules=$((ip_rules + 1))
-  v4="" v6=""
+  # Every block counts - a rule may list the same CIDR twice, and the peers add up: one block without an
+  # except opens what another one cuts out.
+  v4_excepts=() v6_excepts=()
   for block in ${blocks}; do
-    [[ "${block%%|*}" == "0.0.0.0/0" ]] && v4="${block}"
-    [[ "${block%%|*}" == "::/0" ]] && v6="${block}"
+    [[ "${block%%|*}" == "0.0.0.0/0" ]] && v4_excepts+=("${block#*|}")
+    [[ "${block%%|*}" == "::/0" ]] && v6_excepts+=("${block#*|}")
   done
   where="${file}: NetworkPolicy ${policy} ${rule}"
-  if [[ -n "${v4}" && -z "${v6}" ]]; then
+  if ((${#v4_excepts[@]} > 0 && ${#v6_excepts[@]} == 0)); then
     failures+=("${where} opens 0.0.0.0/0 but not ::/0 - on a dual-stack cluster IPv6 stays closed; add the IPv6 twin")
-  elif [[ -z "${v4}" && -n "${v6}" ]]; then
+  elif ((${#v4_excepts[@]} == 0 && ${#v6_excepts[@]} > 0)); then
     failures+=("${where} opens ::/0 but not 0.0.0.0/0 - one rule for both families, or neither")
-  elif [[ -n "${v4}" && -n "${v4#*|}" ]]; then
-    for range in fc00::/7 fe80::/10 64:ff9b::/96 64:ff9b:1::/48; do
-      [[ ",${v6#*|}," == *",${range},"* ]] ||
-        failures+=("${where} cuts private ranges out of 0.0.0.0/0 but ::/0 does not cut out ${range} - IPv6 would be a way around them")
-    done
+  elif ((${#v4_excepts[@]} > 0)); then
+    # IPv4 keeps private ranges out only when every IPv4 block cuts something out; then every IPv6 block
+    # must cut out the private IPv6 ranges - one ::/0 without them opens IPv6 whatever the others say.
+    v4_cuts=yes
+    for excepts in "${v4_excepts[@]}"; do [[ -n "${excepts}" ]] || v4_cuts=no; done
+    if [[ "${v4_cuts}" == yes ]]; then
+      for excepts in "${v6_excepts[@]}"; do
+        for range in fc00::/7 fe80::/10 64:ff9b::/96 64:ff9b:1::/48; do
+          [[ ",${excepts}," == *",${range},"* ]] ||
+            failures+=("${where} cuts private ranges out of 0.0.0.0/0 but a ::/0 block does not cut out ${range} - IPv6 would be a way around them")
+        done
+      done
+    fi
   fi
 done <<<"${np_rows}"
 
