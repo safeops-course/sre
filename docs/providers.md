@@ -45,7 +45,8 @@ example to copy from.
   `allow-backend-egress-https` cuts out of `::/0` (on GKE it is global, not in fc00::/7). Every app pod answers on
   both of its addresses (`make smoke-test`: an image that listens on IPv4 only fails there, not as a 502 later).
   Without it by default (EKS gives a cluster IPv4 or IPv6, not both), the profile patches the app and Traefik
-  Services to `PreferDualStack` - a written exception - and the module writes `ip_stack = "ipv4"` to cluster-config (`"dual"` everywhere else) - conformance C13
+  Services (`ipFamilyPolicy: PreferDualStack` and no `ipFamilies` - a listed IPv6 would be refused) - a written
+  exception - and the module writes `ip_stack = "ipv4"` to cluster-config (`"dual"` everywhere else) - conformance C13
   checks the promise.
 
 ## Proof

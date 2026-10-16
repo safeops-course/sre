@@ -131,24 +131,37 @@ module "kube_hetzner" {
   # the nodes' own /128s are known only after the servers exist (a dependency cycle), and a separate
   # firewall is detached again by kube-hetzner's servers (they set firewall_ids) on every apply. If a node
   # ever gets an address outside the range, Cilium shows "1/2 reachable" again (cilium-health status).
+  # Both directions: kube-hetzner also restricts OUTBOUND traffic (restrict_outbound_traffic, on by default
+  # - ICMP, DNS, HTTP(S), NTP, ... only), so the inbound rule alone opened ping but not TCP 4240 (proved on
+  # Hetzner 2026-10-16: 4240 over IPv6 answered only after the outbound rule; then 2/2 reachable).
   # kube-hetzner keys its rules by direction-protocol-port: these replace its own "in-icmp-" rule
-  # (allow_inbound_icmp, off here) and "in-tcp-4240" (multinetwork, off here) - turning those on needs
-  # their sources added here.
+  # (allow_inbound_icmp, off here) and "in-tcp-4240" / "out-tcp-4240" (multinetwork, off here) - turning
+  # those on needs their addresses added here.
   # https://docs.cilium.io/en/stable/operations/system_requirements/#firewall-rules
   extra_firewall_rules = [
     {
-      description = "Cilium health check between the nodes over IPv6"
-      direction   = "in"
-      protocol    = "tcp"
-      port        = "4240"
-      source_ips  = [local.hetzner_ipv6_range[var.location]]
+      description     = "Cilium health check between the nodes over IPv6"
+      direction       = "in"
+      protocol        = "tcp"
+      port            = "4240"
+      source_ips      = [local.hetzner_ipv6_range[var.location]]
+      destination_ips = []
     },
     {
-      description = "Ping between the nodes over IPv6 (Cilium health)"
-      direction   = "in"
-      protocol    = "icmp"
-      port        = ""
-      source_ips  = [local.hetzner_ipv6_range[var.location]]
+      description     = "Cilium health check between the nodes over IPv6 (outbound)"
+      direction       = "out"
+      protocol        = "tcp"
+      port            = "4240"
+      source_ips      = []
+      destination_ips = [local.hetzner_ipv6_range[var.location]]
+    },
+    {
+      description     = "Ping between the nodes over IPv6 (Cilium health)"
+      direction       = "in"
+      protocol        = "icmp"
+      port            = ""
+      source_ips      = [local.hetzner_ipv6_range[var.location]]
+      destination_ips = []
     },
   ]
 

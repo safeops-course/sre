@@ -144,7 +144,18 @@ single_nodes="$(while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(fa
 svc_ips="$(k -n "$NS" get service server -o jsonpath='{.spec.clusterIPs[*]}' 2>/dev/null)" || svc_ips=""
 dual=false
 [ -n "$node_cidrs" ] && [ -z "$single_nodes" ] && [ "$(families_of "$svc_ips")" = "yes yes" ] && dual=true
-families=4; [ "$dual" = true ] && families="4 6"
+# The promise: cluster-config ip_stack, written by the module's Terraform ("dual" where the provider has
+# IPv6 by default, "ipv4" where it has not). A dual-stack promise makes C2 and C5 test both families even
+# when IPv6 is gone - they fail then too, not only C13. An unreadable ConfigMap is not "no promise".
+ip_stack_note=""
+if cluster_config="$(k -n flux-system get configmap cluster-config -o json 2>&1)"; then
+  ip_stack="$(jq -r '.data.ip_stack // ""' <<<"$cluster_config")"
+else
+  ip_stack=""; ip_stack_note="could not read flux-system/cluster-config: $(head -c 150 <<<"$cluster_config")"
+fi
+want_dual="$dual"
+case "$ip_stack" in dual) want_dual=true ;; ipv4) want_dual=false ;; esac
+families=4; [ "$want_dual" = true ] && families="4 6"
 
 # C2 - NetworkPolicies are enforced, egress included. Four probes from a pod labelled app=client:
 # open with no policy; blocked by the platform's own default-deny-all (+ DNS); still blocked once the
@@ -281,7 +292,7 @@ case "$(jq -r '.spec.type // "missing"' <<<"$svc")" in
     addrs="$(jq -r '[.status.loadBalancer.ingress[]? | .ip // .hostname] | join(" ")' <<<"$svc")"
     if [ -z "$addrs" ]; then
       fail C5 "Traefik's Service has no load balancer address"
-    elif [ "$dual" = true ] && [ -n "$(lb_hostnames "$addrs")" ]; then
+    elif [ "$want_dual" = true ] && [ -n "$(lb_hostnames "$addrs")" ]; then
       # A hostname (AWS NLB): each one must resolve to an IPv4 and an IPv6 address.
       if ! command -v dig >/dev/null 2>&1; then
         skip C5 "load balancer for the ingress: $addrs - a hostname, dig not found to check its A and AAAA records"
@@ -297,7 +308,7 @@ case "$(jq -r '.spec.type // "missing"' <<<"$svc")" in
           fail C5 "load balancer for the ingress - the cluster is dual-stack, records missing:$missing"
         fi
       fi
-    elif [ "$dual" = true ] && [ "$(families_of "$addrs")" != "yes yes" ]; then
+    elif [ "$want_dual" = true ] && [ "$(families_of "$addrs")" != "yes yes" ]; then
       fail C5 "load balancer for the ingress has one family only ($addrs) - the cluster is dual-stack, the ingress must be too"
     else
       pass C5 "load balancer for the ingress: $addrs"
@@ -388,17 +399,25 @@ skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scr
 # Terraform. "dual": IPv4 and IPv6 for every node's pods and for Services (decided before C2) - a provider
 # with IPv6 by default never loses it quietly. "ipv4": a provider without it (docs/providers.md); a
 # cluster that is dual-stack after all fails too, so the promise in Git stays true.
-ip_stack="$(k -n flux-system get configmap cluster-config -o jsonpath='{.data.ip_stack}' 2>/dev/null)" || ip_stack=""
-if [ "$ip_stack" = ipv4 ]; then
+v6_nodes="$(while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "yes no" ] || echo "$name"; done <<<"$node_cidrs")"
+if [ -n "$ip_stack_note" ]; then
+  fail C13 "address families - $ip_stack_note"
+elif [ "$ip_stack" = ipv4 ]; then
   if [ "$dual" = true ]; then
     fail C13 "cluster-config says ip_stack ipv4, but the cluster is dual-stack (a Service gets $svc_ips) - set ip_stack dual"
+  elif [ -z "$node_cidrs" ]; then
+    fail C13 "IPv4 only - could not read the nodes' pod ranges"
+  elif [ -n "$v6_nodes" ]; then
+    fail C13 "cluster-config says ip_stack ipv4, but these nodes have no IPv4-only pod range: $(tr '\n' ' ' <<<"$v6_nodes")"
   elif [ "$(families_of "$svc_ips")" = "yes no" ]; then
     pass C13 "IPv4 only, as cluster-config ip_stack promises (the provider has no IPv6 by default); a Service gets $svc_ips"
   else
     fail C13 "cluster-config says ip_stack ipv4, but a Service got ${svc_ips:-no address}"
   fi
+elif [ -z "$ip_stack" ]; then
+  fail C13 "cluster-config has no ip_stack - the module's Terraform writes it (a cluster from before it: terraform apply once)"
 elif [ "$ip_stack" != dual ]; then
-  fail C13 "cluster-config has no ip_stack (dual or ipv4, got '${ip_stack}') - the module's Terraform writes it (terraform apply)"
+  fail C13 "cluster-config ip_stack '${ip_stack}' is not supported - dual or ipv4"
 elif [ "$dual" = true ]; then
   pass C13 "dual-stack: every node has an IPv4 and an IPv6 pod range; a Service gets $svc_ips"
 elif [ -z "$node_cidrs" ]; then

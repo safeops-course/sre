@@ -95,7 +95,8 @@ scripts/             # Pre-commit hooks, automation scripts
   a random ULA), GKE (Dataplane V2 is Cilium; `stack_type = "IPV4_IPV6"`, EXTERNAL = global pod IPv6). Each Terraform
   writes its pod IPv6 range to cluster-config `cluster_ipv6_range`; `allow-backend-egress-https` cuts it out of `::/0`
   (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
-  (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly
+  (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly; a provider
+  without IPv6 by default patches `PreferDualStack` in its profile and writes cluster-config `ip_stack = "ipv4"`
 - **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
   `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
 - **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)
@@ -193,7 +194,7 @@ scripts/             # Pre-commit hooks, automation scripts
   `terraform-hcloud-plan|apply|destroy`; CI calls `terraform-hcloud-destroy`); `make hcloud-drift` - drift check
 - `make cluster-conformance` — the cluster contract C1-C13 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
   pinned Kubernetes version exactly (a managed cluster without a pin: kind's minor), NetworkPolicies enforced (egress too), API-server egress rule, default StorageClass,
-  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures, dual-stack (C13; C2 and C5 then check both families); PASS/FAIL/SKIP with a
+  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures, the address families the provider promises (C13: cluster-config `ip_stack`; on "dual" C2 and C5 check both families); PASS/FAIL/SKIP with a
   reason. Creates and deletes the namespace `conformance` (a real disk for ~1 min on a cloud); nightly on kind
 - `make capstone-fault` — Chapter 23: a colleague's pull request with one random fault (f1 sign-up limit,
   f2 database network policies, f3 backend CPU), merged in the learner's repository; `scripts/capstone-fault.sh --local` commits only
