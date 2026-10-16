@@ -119,13 +119,19 @@ run_test "Backend /healthz responds in develop" smoke_curl
 # (2026-10-16: frontend images from before frontend#26 in develop and production, while the pods were
 # Ready - the kubelet probes one family). The request comes from Traefik's pod, the path visitors take,
 # straight to each ready address in the EndpointSlices of frontend and backend.
-# endpoints_answer NS SERVICE PATH - true when the Service has ready addresses and every one answers
-# PATH on its pod port (from the EndpointSlice); prints the URLs that did not. One exec per Service.
+# endpoints_answer NS SERVICE PATH - true when every ready pod of the Service has an address of both
+# families and every address answers PATH on its pod port (from the EndpointSlice); prints what did not.
+# One exec per Service.
 endpoints_answer() {
-  local ns="$1" svc="$2" path="$3" urls bad list u out
-  urls="$(k -n "$ns" get endpointslices -l "kubernetes.io/service-name=$svc" -o json | jq -r --arg p "$path" '
+  local ns="$1" svc="$2" path="$3" slices missing urls bad list u out
+  slices="$(k -n "$ns" get endpointslices -l "kubernetes.io/service-name=$svc" -o json)" || return 1
+  # The same ready pods in the IPv4 and the IPv6 slices: a pod missing from one family is never probed there.
+  missing="$(jq -r '[.items[] | .addressType as $f | .endpoints[]? | select(.conditions.ready != false)
+    | {pod: (.targetRef.name // "?"), f: $f}] | group_by(.pod)[] | select(([.[].f] | unique | length) < 2) | .[0].pod' <<< "$slices")" || return 1
+  [ -z "$missing" ] || { echo "ready pods without an address of each family: $(tr '\n' ' ' <<< "$missing")"; return 1; }
+  urls="$(jq -r --arg p "$path" '
     .items[] | .ports[0].port as $port | .endpoints[]? | select(.conditions.ready != false) | .addresses[]
-    | if test(":") then "http://[\(.)]:\($port)\($p)" else "http://\(.):\($port)\($p)" end')" || return 1
+    | if test(":") then "http://[\(.)]:\($port)\($p)" else "http://\(.):\($port)\($p)" end' <<< "$slices")" || return 1
   [ -n "$urls" ] || { echo "no ready addresses"; return 1; }
   list=()
   while IFS= read -r u; do list+=("$u"); done <<< "$urls"

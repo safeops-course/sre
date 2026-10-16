@@ -190,18 +190,27 @@ delete_load_balancers() {
 }
 
 # delete_dns_records - delete every Ingress external-dns publishes (annotation cloudflare-proxied=enabled)
-# and wait until external-dns logged the deletion of each one's records. It runs with --policy=sync and
+# and wait until external-dns deleted their records: a DELETE line for each host (rules, TLS and the
+# hostname annotation - what its ingress source publishes), then a later pass with nothing to change
+# ("All records are already up to date" - a failed delete is retried and never logs that). It runs with --policy=sync and
 # deletes only records with its own owner ID (one per provider); a record left behind points at a load
 # balancer that is gone, and the next cluster - another owner - skips it (found 2026-10-16: dex and
 # headlamp, whose namespace auth is not deleted here, kept their records). Flux is suspended, so nothing
 # recreates the Ingresses. external-dns runs every minute; on a timeout the hosts left are named. It reads
 # external-dns's log (text format, the chart's default) - the cluster has no Cloudflare token to ask.
 delete_dns_records() {
-  local ingresses hosts host start left=""
-  kc -n external-dns get deployment external-dns >/dev/null 2>&1 || return 0
+  local ingresses hosts host start left="" found
+  found="$(kc -n external-dns get deployment external-dns --ignore-not-found -o name 2>/dev/null)" || {
+    warn "could not check for external-dns - DNS records not deleted; remove any left in Cloudflare by hand"
+    return 0
+  }
+  [[ -z "${found}" ]] && { log "no external-dns on this cluster - no DNS records to delete"; return 0; }
   command -v jq >/dev/null 2>&1 || { warn "jq not found - DNS records are not deleted and may stay in Cloudflare"; return 0; }
   ingresses="$(kc get ingress -A -o json 2>/dev/null)" || { warn "could not list Ingresses - DNS records may stay in Cloudflare"; return 0; }
-  hosts="$(jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled") | .spec.rules[]?.host // empty' <<<"${ingresses}" | sort -u)" \
+  hosts="$(jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled")
+    | (.spec.rules[]?.host // empty), (.spec.tls[]?.hosts[]? // empty),
+      ((.metadata.annotations["external-dns.alpha.kubernetes.io/hostname"] // "") | split(",")[] | gsub("\\s"; ""))
+    | select(. != "")' <<<"${ingresses}" | sort -u)" \
     || { warn "could not read the Ingress hosts - DNS records may stay in Cloudflare"; return 0; }
   [[ -z "${hosts}" ]] && return 0
   # A minute early: the node's clock may be behind this machine's, and a DELETE line before start is missed.
@@ -219,10 +228,14 @@ delete_dns_records() {
     while IFS= read -r host; do
       grep -qF "action=DELETE record=${host} " <<<"${logs}" || left+=" ${host}"
     done <<<"${hosts}"
-    [[ -z "${left}" ]] && { log "external-dns deleted the DNS records"; return 0; }
+    # Every DELETE logged, and a later pass found nothing left to change: the deletes went through.
+    if [[ -z "${left}" ]] && awk '/action=DELETE/ { d = NR } /All records are already up to date/ { u = NR } END { exit !(u > d) }' <<<"${logs}"; then
+      log "external-dns deleted the DNS records"
+      return 0
+    fi
     sleep 10
   done
-  warn "external-dns did not delete the records of${left} within ${DNS_TIMEOUT}s - delete them in Cloudflare (A, AAAA and their TXT owner records), or the next cluster skips them"
+  warn "external-dns did not confirm deleting the records of${left:- every host (no clean pass after the deletes)} within ${DNS_TIMEOUT}s - delete them in Cloudflare (A, AAAA and their TXT owner records), or the next cluster skips them"
 }
 
 # stop_pods NS... - delete every pod in these (already terminating) namespaces with grace period 0.
