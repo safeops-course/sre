@@ -141,10 +141,11 @@ repos:
         stages: [pre-commit]
 
       - id: platform-alerts-test
-        name: Platform alerts fire where they should, and only there (promtool test rules, no cluster)
+        name: Platform alerts fire where they should, and only there; every PrometheusRule parses (promtool, no cluster)
         entry: tests/platform-alerts.test.sh
         language: script
-        files: ^(flux/infrastructure/observability/kube-prometheus-stack/monitoring/platform-alerts\.yaml|flux/infrastructure/progressive-delivery/develop/alerts\.yaml|tests/platform-alerts/.*|tests/platform-alerts\.test\.sh)$
+        # Any manifest under flux/ may be a PrometheusRule (the test finds them by kind; ~1 s).
+        files: ^(flux/.*\.yaml|tests/platform-alerts/.*|tests/platform-alerts\.test\.sh)$
         pass_filenames: false
         stages: [pre-commit]
 

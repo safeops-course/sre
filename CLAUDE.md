@@ -184,7 +184,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - `make install-hooks` — install all pre-commit hooks
 - `make pre-commit` — run all hooks manually
 - `make fmt` — terraform fmt recursive
-- `make validate` — terraform validate of every module (kind, hcloud, state-lab), no backend, no credentials
+- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, state-lab), no backend, no credentials
 - `make tf` — list the Terraform modules and their targets
 - `make kind-plan` / `kind-apply` / `kind-drift` / `kind-destroy` — local cluster; plan is saved with
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)

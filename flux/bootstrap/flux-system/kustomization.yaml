@@ -1,4 +1,4 @@
-# The base: what every cluster runs, on any provider - kind, Hetzner, GKE. Nothing here names a cloud,
+# The base: what every cluster runs, on any provider (docs/providers.md). Nothing here names a cloud,
 # a DNS zone or the platform's SOPS key. A cluster reconciles a profile, never this directory alone:
 #   flux/bootstrap/profiles/<profile>   = this base + the components it needs + its own patches
 #   flux/bootstrap/components/<name>    = Kustomizations only some clusters run (Kustomize components)

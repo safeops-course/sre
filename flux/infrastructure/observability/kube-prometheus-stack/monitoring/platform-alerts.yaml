@@ -8,6 +8,11 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: platform-alerts
+  # The labels of the other rule files (Prometheus loads every PrometheusRule - ruleSelector: {} -
+  # so they select nothing; they keep the files alike for anyone filtering by them).
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
 spec:
   groups:
     - name: platform
@@ -29,12 +34,14 @@ spec:
 
         # A platform component that keeps half a core busy for half an hour is doing work nobody
         # asked for - a scan, a loop, a rule that never finishes. The application namespaces are not
-        # listed: their resources have their own budgets (scripts/check-app-resources.sh).
+        # listed: their resources have their own budgets (scripts/check-app-resources.sh). A list, not
+        # "everything but the apps": a learner's own namespace (lab, ...) is not the platform.
+        # A new platform namespace is added here.
         - alert: PlatformComponentHighCPU
           expr: |
             sum by (namespace, pod) (
               rate(container_cpu_usage_seconds_total{
-                namespace=~"kube-system|flux-system|kyverno|observability|flagger-system|cnpg-system|traefik|cert-manager|external-dns",
+                namespace=~"kube-system|flux-system|kyverno|observability|flagger-system|cnpg-system|traefik|cert-manager|external-dns|auth|minio|system-upgrade",
                 container!="", container!="POD"
               }[15m])
             ) > 0.5

@@ -235,6 +235,9 @@ locals {
   }
 
   kubeconfig_path = pathexpand("${path.module}/kubeconfig.yaml")
+  # A new k3s cluster has a new certificate authority: what must run again on a re-created cluster
+  # (Flux, the cluster id) is keyed on it - the kubeconfig path never changes.
+  cluster_ca_hash = sha256(module.kube_hetzner.kubeconfig_data.cluster_ca_certificate)
 
   # kube-hetzner names the kubeconfig context after cluster_name ("sre") - too generic next to other
   # clusters in a merged kubeconfig. Rename only the context (cluster/user names, server and certs stay),
@@ -402,7 +405,9 @@ resource "null_resource" "flux_operator_install" {
   depends_on = [kubernetes_namespace_v1.bootstrap]
 
   # operator_version: a new pinned release is installed on the next apply.
+  # cluster_ca: a re-created cluster gets Flux again (the kubeconfig path alone never changes).
   triggers = {
+    cluster_ca       = local.cluster_ca_hash
     kubeconfig_path  = local.kubeconfig_path
     operator_version = var.flux_operator_version
     # a re-pinned manifest (same version) is installed and checked again
@@ -426,6 +431,9 @@ resource "null_resource" "flux_operator_install" {
 # The FluxInstance: which Flux version and controllers to run, and which Git repository,
 # branch and path to follow. A change of any trigger re-applies it.
 # https://fluxcd.control-plane.io/operator/fluxinstance/
+# No destroy-time delete here (as on GKE): flux-pre-destroy.sh removes the FluxInstance in its order,
+# after what Flux's controllers must clean up; on a replacement (new branch or version) the apply below
+# updates the FluxInstance in place.
 resource "null_resource" "flux_instance" {
   # cluster-config first: the Kustomizations substitute from it (${cluster_ipv6_range} and others).
   depends_on = [
@@ -435,6 +443,7 @@ resource "null_resource" "flux_instance" {
   ]
 
   triggers = {
+    cluster_ca      = local.cluster_ca_hash
     kubeconfig_path = local.kubeconfig_path
     repo_url        = var.flux_git_repository_url
     repo_branch     = var.flux_git_repository_branch
@@ -476,13 +485,6 @@ ${local.flux_pull_secret_yaml}
 EOF
     EOC
   }
-
-  provisioner "local-exec" {
-    when        = destroy
-    on_failure  = continue
-    interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${self.triggers.kubeconfig_path}\" delete fluxinstance flux -n flux-system --ignore-not-found=true --wait=false --timeout=30s 2>/dev/null || true"
-  }
 }
 
 # Runs only on destroy (when = destroy): ../scripts/flux-pre-destroy.sh suspends Flux and deletes
@@ -503,7 +505,7 @@ resource "terraform_data" "flux_pre_destroy" {
 
   input = {
     kubeconfig_path = local.kubeconfig_path
-    namespaces      = "flux-system,develop,staging,production,observability"
+    namespaces      = "flux-system,develop,staging,production,observability,traefik"
   }
 
   provisioner "local-exec" {
@@ -584,7 +586,7 @@ resource "terraform_data" "cluster_id" {
   input = formatdate("YYYYMMDD-hhmm", timestamp())
   # A new k3s cluster has a new certificate authority: a new id, even if the state was kept. Ordinary
   # applies (a resized server, a new chart) keep the CA and the id.
-  triggers_replace = sha256(module.kube_hetzner.kubeconfig_data.cluster_ca_certificate)
+  triggers_replace = local.cluster_ca_hash
 
   lifecycle {
     ignore_changes = [input]

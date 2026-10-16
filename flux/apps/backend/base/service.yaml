@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   # Both families or no Service at all: on a single-stack cluster this fails loudly (the cluster must be
-  # dual-stack - kind, Hetzner and GKE are), instead of quietly leaving IPv6 out.
+  # dual-stack - every cluster of the platform is), instead of quietly leaving IPv6 out.
   ipFamilyPolicy: RequireDualStack
   ipFamilies: [IPv4, IPv6]
   type: ClusterIP

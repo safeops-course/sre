@@ -5,6 +5,10 @@
 # tests/platform-alerts/tests.yaml and fails when an alert fires where it should not, or stays
 # silent where it should fire - the restart loop that exits 0, the component that keeps a core busy.
 #
+# Every other PrometheusRule under flux/ gets `promtool check rules` too: the API server stores a rule
+# without parsing its PromQL, so a typo would reach Prometheus unnoticed (only two files were checked
+# before 2026-10-16).
+#
 # Runs in pre-commit and CI; no cluster, no network. Needs promtool (make check-tools) and yq (v4).
 # A PrometheusRule is a Kubernetes object; promtool wants plain rules files, so each spec is
 # extracted into a temporary directory first.
@@ -25,10 +29,26 @@ done
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
+# The two the unit tests name (promtool test rules parses them below).
 for entry in "${rules[@]}"; do
   read -r name source <<<"${entry}"
   yq '.spec' "${source}" > "${work}/${name}"
-  promtool check rules "${work}/${name}"
 done
+
+# Every PrometheusRule under flux/, found by its kind (yq, not a text search: a quoted or indented
+# kind counts too), one document at a time - promtool reads only the first document of a file. A new
+# rules file is checked without a list to keep up to date.
+pairs="$(find "${repo_root}/flux" -name '*.yaml' -print0 \
+  | xargs -0 yq -N 'select(tag == "!!map" and .kind == "PrometheusRule") | filename + " " + (.metadata.namespace // "-") + " " + .metadata.name')"
+# None found is a broken search, not a clean result.
+[ -n "${pairs}" ] || { echo "platform-alerts: no PrometheusRule found under flux/" >&2; exit 1; }
+n=0
+# One document by file, namespace ("-" when it has none) and name: one file may hold a name twice.
+while read -r source namespace name; do
+  n=$((n + 1))
+  echo "platform-alerts: ${source#"${repo_root}/"} - ${namespace}/${name}"
+  yq "select(tag == \"!!map\" and .kind == \"PrometheusRule\" and (.metadata.namespace // \"-\") == \"${namespace}\" and .metadata.name == \"${name}\") | .spec" "${source}" > "${work}/rule-${n}.yaml"
+  promtool check rules "${work}/rule-${n}.yaml"
+done <<<"${pairs}"
 cp "${tests}" "${work}/tests.yaml"
 promtool test rules "${work}/tests.yaml"

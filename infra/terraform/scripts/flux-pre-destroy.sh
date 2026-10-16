@@ -41,7 +41,7 @@ set -o nounset
 set -o pipefail
 
 KUBECONFIG_PATH="${1:-}"
-TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability}"
+TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability,traefik}"
 PV_TIMEOUT="${PRE_DESTROY_PV_TIMEOUT:-300}"
 LB_TIMEOUT="${PRE_DESTROY_LB_TIMEOUT:-300}"
 NS_TIMEOUT="${PRE_DESTROY_NS_TIMEOUT:-180}"
