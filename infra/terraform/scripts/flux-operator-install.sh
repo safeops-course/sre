@@ -10,8 +10,8 @@
 # (kind, until 2026-10-16) takes a new operator version instead of stopping on a field conflict with
 # "kubectl-client-side-apply"; its first server-side apply prints a one-time migration notice.
 # The manifest is downloaded with retries first: a GitHub hiccup must not stop a billed cluster's apply.
-# Then its SHA-256 must be the one pinned in Git (var.flux_operator_manifest_sha256, from the release's
-# checksums file): a changed or replaced release asset is never applied with cluster-admin rights.
+# Then its SHA-256 must be the one pinned in Git (flux-operator.sha256 next to this script, checked against
+# the release's build provenance): a changed or replaced release asset is never applied with cluster-admin rights.
 # Last it waits until the FluxInstance CRD is served - Terraform applies a FluxInstance right after.
 #
 # Usage: flux-operator-install.sh <kubeconfig> <version without "v", e.g. 0.61.0> <install.yaml SHA-256>
@@ -45,7 +45,7 @@ curl -fsSL --retry 3 --retry-all-errors -o "${manifest}" \
 actual_sha256="$(sha256_of "${manifest}")"
 if [[ "${actual_sha256}" != "${expected_sha256}" ]]; then
   echo "flux-operator-install: install.yaml of v${version} has SHA-256 ${actual_sha256}, Git pins ${expected_sha256}" >&2
-  echo "  - a version bump needs flux_operator_manifest_sha256 from flux-operator_${version}_checksums.txt too" >&2
+  echo "  - check the release (infra/terraform/scripts/flux-operator.sha256 says how) before changing its line" >&2
   exit 1
 fi
 

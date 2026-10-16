@@ -1,0 +1,12 @@
+# SHA-256 of each Flux Operator release's install.yaml a cluster module may install: "<sha256>  <version>".
+# The one place for this pin - gke_cluster, hcloud_cluster and kind_cluster read the line for their
+# flux_operator_version; a version without a line here fails the plan, before anything is created.
+# scripts/flux-operator-install.sh refuses a downloaded manifest with another hash.
+#
+# A new version gets a line only after checking the file was built by the project's release workflow
+# (GitHub build provenance), not just copied from checksums.txt:
+#   gh release download v<version> -R controlplaneio-fluxcd/flux-operator -p install.yaml -D /tmp/fo
+#   gh attestation verify /tmp/fo/install.yaml -R controlplaneio-fluxcd/flux-operator \
+#     --signer-workflow controlplaneio-fluxcd/flux-operator/.github/workflows/release.yaml
+#   shasum -a 256 /tmp/fo/install.yaml
+550ebc8eec5fae00e55336cf5403a60846c51174095df3d8ca541b48481662af  0.61.0

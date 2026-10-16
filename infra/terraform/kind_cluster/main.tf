@@ -255,6 +255,12 @@ resource "helm_release" "metrics_server" {
 
 # The Flux Operator, installed from its release manifest (pinned: var.flux_operator_version).
 # https://fluxcd.control-plane.io/operator/
+# The pinned SHA-256 of flux_operator_version's install.yaml, from scripts/flux-operator.sha256 (the one
+# place for it); "" when that version has no line - the precondition below then fails the plan.
+locals {
+  flux_operator_manifest_sha256 = try(regex("(?m)^([0-9a-f]{64})  ${replace(var.flux_operator_version, ".", "\\.")}$", file("${path.module}/../scripts/flux-operator.sha256"))[0], "")
+}
+
 # The command and why it is a server-side apply: scripts/flux-operator-install.sh (shared by every module).
 resource "null_resource" "flux_operator_install" {
   depends_on = [time_sleep.wait_for_cluster]
@@ -265,17 +271,23 @@ resource "null_resource" "flux_operator_install" {
     kubeconfig_path = local.kubeconfig_path
     # reinstall when the pinned Flux Operator release changes
     operator_version = var.flux_operator_version
+    # a re-pinned manifest (same version) is installed and checked again
+    manifest_sha256 = local.flux_operator_manifest_sha256
   }
 
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\" \"${var.flux_operator_manifest_sha256}\""
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\" \"${local.flux_operator_manifest_sha256}\""
   }
 
   # A new kind cluster (for example a new node_image) needs this step again;
   # without it the replaced cluster came up without Flux.
   lifecycle {
+    precondition {
+      condition     = local.flux_operator_manifest_sha256 != ""
+      error_message = "Flux Operator ${var.flux_operator_version} has no line in infra/terraform/scripts/flux-operator.sha256 - add its install.yaml SHA-256 (the file says how), then plan again."
+    }
     replace_triggered_by = [kind_cluster.sre]
   }
 }

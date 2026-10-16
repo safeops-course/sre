@@ -6,7 +6,7 @@ Every version this module installs is pinned, so a rebuild gives the same cluste
 |---|---|---|
 | Terraform providers | `main.tf` (`required_providers`) | kind ~> 0.11, helm ~> 3.3, kubernetes ~> 3.2, null, random, local, time |
 | Kubernetes | `variables.tf` `kind_node_image` | `kindest/node:v1.36.4@sha256:...` (the same version as Hetzner; 1.37 waits for the kind provider - see the variable) |
-| Flux Operator | `variables.tf` `flux_operator_version` | `0.61.0` (install.yaml of that GitHub release) |
+| Flux Operator | `variables.tf` `flux_operator_version` + its line in `../scripts/flux-operator.sha256` | `0.61.0` (install.yaml of that GitHub release, SHA-256 pinned) |
 | Flux | `variables.tf` `flux_version` | `2.9.6` |
 | metrics-server chart | `variables.tf` `metrics_server_chart_version` | `3.14.0` |
 
@@ -31,7 +31,12 @@ terraform apply
 
   The generated passwords are new (their `random_password` goes with the state); Flux rebuilds
   everything else from your fork.
-- A new `flux_operator_version` or `flux_version` re-applies the operator or the FluxInstance.
+- A new `flux_operator_version` or `flux_version` re-applies the operator or the FluxInstance. A new
+  operator version also needs its install.yaml SHA-256 in `../scripts/flux-operator.sha256` (the file
+  says how to check it first); without that line the plan stops with a precondition error.
+- One time, after 2026-10-16: the plan replaces `null_resource.flux_operator_install` with nothing
+  else changed - its triggers now name only the kubeconfig, the operator version and the manifest
+  hash. The apply re-runs the install (server-side, idempotent).
 - After the apply: `flux get kustomizations -A` (all Ready), `make smoke-test` (9/9), and
   `terraform plan -detailed-exitcode` returns `0`.
 
