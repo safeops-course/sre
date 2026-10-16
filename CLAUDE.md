@@ -139,7 +139,10 @@ scripts/             # Pre-commit hooks, automation scripts
   pre-commit). Production images are never built - `promote-production.yml` (backend/frontend repos)
   re-tags a staging image (same digest). On Hetzner a rollback pins the production ImagePolicy pattern to
   the good tag (a revert of newTag alone is rewritten by ImageUpdateAutomation); kind has no automation.
-- NetworkPolicies use `default-deny-all` — new services need explicit ingress/egress rules from `traefik` namespace
+- NetworkPolicies use `default-deny-all` — new services need explicit ingress/egress rules from `traefik` namespace.
+  IPv4 and IPv6 alike (the platform is going dual-stack): a rule that opens `0.0.0.0/0` also opens `::/0` and the
+  reverse, and IPv4 private ranges cut out mean `fc00::/7` + `fe80::/10` cut out of `::/0` (`scripts/check-app-security.sh`).
+  IPv6 is never switched off to look safe - it is secured like IPv4
 - App security rules (enforced by `scripts/check-app-security.sh` in pre-commit and Flux Diff): every app
   Deployment sets `automountServiceAccountToken: false` and, when an HPA targets it, no `spec.replicas`;
   every workload written under `flux/` (apps and platform: Guardian, MinIO, chaos, synthetic traffic) sets

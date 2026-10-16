@@ -299,6 +299,19 @@ patches:
   write_file flux/infrastructure/data/minio-opt-in/patches/links.yaml "$(smp TRUE)"
 }
 
+# The IPv4/IPv6 twin rule on NetworkPolicy ipBlocks (allow-backend-egress-https: both families, IPv6 excepts).
+NP="flux/infrastructure/network-policies/base"
+case_31() {
+  yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0"))' "${R}/${NP}/allow-postgres-egress-https.yaml"
+}
+case_32() {
+  yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "0.0.0.0/0"))' "${R}/${NP}/allow-postgres-egress-https.yaml"
+}
+case_33() {
+  yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "fe80::/10"))' \
+    "${R}/${NP}/allow-backend-egress-https.yaml"
+}
+
 # CASES - function|expected verdict|reason a fail must name (empty: the rule itself)|name. A case that edits a
 # workload file names the build's own line (kind namespace/name), which the file check never prints - so
 # it proves the build check, not only the check of the file as written ("): " ends the build's prefix;
@@ -334,6 +347,9 @@ CASES=(
   'case_28|fail|checked in the file|a file no build deploys, named like a built workload in another namespace, is checked in the file'
   'case_29|fail|checked in the file|an unbuilt copy of a deployed workload (same kind, namespace and name) is checked in the file'
   'case_30|fail|kustomize flux/infrastructure/data/minio-opt-in|a patch in an overlay no profile deploys is rendered and checked'
+  'case_31|fail|add the IPv6 twin|a NetworkPolicy rule with 0.0.0.0/0 and no ::/0 fails'
+  'case_32|fail|one rule for both families|a NetworkPolicy rule with ::/0 and no 0.0.0.0/0 fails'
+  'case_33|fail|does not cut out fe80::/10|IPv4 private ranges cut out but IPv6 link-local left open fails'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or

@@ -33,10 +33,15 @@
 #     "false" in production
 #   - production: no container sets RANDOM_ERROR_RATE (fault injection - backend Ch15, frontend Ch19)
 #   - every overlay renders at least one Deployment (an empty render must not pass as OK)
+#   - every NetworkPolicy rule under flux/ that opens 0.0.0.0/0 also opens ::/0, and the reverse: an
+#     ipBlock covers one family, so on a dual-stack cluster 0.0.0.0/0 alone leaves IPv6 closed under
+#     default-deny (a host with an AAAA record times out) and ::/0 alone opens IPv6 only. When the IPv4
+#     block cuts out private ranges, the IPv6 one cuts out fc00::/7 (unique local) and fe80::/10
+#     (link-local) - the same rule for both families, never a second door
 #   - a Deployment targeted by an HPA sets no spec.replicas (the HPA owns the count; a value in Git
 #     makes Flux reset what the HPA scaled on every reconcile)
 #
-# Runs in pre-commit (flux/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`), yq (v4)
+# Runs in pre-commit (flux/**) and in the Flux Diff workflow. Needs kubectl (for `kubectl kustomize`), yq (v4), jq
 # and the flux CLI (`flux build`, no cluster).
 # Usage: scripts/check-app-security.sh   (no arguments - it always checks all six overlays)
 # Read-only: it renders the overlays locally and changes no file and no cluster. Every problem is
@@ -46,7 +51,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-for tool in kubectl yq flux; do
+for tool in kubectl yq jq flux; do
   command -v "${tool}" >/dev/null || { echo "check-app-security: ${tool} is required" >&2; exit 1; }
 done
 
@@ -348,9 +353,45 @@ if ((documents == 0)); then
   failures+=("flux/: no workload document found - nothing was checked as written for enableServiceLinks")
 fi
 
+# Rule: IPv4 and IPv6 alike in NetworkPolicy ipBlocks (see the header). One row per rule that has an
+# ipBlock: policy, direction[index], "cidr|except,except" per block, file. NetworkPolicies are written as
+# they are applied (no patch changes an ipBlock), so the source files are checked.
+ip_rules=0
+if ! np_rows="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z |
+  xargs -0 -r yq -o=json -I=0 'select(tag == "!!map" and .kind == "NetworkPolicy")
+    | {"name": .metadata.name, "file": filename, "rules":
+        ([(.spec.egress // [])[] | {"dir": "egress", "blocks": [(.to // [])[] | select(has("ipBlock")) | .ipBlock]}]
+       + [(.spec.ingress // [])[] | {"dir": "ingress", "blocks": [(.from // [])[] | select(has("ipBlock")) | .ipBlock]}])}' 2>"${render_tmp}/err" |
+  jq -r '. as $p | .rules | to_entries[] | select(.value.blocks | length > 0)
+    | [$p.name, .value.dir + "[" + (.key | tostring) + "]",
+       ([.value.blocks[] | .cidr + "|" + ((.except // []) | join(","))] | join(" ")), $p.file] | @tsv')"; then
+  failures+=("flux/: could not read the NetworkPolicies: $(cat "${render_tmp}/err")")
+  np_rows=""
+fi
+while IFS=$'\t' read -r policy rule blocks file; do
+  [[ -z "${policy}" ]] && continue
+  ip_rules=$((ip_rules + 1))
+  v4="" v6=""
+  for block in ${blocks}; do
+    [[ "${block%%|*}" == "0.0.0.0/0" ]] && v4="${block}"
+    [[ "${block%%|*}" == "::/0" ]] && v6="${block}"
+  done
+  where="${file}: NetworkPolicy ${policy} ${rule}"
+  if [[ -n "${v4}" && -z "${v6}" ]]; then
+    failures+=("${where} opens 0.0.0.0/0 but not ::/0 - on a dual-stack cluster IPv6 stays closed; add the IPv6 twin")
+  elif [[ -z "${v4}" && -n "${v6}" ]]; then
+    failures+=("${where} opens ::/0 but not 0.0.0.0/0 - one rule for both families, or neither")
+  elif [[ -n "${v4}" && -n "${v4#*|}" ]]; then
+    for range in fc00::/7 fe80::/10; do
+      [[ ",${v6#*|}," == *",${range},"* ]] ||
+        failures+=("${where} cuts private ranges out of 0.0.0.0/0 but ::/0 does not cut out ${range} - IPv6 would be a way around them")
+    done
+  fi
+done <<<"${np_rows}"
+
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
   printf '  - %s\n' "${failures[@]}" >&2
   exit 1
 fi
-echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${dirs} kustomize directories rendered; ${documents} workload documents checked as written)"
+echo "check-app-security: OK (${#overlays[@]} overlays; ${builds} Flux Kustomizations built, ${workloads} workloads; ${dirs} kustomize directories rendered; ${documents} workload documents checked as written; ${ip_rules} NetworkPolicy ipBlock rules, both families)"
