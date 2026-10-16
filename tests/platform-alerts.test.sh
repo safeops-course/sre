@@ -39,14 +39,15 @@ done
 # kind counts too), one document at a time - promtool reads only the first document of a file. A new
 # rules file is checked without a list to keep up to date.
 pairs="$(find "${repo_root}/flux" -name '*.yaml' -print0 \
-  | xargs -0 yq -N 'select(tag == "!!map" and .kind == "PrometheusRule") | filename + " " + .metadata.name')"
+  | xargs -0 yq -N 'select(tag == "!!map" and .kind == "PrometheusRule") | filename + " " + (.metadata.namespace // "-") + " " + .metadata.name')"
 # None found is a broken search, not a clean result.
 [ -n "${pairs}" ] || { echo "platform-alerts: no PrometheusRule found under flux/" >&2; exit 1; }
 n=0
-while read -r source name; do
+# One document by file, namespace ("-" when it has none) and name: one file may hold a name twice.
+while read -r source namespace name; do
   n=$((n + 1))
-  echo "platform-alerts: ${source#"${repo_root}/"} - ${name}"
-  yq "select(.kind == \"PrometheusRule\" and .metadata.name == \"${name}\") | .spec" "${source}" > "${work}/rule-${n}.yaml"
+  echo "platform-alerts: ${source#"${repo_root}/"} - ${namespace}/${name}"
+  yq "select(tag == \"!!map\" and .kind == \"PrometheusRule\" and (.metadata.namespace // \"-\") == \"${namespace}\" and .metadata.name == \"${name}\") | .spec" "${source}" > "${work}/rule-${n}.yaml"
   promtool check rules "${work}/rule-${n}.yaml"
 done <<<"${pairs}"
 cp "${tests}" "${work}/tests.yaml"
