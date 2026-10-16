@@ -88,7 +88,8 @@ scripts/             # Pre-commit hooks, automation scripts
 - **GitOps**: FluxCD (Flux Operator + FluxInstance, Kustomizations, HelmReleases)
 - **Secrets**: SOPS with AGE encryption
 - **DNS/TLS**: external-dns (Cloudflare, proxied records) + cert-manager with Cloudflare Origin CA (origin-ca-issuer); zone SSL mode Full (strict)
-- **Network**: dual-stack (IPv4 + IPv6 for every node, pod and Service) on every cluster, Cilium as the CNI and
+- **Network**: dual-stack (IPv4 + IPv6 for every node, pod and Service) where the provider has IPv6 by default - never
+  switched off, never forced (today kind, Hetzner and GKE; docs/providers.md) - and Cilium as the CNI and
   NetworkPolicy engine - kind (`helm_release.cilium`, kindnet off; pods fd00:10:244::/56), Hetzner (kube-hetzner
   `cni_plugin = "cilium"`, pinned `cilium_version` = kind's (1.20.3); pods fdf9:a717:c7cc::/56, Services fdf9:a717:c7cc:100::/112,
   a random ULA), GKE (Dataplane V2 is Cilium; `stack_type = "IPV4_IPV6"`, EXTERNAL = global pod IPv6). Each Terraform

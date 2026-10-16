@@ -119,7 +119,8 @@ resource "kind_cluster" "sre" {
     api_version = "kind.x-k8s.io/v1alpha4"
     kind        = "Cluster"
 
-    # Dual-stack: every pod and Service gets an IPv4 and an IPv6 address, as on every cloud cluster. kind's
+    # Dual-stack: every pod and Service gets an IPv4 and an IPv6 address, as on the platform's dual-stack
+    # cloud clusters (a provider gets IPv6 where it has it by default - docs/providers.md). kind's
     # own CNI (kindnet) is off - Cilium is installed below, the policy engine the clouds run too.
     # The IPv6 ranges are unique local (fd00::/8, not routed on the internet) - kind's own defaults.
     networking {
@@ -516,6 +517,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "disabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "kind"
+    # The address families this provider promises (dual where it has IPv6 by default): conformance C13.
+    ip_stack = "dual"
     # The pods' IPv6 range (networking.pod_subnet above): NetworkPolicies cut it out of ::/0 (postBuild).
     cluster_ipv6_range    = "fd00:10:244::/56"
     cluster_name          = "sre-control-plane"

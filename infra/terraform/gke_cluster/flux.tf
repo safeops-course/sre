@@ -60,6 +60,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "enabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "gke"
+    # The address families this provider promises (dual where it has IPv6 by default): conformance C13.
+    ip_stack       = "dual"
     cluster_name   = var.cluster_name
     image_registry = var.image_registry
     git_owner      = var.git_owner

@@ -337,7 +337,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "enabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "hetzner"
-    cluster_name   = var.cluster_name
+    # The address families this provider promises (dual where it has IPv6 by default): conformance C13.
+    ip_stack     = "dual"
+    cluster_name = var.cluster_name
     # The pods' IPv6 range (cluster_ipv6_cidr): NetworkPolicies cut it out of ::/0 (postBuild).
     cluster_ipv6_range = "fdf9:a717:c7cc::/56"
     image_registry     = var.image_registry

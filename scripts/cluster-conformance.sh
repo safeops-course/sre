@@ -4,8 +4,9 @@
 # The platform runs on any cluster that keeps a short contract (C1-C13): the Kubernetes version Git
 # pins (on a managed cluster without a pin: the platform's minor), NetworkPolicies that are enforced (egress too), a default StorageClass, a load balancer for
 # the ingress, metrics-server, reachable admission webhooks, backups to S3, images for the nodes'
-# architecture, dual-stack networking (IPv4 and IPv6 for every node, pod and Service - C2 and C5 then
-# check both families). This script checks the contract on a running cluster with the platform installed -
+# architecture, and the address families the provider promises (C13: cluster-config ip_stack - "dual",
+# IPv4 and IPv6 for every node, pod and Service, where the provider has IPv6 by default; "ipv4" where it
+# has not; C2 and C5 then check both families on a dual-stack cluster). This script checks the contract on a running cluster with the platform installed -
 # the layer below tests/smoke-test.sh (do the apps answer?). One line per item: PASS, FAIL or SKIP
 # with the reason. A SKIP is never a quiet pass: it names what was not checked and why.
 #
@@ -383,8 +384,22 @@ fi
 # C12 - nothing billed is left after a destroy: a check after the cluster is gone, not on it.
 skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers; kind: nothing billed)"
 
-# C13 - dual-stack: IPv4 and IPv6 for every node's pods and for Services (decided before C2).
-if [ "$dual" = true ]; then
+# C13 - the address families the provider promises: cluster-config ip_stack, written by the module's
+# Terraform. "dual": IPv4 and IPv6 for every node's pods and for Services (decided before C2) - a provider
+# with IPv6 by default never loses it quietly. "ipv4": a provider without it (docs/providers.md); a
+# cluster that is dual-stack after all fails too, so the promise in Git stays true.
+ip_stack="$(k -n flux-system get configmap cluster-config -o jsonpath='{.data.ip_stack}' 2>/dev/null)" || ip_stack=""
+if [ "$ip_stack" = ipv4 ]; then
+  if [ "$dual" = true ]; then
+    fail C13 "cluster-config says ip_stack ipv4, but the cluster is dual-stack (a Service gets $svc_ips) - set ip_stack dual"
+  elif [ "$(families_of "$svc_ips")" = "yes no" ]; then
+    pass C13 "IPv4 only, as cluster-config ip_stack promises (the provider has no IPv6 by default); a Service gets $svc_ips"
+  else
+    fail C13 "cluster-config says ip_stack ipv4, but a Service got ${svc_ips:-no address}"
+  fi
+elif [ "$ip_stack" != dual ]; then
+  fail C13 "cluster-config has no ip_stack (dual or ipv4, got '${ip_stack}') - the module's Terraform writes it (terraform apply)"
+elif [ "$dual" = true ]; then
   pass C13 "dual-stack: every node has an IPv4 and an IPv6 pod range; a Service gets $svc_ips"
 elif [ -z "$node_cidrs" ]; then
   fail C13 "dual-stack - could not read the nodes' pod ranges"
