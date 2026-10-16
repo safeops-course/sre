@@ -11,8 +11,9 @@
 #     adds variables for every Service in the namespace - BACKEND_PORT=tcp://<ip>:80, ... - to every new
 #     pod; BACKEND_PORT had the name of a frontend setting and would have crash-looped every new frontend
 #     pod (frontend#25, caught on kind before it shipped). Without them no variable of the namespace's
-#     Services reaches the pod; names resolve through DNS. KUBERNETES_SERVICE_HOST / _PORT (the API
-#     server) are still added - the kubelet adds them either way
+#     Services reaches the pod; names resolve through DNS. The API server's own variables (the kubernetes
+#     Service in default: KUBERNETES_SERVICE_HOST, _PORT, _PORT_HTTPS, KUBERNETES_PORT, KUBERNETES_PORT_*)
+#     are still added - the kubelet adds them either way
 #   - every container (and init container): runAsNonRoot, readOnlyRootFilesystem, no privilege
 #     escalation, capabilities drop ALL, seccomp RuntimeDefault - the container value wins over
 #     the pod's, as in Kubernetes. Pod Security "restricted" (enforced on develop, staging and

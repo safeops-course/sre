@@ -152,7 +152,7 @@ limits Restricted does not require.
 | Tell "Read-only file system" from "Permission denied" - the first needs a writable mount, the second a path the app's user owns. Neither is fixed with root. | Instruction only. |
 | Every `emptyDir` gets a `sizeLimit`. | `scripts/check-app-security.sh`. |
 | Never set `automountServiceAccountToken: true` for an app that does not call the Kubernetes API. | `scripts/check-app-security.sh`. |
-| Every workload you write sets `enableServiceLinks: false`, and no patch sets it true or removes it - no variables for the namespace's Services reach the pod (the API server's `KUBERNETES_SERVICE_HOST`, `_PORT`, `_PORT_HTTPS` and `KUBERNETES_PORT_*` still do); it finds Services through DNS. | `scripts/check-app-security.sh`. |
+| Every workload you write sets `enableServiceLinks: false`, and no patch sets it true or removes it - no variables for the namespace's Services reach the pod (the API server's `KUBERNETES_SERVICE_HOST`, `_PORT`, `_PORT_HTTPS`, `KUBERNETES_PORT` and `KUBERNETES_PORT_*` still do); it finds Services through DNS. | `scripts/check-app-security.sh`. |
 | Never change a namespace's Pod Security level (`pod-security.kubernetes.io/enforce`) to get a pod in. | On Hetzner the OIDC roles cannot write namespaces, and the labels are in Git; on kind - instruction only. |
 
 ## Chapter 08 - Resources are a budget, not a guess
