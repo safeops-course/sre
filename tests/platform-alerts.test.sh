@@ -29,21 +29,25 @@ done
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
+# The two the unit tests name (promtool test rules parses them below).
 for entry in "${rules[@]}"; do
   read -r name source <<<"${entry}"
   yq '.spec' "${source}" > "${work}/${name}"
-  promtool check rules "${work}/${name}"
 done
 
-# Every PrometheusRule in the repository, found by kind - a new rules file is checked without a list
-# to keep up to date. The two above are checked again here; that costs nothing.
-checked=0
-while IFS= read -r source; do
-  yq 'select(.kind == "PrometheusRule") | .spec' "${source}" > "${work}/all-$(basename "${source}")"
-  promtool check rules "${work}/all-$(basename "${source}")"
-  checked=$((checked + 1))
-done < <(grep -rlE '^kind: PrometheusRule' "${repo_root}/flux")
+# Every PrometheusRule under flux/, found by its kind (yq, not a text search: a quoted or indented
+# kind counts too), one document at a time - promtool reads only the first document of a file. A new
+# rules file is checked without a list to keep up to date.
+pairs="$(find "${repo_root}/flux" -name '*.yaml' -print0 \
+  | xargs -0 yq -N 'select(tag == "!!map" and .kind == "PrometheusRule") | filename + " " + .metadata.name')"
 # None found is a broken search, not a clean result.
-[ "${checked}" -gt 0 ] || { echo "platform-alerts: no PrometheusRule found under flux/" >&2; exit 1; }
+[ -n "${pairs}" ] || { echo "platform-alerts: no PrometheusRule found under flux/" >&2; exit 1; }
+n=0
+while read -r source name; do
+  n=$((n + 1))
+  echo "platform-alerts: ${source#"${repo_root}/"} - ${name}"
+  yq "select(.kind == \"PrometheusRule\" and .metadata.name == \"${name}\") | .spec" "${source}" > "${work}/rule-${n}.yaml"
+  promtool check rules "${work}/rule-${n}.yaml"
+done <<<"${pairs}"
 cp "${tests}" "${work}/tests.yaml"
 promtool test rules "${work}/tests.yaml"
