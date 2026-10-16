@@ -20,11 +20,19 @@ spec:
   policyTypes:
     - Egress
   egress:
+    # Every address, written as two halves per family: Cilium (kind, Hetzner) reads exactly 0.0.0.0/0 and
+    # ::/0 as "world", which leaves the nodes out - and on kind and k3s the API server runs on a node.
+    # Half-ranges are plain CIDRs; with Cilium's policyCIDRMatchMode=nodes they select node addresses too
+    # (tested on kind 2026-10-16: /0 blocked, the halves open). The same addresses on every other CNI.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 0.0.0.0/1
         - ipBlock:
-            cidr: ::/0
+            cidr: 128.0.0.0/1
+        - ipBlock:
+            cidr: ::/1
+        - ipBlock:
+            cidr: 8000::/1
       ports:
         - protocol: TCP
           port: 6443

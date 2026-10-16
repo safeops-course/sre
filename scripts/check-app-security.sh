@@ -33,7 +33,8 @@
 #     "false" in production
 #   - production: no container sets RANDOM_ERROR_RATE (fault injection - backend Ch15, frontend Ch19)
 #   - every overlay renders at least one Deployment (an empty render must not pass as OK)
-#   - every NetworkPolicy rule under flux/ that opens 0.0.0.0/0 also opens ::/0, and the reverse: an
+#   - every NetworkPolicy rule under flux/ that opens 0.0.0.0/0 also opens ::/0, and the reverse (/0 or its
+#     two /1 halves - the form a rule takes when it must reach the nodes under Cilium): an
 #     ipBlock covers one family, so on a dual-stack cluster 0.0.0.0/0 alone leaves IPv6 closed under
 #     default-deny (a host with an AAAA record times out) and ::/0 alone opens IPv6 only. When the IPv4
 #     block cuts out private ranges, the IPv6 one cuts out fc00::/7 (unique local), fe80::/10
@@ -374,11 +375,24 @@ while IFS=$'\t' read -r policy rule blocks file; do
   ip_rules=$((ip_rules + 1))
   # Every block counts - a rule may list the same CIDR twice, and the peers add up: one block without an
   # except opens what another one cuts out.
+  # "Every address" of a family is /0 or its two /1 halves (the form a rule takes when it must reach the
+  # nodes under Cilium, which reads /0 as "world" - without them); a pair of halves counts as one block.
   v4_excepts=() v6_excepts=()
+  half_v4lo=no half_v4hi=no half_v6lo=no half_v6hi=no half_excepts4="" half_excepts6=""
   for block in ${blocks}; do
-    [[ "${block%%|*}" == "0.0.0.0/0" ]] && v4_excepts+=("${block#*|}")
-    [[ "${block%%|*}" == "::/0" ]] && v6_excepts+=("${block#*|}")
+    case "${block%%|*}" in
+      0.0.0.0/0) v4_excepts+=("${block#*|}") ;;
+      ::/0) v6_excepts+=("${block#*|}") ;;
+      0.0.0.0/1) half_v4lo=yes; half_excepts4+="${block#*|}," ;;
+      128.0.0.0/1) half_v4hi=yes; half_excepts4+="${block#*|}," ;;
+      ::/1) half_v6lo=yes; half_excepts6+="${block#*|}," ;;
+      8000::/1) half_v6hi=yes; half_excepts6+="${block#*|}," ;;
+    esac
   done
+  half_excepts4="${half_excepts4//,,/,}"; half_excepts4="${half_excepts4#,}"; half_excepts4="${half_excepts4%,}"
+  half_excepts6="${half_excepts6//,,/,}"; half_excepts6="${half_excepts6#,}"; half_excepts6="${half_excepts6%,}"
+  [[ "${half_v4lo}${half_v4hi}" == yesyes ]] && v4_excepts+=("${half_excepts4}")
+  [[ "${half_v6lo}${half_v6hi}" == yesyes ]] && v6_excepts+=("${half_excepts6}")
   where="${file}: NetworkPolicy ${policy} ${rule}"
   if ((${#v4_excepts[@]} > 0 && ${#v6_excepts[@]} == 0)); then
     failures+=("${where} opens 0.0.0.0/0 but not ::/0 - on a dual-stack cluster IPv6 stays closed; add the IPv6 twin")

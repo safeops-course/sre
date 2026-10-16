@@ -331,6 +331,10 @@ spec:
 case_36() {
   yq -i '.spec.egress[0].to = [{"ipBlock": {"cidr": "::/0"}}] + .spec.egress[0].to' "${R}/${NP}/allow-backend-egress-https.yaml"
 }
+case_37() {
+  yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/1" or .ipBlock.cidr == "8000::/1"))' \
+    "${R}/${NP}/allow-postgres-egress-apiserver.yaml"
+}
 case_33() {
   yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "fe80::/10"))' \
     "${R}/${NP}/allow-backend-egress-https.yaml"
@@ -377,6 +381,7 @@ CASES=(
   'case_34|fail|does not cut out 64:ff9b::/96|IPv4 private ranges cut out but the NAT64 prefix left open fails'
   'case_35|fail|ingress[0] opens 0.0.0.0/0 but not ::/0|an ingress rule is checked and named by its own index'
   'case_36|fail|a ::/0 block does not cut out fc00::/7|an unrestricted ::/0 listed before the restricted one is still caught'
+  'case_37|fail|opens 0.0.0.0/0 but not ::/0|the IPv4 halves (0.0.0.0/1 + 128.0.0.0/1) without the IPv6 halves fail'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or
