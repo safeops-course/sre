@@ -119,7 +119,7 @@ resource "kind_cluster" "sre" {
     api_version = "kind.x-k8s.io/v1alpha4"
     kind        = "Cluster"
 
-    # Dual-stack: every pod and Service gets an IPv4 and an IPv6 address, as on Hetzner and GKE. kind's
+    # Dual-stack: every pod and Service gets an IPv4 and an IPv6 address, as on every cloud cluster. kind's
     # own CNI (kindnet) is off - Cilium is installed below, the policy engine the clouds run too.
     # The IPv6 ranges are unique local (fd00::/8, not routed on the internet) - kind's own defaults.
     networking {

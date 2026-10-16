@@ -26,7 +26,7 @@ example to copy from.
 
 ## Flux
 
-- [ ] **The same bootstrap as Hetzner and GKE, same names and order:** namespaces, `cluster-config`,
+- [ ] **The same bootstrap as the providers before it, same names and order:** namespaces, `cluster-config`,
   `cluster-secrets`, `backup-s3`, `sops-age` (write-only), the production database password, Flux
   Operator, a FluxInstance on the provider's profile, and a pre-destroy hook that deletes the volumes and
   the namespace of the LoadBalancer Service before the nodes go.

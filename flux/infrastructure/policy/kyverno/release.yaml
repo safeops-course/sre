@@ -52,7 +52,7 @@ spec:
       # Credentials for reading images and signatures. The chart's default adds the google, amazon,
       # azure and github helpers, which look for each cloud's credentials on registry reads. The
       # platform's images are public on ghcr.io and need none, so only the default keychain: nothing
-      # to look up, on kind, Hetzner or GKE alike.
+      # to look up, on every provider alike.
       registryClient:
         credentialHelpers:
           - default
