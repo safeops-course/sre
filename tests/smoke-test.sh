@@ -2,7 +2,7 @@
 # Infrastructure smoke tests for the SRE platform.
 # Validates a running cluster by checking core components.
 #
-# Requirements: kubectl, flux CLI, and KUBE_CONTEXT - the kubeconfig context
+# Requirements: kubectl, flux CLI, jq, and KUBE_CONTEXT - the kubeconfig context
 # of the cluster to test (`make smoke-test` sets kind-sre-control-plane).
 # Every kubectl/flux call names that context: the test also creates and deletes a
 # pod, and it must never land on whatever the shared current context is (Chapter 01).
@@ -120,28 +120,33 @@ run_test "Backend /healthz responds in develop" smoke_curl
 # Ready - the kubelet probes one family). The request comes from Traefik's pod, the path visitors take,
 # straight to each ready address in the EndpointSlices of frontend and backend.
 # endpoints_answer NS SERVICE PATH - true when the Service has ready addresses and every one answers
-# PATH on port 8080; prints the addresses that did not.
+# PATH on its pod port (from the EndpointSlice); prints the URLs that did not. One exec per Service.
 endpoints_answer() {
-  local ns="$1" svc="$2" path="$3" addrs addr url bad=""
-  addrs="$(k -n "$ns" get endpointslices -l "kubernetes.io/service-name=$svc" -o json \
-    | jq -r '.items[].endpoints[]? | select(.conditions.ready != false) | .addresses[]')" || return 1
-  [ -n "$addrs" ] || { echo "no ready addresses"; return 1; }
-  for addr in $addrs; do
-    case "$addr" in *:*) url="http://[$addr]:8080$path" ;; *) url="http://$addr:8080$path" ;; esac
-    k -n traefik exec deploy/traefik -- wget -q -T 5 -O /dev/null "$url" >/dev/null 2>&1 || bad+=" $addr"
-  done
-  [ -z "$bad" ] || { echo "no answer from:$bad"; return 1; }
+  local ns="$1" svc="$2" path="$3" urls bad list
+  urls="$(k -n "$ns" get endpointslices -l "kubernetes.io/service-name=$svc" -o json | jq -r --arg p "$path" '
+    .items[] | .ports[0].port as $port | .endpoints[]? | select(.conditions.ready != false) | .addresses[]
+    | if test(":") then "http://[\(.)]:\($port)\($p)" else "http://\(.):\($port)\($p)" end')" || return 1
+  [ -n "$urls" ] || { echo "no ready addresses"; return 1; }
+  mapfile -t list <<< "$urls"
+  # shellcheck disable=SC2016 # $u is expanded by the shell in Traefik's pod, not here
+  bad="$(k -n traefik exec deploy/traefik -- sh -c 'for u; do wget -q -T 5 -O /dev/null "$u" || echo " $u"; done' sh "${list[@]}" 2>/dev/null)" || true
+  [ -z "$bad" ] || { echo "no answer from:$(tr -d '\n' <<< "$bad")"; return 1; }
 }
-for ns in develop staging production; do
-  for app in frontend backend; do
-    path=/health; [ "$app" = backend ] && path=/healthz
-    if out="$(endpoints_answer "$ns" "$app" "$path")"; then
-      pass "Every $app pod in $ns answers on each address (IPv4 and IPv6)"
-    else
-      fail "Every $app pod in $ns answers on each address (IPv4 and IPv6) - $out"
-    fi
+# The probe itself first: a Traefik pod that cannot run wget is a probe problem, not 6 app failures.
+if ! k -n traefik exec deploy/traefik -- wget --help >/dev/null 2>&1; then
+  fail "Apps answer on each address - cannot run wget in Traefik's pod (kubectl exec deploy/traefik)"
+else
+  for ns in develop staging production; do
+    for app in frontend backend; do
+      path=/health; [ "$app" = backend ] && path=/healthz
+      if out="$(endpoints_answer "$ns" "$app" "$path")"; then
+        pass "Every $app pod in $ns answers on each address (IPv4 and IPv6)"
+      else
+        fail "Every $app pod in $ns answers on each address (IPv4 and IPv6) - $out"
+      fi
+    done
   done
-done
+fi
 
 # --- 4. Critical secrets present ---
 # (uptrace-secrets is not part of flux/secrets/develop; the DSN lives in backend-secrets)
