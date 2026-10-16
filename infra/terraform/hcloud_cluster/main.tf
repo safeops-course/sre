@@ -328,17 +328,20 @@ resource "kubernetes_secret_v1" "flux_git_credentials" {
 # it runs again. https://fluxcd.control-plane.io/operator/
 # https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource
 # https://developer.hashicorp.com/terraform/language/resources/provisioners/local-exec
+# The command and why it is a server-side apply: scripts/flux-operator-install.sh (shared by every module).
 resource "null_resource" "flux_operator_install" {
   depends_on = [kubernetes_namespace_v1.bootstrap]
 
+  # operator_version: a new pinned release is installed on the next apply.
   triggers = {
-    kubeconfig_path = local.kubeconfig_path
+    kubeconfig_path  = local.kubeconfig_path
+    operator_version = var.flux_operator_version
   }
 
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/download/v${var.flux_operator_version}/install.yaml"
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\""
   }
 }
 

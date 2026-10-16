@@ -255,6 +255,7 @@ resource "helm_release" "metrics_server" {
 
 # The Flux Operator, installed from its release manifest (pinned: var.flux_operator_version).
 # https://fluxcd.control-plane.io/operator/
+# The command and why it is a server-side apply: scripts/flux-operator-install.sh (shared by every module).
 resource "null_resource" "flux_operator_install" {
   depends_on = [time_sleep.wait_for_cluster]
 
@@ -271,7 +272,7 @@ resource "null_resource" "flux_operator_install" {
   provisioner "local-exec" {
     when        = create
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/download/v${var.flux_operator_version}/install.yaml"
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\""
   }
 
   # A new kind cluster (for example a new node_image) needs this step again;
