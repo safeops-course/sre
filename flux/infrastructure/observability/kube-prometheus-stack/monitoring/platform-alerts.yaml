@@ -8,6 +8,11 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: platform-alerts
+  # The labels of the other rule files (Prometheus loads every PrometheusRule - ruleSelector: {} -
+  # so they select nothing; they keep the files alike for anyone filtering by them).
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
 spec:
   groups:
     - name: platform
@@ -34,7 +39,7 @@ spec:
           expr: |
             sum by (namespace, pod) (
               rate(container_cpu_usage_seconds_total{
-                namespace=~"kube-system|flux-system|kyverno|observability|flagger-system|cnpg-system|traefik|cert-manager|external-dns",
+                namespace=~"kube-system|flux-system|kyverno|observability|flagger-system|cnpg-system|traefik|cert-manager|external-dns|auth|minio",
                 container!="", container!="POD"
               }[15m])
             ) > 0.5

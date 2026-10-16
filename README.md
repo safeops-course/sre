@@ -33,6 +33,10 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 | Supply Chain Security (advanced) | `flux/infrastructure/policy/packs/supply-chain/` |
 | Rollback & Data Migrations (advanced) | `flux/apps/backend/base/deployment.yaml` (migrate initContainer), `flux/apps/backend/develop/kustomization.yaml` (feature flags), `scripts/postgres-restore-manifest.sh`, `../backend/pkg/migrations/` |
 | Progressive Delivery (advanced) | `flux/infrastructure/progressive-delivery/` |
+| Platform Lifecycle (advanced) | `renovate.json`, `scripts/node-maintenance.sh`, `scripts/cluster-conformance.sh` |
+| Credential & Access Lifecycle (advanced) | `docs/credential-registry.yaml`, `docs/credential-rotation.md`, `scripts/check-credentials.sh` |
+| Disaster Recovery (advanced) | `flux/infrastructure/data/cnpg-clusters/production/cluster.yaml`, `scripts/postgres-restore-manifest.sh` |
+| Capstone (advanced) | `scripts/capstone-fault.sh`, `scripts/capstone-check.sh`, `docs/handover-template.md`, `docs/agent-rules.md` |
 
 ## Repository Layout
 
@@ -40,6 +44,8 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 - `infra/` -- Terraform IaC
 - `infra/terraform/hcloud_cluster/` -- Hetzner k3s production cluster (kube-hetzner module)
 - `infra/terraform/kind_cluster/` -- local multi-node kind cluster + Flux install
+- `infra/terraform/gcp_foundation/` -- Google Cloud foundation (APIs, service accounts, Workload Identity), applied once
+- `infra/terraform/gke_cluster/` -- GKE cluster per test cycle (created, tested, destroyed); `docs/providers.md` lists what every provider needs
 - `flux/` -- FluxCD GitOps configuration (bootstrap, infrastructure, apps, secrets)
 - `config/` -- shared configuration files
 - `tests/` -- infrastructure and system test suites
@@ -49,7 +55,7 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 Companion repos in this workspace:
 - `../backend/` -- Go HTTP API reference service (health probes, Prometheus metrics, OpenTelemetry traces, chaos endpoints)
 - `../frontend/` -- Vue 3 SPA dashboard (health dashboard, API explorer, chaos controls, web tracing)
-- `../k8s-ai-monitor/` -- Kopf-based K8s monitoring operator with LLM-powered root-cause analysis (Ch 13)
+- `../k8s-ai-monitor/` -- Kopf-based K8s monitoring operator with LLM-powered root-cause analysis (the AI-Assisted SRE Guardian topic)
 
 ## Current Decisions
 
@@ -81,5 +87,3 @@ Each cluster reconciles a **profile**: the provider-neutral base (`flux/bootstra
 - Hetzner cluster: `docs/hetzner.md`
 - Local bootstrap: `docs/local-dev.md`
 - Flux/GitOps: `docs/gitops/flux.md`
-
-Track build-out progress in `PLAN.md`.

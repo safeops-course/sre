@@ -8,6 +8,9 @@ kind: PrometheusRule
 metadata:
   name: progressive-delivery-develop
   namespace: develop
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
 spec:
   groups:
     - name: progressive-delivery
