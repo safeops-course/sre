@@ -16,8 +16,10 @@
 #      are removed by the CSI driver only while it runs; after the nodes are gone they stay, billed;
 #   4. wait for those namespaces; only for what is still stuck, clear the finalizers on the objects
 #      that actually have them (not every object - that took hundreds of API calls per namespace);
-#   5. only then remove Flux itself: the FluxInstance (the operator uninstalls the controllers) and
-#      the flux-system namespace. Removing Flux first left every Flux object's finalizer unprocessed.
+#   5. only then remove Flux itself: the ResourceSets and their input providers in flux-system (their
+#      finalizer needs flux-operator, still running), the FluxInstance (the operator uninstalls the
+#      controllers) and the flux-system namespace. Removing Flux first left every Flux object's
+#      finalizer unprocessed.
 # Everything left over is reported loudly. Terraform continues either way (on_failure = continue),
 # so the log lines here are the only warning.
 #
@@ -27,7 +29,8 @@
 # Needs kubectl (and jq only for the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
 # Changes the cluster: it suspends Flux, stops Kyverno, deletes the webhooks, every PodDisruptionBudget
-# outside kube-system, the given namespaces (their pods at once) and every PVC. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT (seconds, default 300 / 180).
+# outside kube-system, the given namespaces (their pods at once), every PVC, and the ResourceSets and
+# input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT (seconds, default 300 / 180).
 # Without kubectl, the kubeconfig or a reachable cluster it warns and exits 0 - nothing to clean.
 
 set -o errexit
@@ -99,20 +102,25 @@ suspend_flux() {
   done
 }
 
-# Last: the operator's own objects, the FluxInstance (flux-operator uninstalls the controllers on its
-# deletion), then flux-system. ResourceSets and ResourceSetInputProviders carry a finalizer that only
-# flux-operator removes - delete them while it still runs: deleting flux-system took the operator with
-# it, the three backend input providers kept the namespace terminating, and the 180 s fallback below had
-# to clear their finalizers (GKE cycle 2026-10-16).
+# Last: the operator's own objects in flux-system, the FluxInstance (flux-operator uninstalls the
+# controllers on its deletion), then flux-system. ResourceSets and ResourceSetInputProviders carry a
+# finalizer that only flux-operator removes - delete them while it still runs: deleting flux-system took
+# the operator with it, the three backend input providers kept the namespace terminating, and the 180 s
+# fallback had to clear their finalizers (GKE cycle 2026-10-16). Only flux-system, where this repository
+# puts them: deleting a ResourceSet also deletes what it generated.
 remove_flux() {
-  local kind
+  local kind kinds=()
   for kind in resourcesets.fluxcd.controlplane.io resourcesetinputproviders.fluxcd.controlplane.io; do
-    api_exists "${kind}" || continue
-    log "removing the ${kind%%.*} while flux-operator runs"
-    kc delete "${kind}" --all --all-namespaces --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
-    wait_until_empty 120 get "${kind}" --all-namespaces -o name \
-      || warn "${kind%%.*} still present after 120s - their finalizers are cleared with the namespace"
+    api_exists "${kind}" && kinds+=("${kind}")
   done
+  if ((${#kinds[@]} > 0)); then
+    log "removing the ResourceSets and their input providers in flux-system while flux-operator runs"
+    kc -n flux-system delete "$(IFS=,; echo "${kinds[*]}")" --all --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    if ! wait_until_empty 120 -n flux-system get "$(IFS=,; echo "${kinds[*]}")" -o name; then
+      warn "still present after 120s - their finalizers are cleared with flux-system:"
+      kc -n flux-system get "$(IFS=,; echo "${kinds[*]}")" -o name >&2 2>/dev/null || true
+    fi
+  fi
   if api_exists fluxinstances.fluxcd.controlplane.io; then
     log "removing the FluxInstance"
     kc -n flux-system delete fluxinstance flux --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
