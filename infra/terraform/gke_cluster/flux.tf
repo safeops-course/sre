@@ -170,6 +170,7 @@ resource "kubernetes_secret_v1" "postgres_app_production" {
 
 # The Flux Operator, from its release manifest (pinned).
 # https://fluxcd.control-plane.io/operator/
+# The command and why it is a server-side apply: scripts/flux-operator-install.sh (shared by every module).
 resource "null_resource" "flux_operator_install" {
   # cluster_ca: a re-created cluster gets Flux again (the kubeconfig path alone never changes).
   triggers = {
@@ -180,7 +181,7 @@ resource "null_resource" "flux_operator_install" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
-    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" apply -f https://github.com/controlplaneio-fluxcd/flux-operator/releases/download/v${var.flux_operator_version}/install.yaml"
+    command     = "\"${path.module}/../scripts/flux-operator-install.sh\" \"${local.kubeconfig_path}\" \"${var.flux_operator_version}\""
   }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]
