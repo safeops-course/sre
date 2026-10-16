@@ -115,7 +115,8 @@ remove_flux() {
   done
   if ((${#kinds[@]} > 0)); then
     log "removing the ResourceSets and their input providers in flux-system while flux-operator runs"
-    kc -n flux-system delete "$(IFS=,; echo "${kinds[*]}")" --all --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    kc -n flux-system delete "$(IFS=,; echo "${kinds[*]}")" --all --ignore-not-found=true --wait=false >/dev/null 2>&1 \
+      || warn "could not delete ${kinds[*]} in flux-system - their finalizers may keep flux-system terminating"
     if ! wait_until_empty 120 -n flux-system get "$(IFS=,; echo "${kinds[*]}")" -o name; then
       warn "still present after 120s - their finalizers are cleared with flux-system:"
       kc -n flux-system get "$(IFS=,; echo "${kinds[*]}")" -o name >&2 2>/dev/null || true
