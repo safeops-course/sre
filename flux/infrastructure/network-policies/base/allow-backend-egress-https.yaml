@@ -13,6 +13,12 @@ spec:
   egress:
     # Internet HTTPS only (Uptrace). The private and link-local ranges are cut out so this rule can
     # never become a path to something inside the cluster or the provider network on 443.
+    # IPv6 is the same rule, not a second door: an ipBlock covers one family, so 0.0.0.0/0 alone leaves
+    # IPv6 closed under default-deny (a host with an AAAA record times out) and ::/0 alone would open the
+    # private IPv6 ranges. Cut out of ::/0: unique local fc00::/7 (also the metadata servers, fd20:ce::254
+    # and fd00:ec2::254), link-local fe80::/10, loopback ::1, and NAT64 64:ff9b::/96 + 64:ff9b:1::/48
+    # (a translator would reach the private IPv4 ranges cut out above). IPv4-mapped ::ffff:0:0/96 needs no
+    # line: such a connection leaves as an IPv4 packet and meets the IPv4 rule (the API refuses it here).
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -21,6 +27,14 @@ spec:
               - 172.16.0.0/12
               - 192.168.0.0/16
               - 169.254.0.0/16
+        - ipBlock:
+            cidr: ::/0
+            except:
+              - fc00::/7
+              - fe80::/10
+              - ::1/128
+              - 64:ff9b::/96
+              - 64:ff9b:1::/48
       ports:
         - protocol: TCP
           port: 443

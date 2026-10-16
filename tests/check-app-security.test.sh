@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Tests the service-link rule of scripts/check-app-security.sh on throw-away copies of flux/ - no cluster.
+# Tests the service-link rule and the IPv4/IPv6 NetworkPolicy rule of scripts/check-app-security.sh on
+# throw-away copies of flux/ - no cluster.
 # Run: tests/check-app-security.test.sh   (pre-commit runs it when the check or this test changes)
 # Each case changes one thing in its own copy, runs the check and compares the verdict (pass/fail) with
 # the expected one. The check builds what Flux would apply (flux build, from the profiles), so every
 # patch below is wired in the way Flux reaches it: listed in MinIO's kustomization.yaml (the local
 # profile deploys MinIO), or added to a Flux Kustomization's spec.patches by the local profile.
 # A failing case must fail on the rule itself ("must be the boolean false"), not on a build error.
-# The cases run in parallel, one per CPU (each check builds ~66 Flux Kustomizations). Needs kubectl, yq (v4) and the
-# flux CLI, like the check. Exit 0 when every case passes, 1 otherwise.
+# The cases run in parallel, one per CPU (each check builds ~66 Flux Kustomizations). Needs kubectl, yq (v4), jq and
+# the flux CLI, like the check. Exit 0 when every case passes, 1 otherwise.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -299,6 +300,42 @@ patches:
   write_file flux/infrastructure/data/minio-opt-in/patches/links.yaml "$(smp TRUE)"
 }
 
+# The IPv4/IPv6 twin rule on NetworkPolicy ipBlocks (allow-backend-egress-https: both families, IPv6 excepts).
+NP="flux/infrastructure/network-policies/base"
+case_31() {
+  yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0"))' "${R}/${NP}/allow-postgres-egress-https.yaml"
+}
+case_32() {
+  yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "0.0.0.0/0"))' "${R}/${NP}/allow-postgres-egress-https.yaml"
+}
+case_34() {
+  yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "64:ff9b::/96"))' \
+    "${R}/${NP}/allow-backend-egress-https.yaml"
+}
+# A policy with two egress rules and one ingress rule: the ingress rule is named ingress[0], not ingress[2].
+case_35() {
+  write_file "${NP}/ingress-test.yaml" 'apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-test
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to: [{podSelector: {}}]
+    - to: [{namespaceSelector: {}}]
+  ingress:
+    - from: [{ipBlock: {cidr: 0.0.0.0/0}}]'
+}
+# An unrestricted ::/0 first, the restricted one after it: the check must not read only the last block.
+case_36() {
+  yq -i '.spec.egress[0].to = [{"ipBlock": {"cidr": "::/0"}}] + .spec.egress[0].to' "${R}/${NP}/allow-backend-egress-https.yaml"
+}
+case_33() {
+  yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "fe80::/10"))' \
+    "${R}/${NP}/allow-backend-egress-https.yaml"
+}
+
 # CASES - function|expected verdict|reason a fail must name (empty: the rule itself)|name. A case that edits a
 # workload file names the build's own line (kind namespace/name), which the file check never prints - so
 # it proves the build check, not only the check of the file as written ("): " ends the build's prefix;
@@ -334,6 +371,12 @@ CASES=(
   'case_28|fail|checked in the file|a file no build deploys, named like a built workload in another namespace, is checked in the file'
   'case_29|fail|checked in the file|an unbuilt copy of a deployed workload (same kind, namespace and name) is checked in the file'
   'case_30|fail|kustomize flux/infrastructure/data/minio-opt-in|a patch in an overlay no profile deploys is rendered and checked'
+  'case_31|fail|add the IPv6 twin|a NetworkPolicy rule with 0.0.0.0/0 and no ::/0 fails'
+  'case_32|fail|one rule for both families|a NetworkPolicy rule with ::/0 and no 0.0.0.0/0 fails'
+  'case_33|fail|does not cut out fe80::/10|IPv4 private ranges cut out but IPv6 link-local left open fails'
+  'case_34|fail|does not cut out 64:ff9b::/96|IPv4 private ranges cut out but the NAT64 prefix left open fails'
+  'case_35|fail|ingress[0] opens 0.0.0.0/0 but not ::/0|an ingress rule is checked and named by its own index'
+  'case_36|fail|a ::/0 block does not cut out fc00::/7|an unrestricted ::/0 listed before the restricted one is still caught'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or

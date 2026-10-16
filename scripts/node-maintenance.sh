@@ -64,7 +64,11 @@ on_node() {
 trap 'echo "error: stopped at line ${LINENO} - ${node} may still be cordoned and out of the load balancer: kubectl --context ${context} uncordon ${node} and kubectl --context ${context} label node ${node} ${lb_label}- once it is healthy" >&2' ERR
 
 boot_id="$(kube get node "${node}" -o jsonpath='{.status.nodeInfo.bootID}')"
-address="$(kube get node "${node}" -o jsonpath='{.status.addresses[?(@.type=="ExternalIP")].address}')"
+# A dual-stack node has two ExternalIPs (IPv4 and IPv6, space-separated): ssh takes one - the IPv4 one
+# when there is one (not every workstation has IPv6), else the first.
+external_ips="$(kube get node "${node}" -o jsonpath='{.status.addresses[?(@.type=="ExternalIP")].address}')"
+address="$(tr ' ' '\n' <<<"${external_ips}" | grep -v ':' | head -1 || true)"
+[[ -n "${address}" ]] || address="$(tr ' ' '\n' <<<"${external_ips}" | head -1 || true)"
 roles="$(kube get node "${node}" -o jsonpath='{.metadata.labels}' | grep -o 'node-role.kubernetes.io/[a-z-]*' | sed 's|.*/||' | sort -u | tr '\n' ' ' || true)"
 echo "node ${node} (${address:-no ExternalIP}) roles: ${roles:-worker}; boot ${boot_id}"
 if [[ "${roles}" == *control-plane* ]]; then

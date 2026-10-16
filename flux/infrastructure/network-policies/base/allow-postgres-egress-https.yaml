@@ -4,6 +4,7 @@
 # Trade-off: the ipBlock allows any address on TCP 443, not only the backup endpoint - NetworkPolicy
 # cannot select a host name. The residual risk: a compromised database pod could send data to any
 # HTTPS host. Narrow it to the endpoint's address range if the provider publishes a stable one.
+# IPv6 too (::/0): an ipBlock covers one family, and the object storage endpoint may answer on IPv6.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -22,6 +23,8 @@ spec:
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
+        - ipBlock:
+            cidr: ::/0
       ports:
         - protocol: TCP
           port: 443
