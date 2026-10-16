@@ -144,7 +144,7 @@ scripts/             # Pre-commit hooks, automation scripts
   Deployment sets `automountServiceAccountToken: false` and, when an HPA targets it, no `spec.replicas`;
   every workload written under `flux/` (apps and platform: Guardian, MinIO, chaos, synthetic traffic) sets
   `enableServiceLinks: false` (and no patch sets it true or removes it) - no variables for the namespace's Services
-  (`KUBERNETES_SERVICE_HOST`/`_PORT` are still added); `BACKEND_PORT=tcp://...` would have crash-looped the frontend
+  (the API server's `KUBERNETES_SERVICE_HOST`/`_PORT`/`_PORT_HTTPS`, `KUBERNETES_PORT` and `KUBERNETES_PORT_*` are still added); `BACKEND_PORT=tcp://...` would have crash-looped the frontend
   (frontend#25, caught on kind); Helm/operator pods are not covered;
   every container runs non-root with a read-only root filesystem, no privilege escalation, capabilities
   drop ALL and seccomp RuntimeDefault (Pod Security restricted enforces all but the read-only root filesystem
