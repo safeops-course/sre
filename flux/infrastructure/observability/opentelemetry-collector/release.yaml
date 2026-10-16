@@ -51,12 +51,11 @@ spec:
         zipkin: null
         prometheus: null
         otlp:
-          # ":port" = every address of both families; 0.0.0.0 was IPv4 only (dual-stack pods send over IPv6 too).
           protocols:
             grpc:
-              endpoint: ":4317"
+              endpoint: 0.0.0.0:4317
             http:
-              endpoint: ":4318"
+              endpoint: 0.0.0.0:4318
         kubeletstats:
           auth_type: serviceAccount
           insecure_skip_verify: true

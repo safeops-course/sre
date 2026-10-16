@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Tests the service-link rule of scripts/check-app-security.sh on throw-away copies of flux/ - no cluster.
+# Tests the service-link rule and the IPv4/IPv6 NetworkPolicy rule of scripts/check-app-security.sh on
+# throw-away copies of flux/ - no cluster.
 # Run: tests/check-app-security.test.sh   (pre-commit runs it when the check or this test changes)
 # Each case changes one thing in its own copy, runs the check and compares the verdict (pass/fail) with
 # the expected one. The check builds what Flux would apply (flux build, from the profiles), so every
 # patch below is wired in the way Flux reaches it: listed in MinIO's kustomization.yaml (the local
 # profile deploys MinIO), or added to a Flux Kustomization's spec.patches by the local profile.
 # A failing case must fail on the rule itself ("must be the boolean false"), not on a build error.
-# The cases run in parallel, one per CPU (each check builds ~66 Flux Kustomizations). Needs kubectl, yq (v4) and the
-# flux CLI, like the check. Exit 0 when every case passes, 1 otherwise.
+# The cases run in parallel, one per CPU (each check builds ~66 Flux Kustomizations). Needs kubectl, yq (v4), jq and
+# the flux CLI, like the check. Exit 0 when every case passes, 1 otherwise.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -307,6 +308,25 @@ case_31() {
 case_32() {
   yq -i 'del(.spec.egress[0].to[] | select(.ipBlock.cidr == "0.0.0.0/0"))' "${R}/${NP}/allow-postgres-egress-https.yaml"
 }
+case_34() {
+  yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "64:ff9b::/96"))' \
+    "${R}/${NP}/allow-backend-egress-https.yaml"
+}
+# A policy with two egress rules and one ingress rule: the ingress rule is named ingress[0], not ingress[2].
+case_35() {
+  write_file "${NP}/ingress-test.yaml" 'apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-test
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to: [{podSelector: {}}]
+    - to: [{namespaceSelector: {}}]
+  ingress:
+    - from: [{ipBlock: {cidr: 0.0.0.0/0}}]'
+}
 case_33() {
   yq -i '(.spec.egress[0].to[] | select(.ipBlock.cidr == "::/0") | .ipBlock.except) |= map(select(. != "fe80::/10"))' \
     "${R}/${NP}/allow-backend-egress-https.yaml"
@@ -350,6 +370,8 @@ CASES=(
   'case_31|fail|add the IPv6 twin|a NetworkPolicy rule with 0.0.0.0/0 and no ::/0 fails'
   'case_32|fail|one rule for both families|a NetworkPolicy rule with ::/0 and no 0.0.0.0/0 fails'
   'case_33|fail|does not cut out fe80::/10|IPv4 private ranges cut out but IPv6 link-local left open fails'
+  'case_34|fail|does not cut out 64:ff9b::/96|IPv4 private ranges cut out but the NAT64 prefix left open fails'
+  'case_35|fail|ingress[0] opens 0.0.0.0/0 but not ::/0|an ingress rule is checked and named by its own index'
 )
 
 # run_case FUNCTION EXPECTED REASON NAME - set up the case's copy, run the check, write "ok   - NAME" or

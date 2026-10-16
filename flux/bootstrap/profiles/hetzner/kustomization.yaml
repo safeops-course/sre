@@ -57,11 +57,11 @@ patches:
                   ports:
                     web:
                       proxyProtocol:
-                        trustedIPs: [127.0.0.1/32, "::1/128", 10.0.0.0/8]
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
                       forwardedHeaders:
-                        trustedIPs: [127.0.0.1/32, "::1/128", 10.0.0.0/8]
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
                     websecure:
                       proxyProtocol:
-                        trustedIPs: [127.0.0.1/32, "::1/128", 10.0.0.0/8]
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
                       forwardedHeaders:
-                        trustedIPs: [127.0.0.1/32, "::1/128", 10.0.0.0/8]
+                        trustedIPs: [127.0.0.1/32, 10.0.0.0/8]

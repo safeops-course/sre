@@ -38,11 +38,9 @@ spec:
       - --cloudflare-proxied
       - --kube-api-request-timeout=60s
       - --cloudflare-dns-records-per-page=500
-      # A and AAAA: a dual-stack load balancer has an IPv6 address too, and its record is published
-      # like the IPv4 one (the default list today - named here, so a default change cannot drop IPv6).
-      - --managed-record-types=A
-      - --managed-record-types=AAAA
-      - --managed-record-types=CNAME
+    # A and AAAA: a dual-stack load balancer has an IPv6 address too, and its record is published like the
+    # IPv4 one (the default list today - named here, so a default change cannot drop IPv6).
+    managedRecordTypes: [A, AAAA, CNAME]
     domainFilters:
       - safeops.work
     policy: sync

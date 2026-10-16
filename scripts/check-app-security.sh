@@ -36,8 +36,9 @@
 #   - every NetworkPolicy rule under flux/ that opens 0.0.0.0/0 also opens ::/0, and the reverse: an
 #     ipBlock covers one family, so on a dual-stack cluster 0.0.0.0/0 alone leaves IPv6 closed under
 #     default-deny (a host with an AAAA record times out) and ::/0 alone opens IPv6 only. When the IPv4
-#     block cuts out private ranges, the IPv6 one cuts out fc00::/7 (unique local) and fe80::/10
-#     (link-local) - the same rule for both families, never a second door
+#     block cuts out private ranges, the IPv6 one cuts out fc00::/7 (unique local), fe80::/10
+#     (link-local) and the NAT64 prefixes 64:ff9b::/96 + 64:ff9b:1::/48 (a translator reaches private
+#     IPv4 through them) - the same rule for both families, never a second door
 #   - a Deployment targeted by an HPA sets no spec.replicas (the HPA owns the count; a value in Git
 #     makes Flux reset what the HPA scaled on every reconcile)
 #
@@ -360,11 +361,11 @@ ip_rules=0
 if ! np_rows="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z |
   xargs -0 -r yq -o=json -I=0 'select(tag == "!!map" and .kind == "NetworkPolicy")
     | {"name": .metadata.name, "file": filename, "rules":
-        ([(.spec.egress // [])[] | {"dir": "egress", "blocks": [(.to // [])[] | select(has("ipBlock")) | .ipBlock]}]
-       + [(.spec.ingress // [])[] | {"dir": "ingress", "blocks": [(.from // [])[] | select(has("ipBlock")) | .ipBlock]}])}' 2>"${render_tmp}/err" |
-  jq -r '. as $p | .rules | to_entries[] | select(.value.blocks | length > 0)
-    | [$p.name, .value.dir + "[" + (.key | tostring) + "]",
-       ([.value.blocks[] | .cidr + "|" + ((.except // []) | join(","))] | join(" ")), $p.file] | @tsv')"; then
+        ([(.spec.egress // []) | to_entries[] | {"rule": ("egress[" + (.key | tostring) + "]"), "blocks": [(.value.to // [])[] | select(has("ipBlock")) | .ipBlock]}]
+       + [(.spec.ingress // []) | to_entries[] | {"rule": ("ingress[" + (.key | tostring) + "]"), "blocks": [(.value.from // [])[] | select(has("ipBlock")) | .ipBlock]}])}' 2>"${render_tmp}/err" |
+  jq -r '. as $p | .rules[] | select(.blocks | length > 0)
+    | [$p.name, .rule,
+       ([.blocks[] | .cidr + "|" + ((.except // []) | join(","))] | join(" ")), $p.file] | @tsv')"; then
   failures+=("flux/: could not read the NetworkPolicies: $(cat "${render_tmp}/err")")
   np_rows=""
 fi
@@ -382,7 +383,7 @@ while IFS=$'\t' read -r policy rule blocks file; do
   elif [[ -z "${v4}" && -n "${v6}" ]]; then
     failures+=("${where} opens ::/0 but not 0.0.0.0/0 - one rule for both families, or neither")
   elif [[ -n "${v4}" && -n "${v4#*|}" ]]; then
-    for range in fc00::/7 fe80::/10; do
+    for range in fc00::/7 fe80::/10 64:ff9b::/96 64:ff9b:1::/48; do
       [[ ",${v6#*|}," == *",${range},"* ]] ||
         failures+=("${where} cuts private ranges out of 0.0.0.0/0 but ::/0 does not cut out ${range} - IPv6 would be a way around them")
     done

@@ -31,9 +31,7 @@ spec:
         config:
           inCluster: true
       web:
-        # ":5556" = every address of both families (Go); 0.0.0.0 was IPv4 only - a dual-stack pod is
-        # also reached over IPv6.
-        http: ":5556"
+        http: 0.0.0.0:5556
       connectors:
         - type: github
           id: github
