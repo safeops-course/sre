@@ -36,9 +36,11 @@ example to copy from.
 - [ ] **Clusters of different providers never run at the same time:** they share the DNS names (one
   external-dns owner) and image automation writes to the same branch.
 - [ ] **Backups go to Cloudflare R2,** the same target for every provider.
+- [ ] **Dual-stack:** IPv4 and IPv6 for nodes, pods and Services (conformance C13); the load balancer gets both families
+  (C5); a pod range that is not in fc00::/7 is cut out of `allow-backend-egress-https` by the profile (GKE does it).
 
 ## Proof
 
-- [ ] A full cycle: apply, every Flux Kustomization Ready, `make cluster-conformance` (C1-C12, PASS /
+- [ ] A full cycle: apply, every Flux Kustomization Ready, `make cluster-conformance` (C1-C13, PASS /
   FAIL / SKIP with a reason), destroy, `make leftovers` clean.
 - [ ] A runbook `docs/<provider>.md`: what each module creates and why, the cycle, troubleshooting.

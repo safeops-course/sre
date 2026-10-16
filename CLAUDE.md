@@ -88,6 +88,13 @@ scripts/             # Pre-commit hooks, automation scripts
 - **GitOps**: FluxCD (Flux Operator + FluxInstance, Kustomizations, HelmReleases)
 - **Secrets**: SOPS with AGE encryption
 - **DNS/TLS**: external-dns (Cloudflare, proxied records) + cert-manager with Cloudflare Origin CA (origin-ca-issuer); zone SSL mode Full (strict)
+- **Network**: dual-stack (IPv4 + IPv6 for every node, pod and Service) on every cluster, Cilium as the CNI and
+  NetworkPolicy engine - kind (`helm_release.cilium`, kindnet off; pods fd00:10:244::/56), Hetzner (kube-hetzner
+  `cni_plugin = "cilium"`, pinned `cilium_version` = kind's; pods fdf9:a717:c7cc::/56, Services fdf9:a717:c7cc:100::/112,
+  a random ULA), GKE (Dataplane V2 is Cilium; `stack_type = "IPV4_IPV6"`, EXTERNAL = global pod IPv6). Each Terraform
+  writes its pod IPv6 range to cluster-config `cluster_ipv6_range`; `allow-backend-egress-https` cuts it out of `::/0`
+  (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
+  (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly
 - **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
   `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
 - **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)
@@ -181,9 +188,9 @@ scripts/             # Pre-commit hooks, automation scripts
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)
 - `make hcloud-plan` / `hcloud-apply` / `hcloud-destroy` — the same for Hetzner (aliases of
   `terraform-hcloud-plan|apply|destroy`; CI calls `terraform-hcloud-destroy`); `make hcloud-drift` - drift check
-- `make cluster-conformance` — the cluster contract C1-C12 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
+- `make cluster-conformance` — the cluster contract C1-C13 against KUBE_CONTEXT (`scripts/cluster-conformance.sh`): the
   pinned Kubernetes version exactly (a managed cluster without a pin: kind's minor), NetworkPolicies enforced (egress too), API-server egress rule, default StorageClass,
-  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures; PASS/FAIL/SKIP with a
+  ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures, dual-stack (C13; C2 and C5 then check both families); PASS/FAIL/SKIP with a
   reason. Creates and deletes the namespace `conformance` (a real disk for ~1 min on a cloud); nightly on kind
 - `make capstone-fault` — Chapter 23: a colleague's pull request with one random fault (f1 sign-up limit,
   f2 database network policies, f3 backend CPU), merged in the learner's repository; `scripts/capstone-fault.sh --local` commits only

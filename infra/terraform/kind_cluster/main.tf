@@ -264,6 +264,12 @@ resource "helm_release" "cilium" {
 
   depends_on = [null_resource.merge_kubeconfig]
 
+  # A new kind cluster (a new node_image, a networking change) has no CNI: install Cilium there again,
+  # or its nodes stay NotReady and nothing after this ever starts.
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
+  }
+
   values = [yamlencode({
     ipam                 = { mode = "kubernetes" }
     k8s                  = { requireIPv4PodCIDR = true, requireIPv6PodCIDR = true }
@@ -484,7 +490,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
   }
 
   data = {
-    cloudflare_proxied    = "disabled"
+    cloudflare_proxied = "disabled"
+    # The pods' IPv6 range (networking.pod_subnet above): NetworkPolicies cut it out of ::/0 (postBuild).
+    cluster_ipv6_range    = "fd00:10:244::/56"
     cluster_name          = "sre-control-plane"
     image_registry        = var.image_registry
     git_owner             = var.git_owner

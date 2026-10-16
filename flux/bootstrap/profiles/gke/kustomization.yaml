@@ -46,28 +46,3 @@ patches:
                   service:
                     spec:
                       loadBalancerClass: networking.gke.io/l4-regional-external
-
-  # --- NetworkPolicies: GKE's Pod IPv6 is global ------------------------------
-  # With EXTERNAL IPv6 the Pods' addresses come from the subnet's global range, not from fc00::/7, so
-  # allow-backend-egress-https (443 to the internet) would also reach other Pods over IPv6. Its ::/0 gets
-  # that range cut out too - the subnet's range from cluster-config (Terraform), as 10.0.0.0/8 is cut
-  # out of 0.0.0.0/0. postBuild fills ${cluster_ipv6_range} in; nothing else here uses a variable.
-  - target: { kind: Kustomization, name: "network-policies-(develop|staging|production)" }
-    patch: |-
-      - op: add
-        path: /spec/postBuild
-        value:
-          substituteFrom:
-            - kind: ConfigMap
-              name: cluster-config
-      - op: add
-        path: /spec/patches
-        value:
-          - target: { kind: NetworkPolicy, name: allow-backend-egress-https }
-            patch: |-
-              - op: test
-                path: /spec/egress/0/to/1/ipBlock/cidr
-                value: "::/0"
-              - op: add
-                path: /spec/egress/0/to/1/ipBlock/except/-
-                value: "${cluster_ipv6_range}"

@@ -131,11 +131,14 @@ module "kube_hetzner" {
   # Network: Cilium, dual-stack - every pod and Service gets an IPv4 and an IPv6 address, as on kind and
   # GKE. kube-hetzner supports IPv6 cluster ranges with Cilium only (validation-contract.tf), so Cilium is
   # the CNI and the NetworkPolicy engine (k3s's own policy controller is then off). The IPv6 ranges are a
-  # random unique local prefix (fdf9:a717:c7cc::/48, RFC 4193): not routed on the internet, so pod and
+  # random unique local prefix (fdf9:a717:c7cc::/48, RFC 4193 - pods :/56, Services :100::/112): not routed on the internet, so pod and
   # Service addresses fall in fc00::/7, which the egress NetworkPolicies cut out like 10.0.0.0/8. Pod
   # traffic between nodes stays in Cilium's tunnel over the private IPv4 network. A fresh cluster only:
   # k3s cannot add IPv6 to a running IPv4 cluster. The IPv4 ranges stay kube-hetzner's defaults.
-  cni_plugin        = "cilium"
+  cni_plugin = "cilium"
+  # Pinned here, not left to the module's default: the same version as kind (kind_cluster cilium_version),
+  # so a kube-hetzner upgrade cannot move Hetzner to another Cilium unnoticed.
+  cilium_version    = "1.19.3"
   cluster_ipv6_cidr = "fdf9:a717:c7cc::/56"
   service_ipv6_cidr = "fdf9:a717:c7cc:100::/112"
   # An ipBlock matches node addresses too, as in Kubernetes' own model: Cilium leaves nodes out of CIDR
@@ -292,6 +295,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
   data = {
     cloudflare_proxied = "enabled"
     cluster_name       = var.cluster_name
+    # The pods' IPv6 range (cluster_ipv6_cidr): NetworkPolicies cut it out of ::/0 (postBuild).
+    cluster_ipv6_range = "fdf9:a717:c7cc::/56"
     image_registry     = var.image_registry
     git_owner          = var.git_owner
     # The load balancer kube-hetzner creates for ingress_controller = "custom" (its name is

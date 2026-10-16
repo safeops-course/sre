@@ -277,6 +277,8 @@ case "$(jq -r '.spec.type // "missing"' <<<"$svc")" in
     addrs="$(jq -r '[.status.loadBalancer.ingress[]? | .ip // .hostname] | join(" ")' <<<"$svc")"
     if [ -z "$addrs" ]; then
       fail C5 "Traefik's Service has no load balancer address"
+    elif [ "$dual" = true ] && [ -n "$(tr ' ' '\n' <<<"$addrs" | grep -v ':' | grep '[a-zA-Z]' || true)" ]; then
+      pass C5 "load balancer for the ingress: $addrs (a hostname - its address families are the provider's, not checked)"
     elif [ "$dual" = true ] && [ "$(families_of "$addrs")" != "yes yes" ]; then
       fail C5 "load balancer for the ingress has one family only ($addrs) - the cluster is dual-stack, the ingress must be too"
     else
