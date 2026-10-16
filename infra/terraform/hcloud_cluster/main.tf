@@ -122,6 +122,36 @@ module "kube_hetzner" {
   load_balancer_location    = var.location
   load_balancer_enable_ipv6 = true
 
+  # Node-to-node IPv6 for Cilium's health check. Hetzner's private network carries IPv4 only, so a node's
+  # IPv6 address is its public one, and kube-hetzner's firewall dropped what one node sent to another
+  # there: Cilium reported "1/2 reachable" for ever (2026-10-16; pods are not affected - Cilium tunnels both
+  # families over the private IPv4 network). Opened: only the health check (TCP 4240) and ping (ICMP, also
+  # ICMPv6), only from Hetzner's IPv6 range of the location - every Hetzner server there, any customer's,
+  # can reach them (the health endpoint answers /hello, no data); not the rest of the internet. Accepted:
+  # the nodes' own /128s are known only after the servers exist (a dependency cycle), and a separate
+  # firewall is detached again by kube-hetzner's servers (they set firewall_ids) on every apply. If a node
+  # ever gets an address outside the range, Cilium shows "1/2 reachable" again (cilium-health status).
+  # kube-hetzner keys its rules by direction-protocol-port: these replace its own "in-icmp-" rule
+  # (allow_inbound_icmp, off here) and "in-tcp-4240" (multinetwork, off here) - turning those on needs
+  # their sources added here.
+  # https://docs.cilium.io/en/stable/operations/system_requirements/#firewall-rules
+  extra_firewall_rules = [
+    {
+      description = "Cilium health check between the nodes over IPv6"
+      direction   = "in"
+      protocol    = "tcp"
+      port        = "4240"
+      source_ips  = [local.hetzner_ipv6_range[var.location]]
+    },
+    {
+      description = "Ping between the nodes over IPv6 (Cilium health)"
+      direction   = "in"
+      protocol    = "icmp"
+      port        = ""
+      source_ips  = [local.hetzner_ipv6_range[var.location]]
+    },
+  ]
+
   # Ingress: Traefik comes from Flux (flux/infrastructure/ingress/traefik), as on every cluster.
   # "custom" = the module installs no ingress controller but still creates the load balancer
   # (<cluster_name>-custom, on the private network) and deletes it on destroy - the billed resource
@@ -196,12 +226,20 @@ locals {
     }]
   })
 
+  # Hetzner's IPv6 range for the servers of each location (Germany 2a01:4f8::/32, Finland 2a01:4f9::/32):
+  # the source of the nodes' Cilium health rules above. variables.tf allows only these locations.
+  hetzner_ipv6_range = {
+    fsn1 = "2a01:4f8::/32"
+    nbg1 = "2a01:4f8::/32"
+    hel1 = "2a01:4f9::/32"
+  }
+
   kubeconfig_path = pathexpand("${path.module}/kubeconfig.yaml")
 
   # kube-hetzner names the kubeconfig context after cluster_name ("sre") - too generic next to other
   # clusters in a merged kubeconfig. Rename only the context (cluster/user names, server and certs stay),
   # so it reads like kind's "kind-sre-control-plane". cluster_name itself must not change: it also names
-  # the servers, the etcd snapshot folder and the external-dns owner ID.
+  # the servers, the etcd snapshot folder and the external-dns owner ID (with cloud_provider).
   # https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
   kubeconfig_context = "hetzner-${var.cluster_name}-control-plane"
   kubeconfig_parsed  = yamldecode(module.kube_hetzner.kubeconfig)
@@ -294,7 +332,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
 
   data = {
     cloudflare_proxied = "enabled"
-    cluster_name       = var.cluster_name
+    # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
+    cloud_provider = "hetzner"
+    cluster_name   = var.cluster_name
     # The pods' IPv6 range (cluster_ipv6_cidr): NetworkPolicies cut it out of ::/0 (postBuild).
     cluster_ipv6_range = "fdf9:a717:c7cc::/56"
     image_registry     = var.image_registry

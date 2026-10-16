@@ -152,8 +152,11 @@ Optional `/etc/hosts` for browser testing:
 ## DNS/TLS
 
 - **DNS:** external-dns writes the Ingress hostnames to Cloudflare as **proxied** records and owns them
-  through TXT records (`txtOwnerId k8s-external-dns-<cluster_name>`). Records it does not own - for
-  example from an older cluster - it never changes; delete those by hand.
+  through TXT records (`txtOwnerId k8s-external-dns-<cluster_name>-<cloud_provider>`, here
+  `k8s-external-dns-sre-hetzner`; cloud_provider comes from cluster-config). Records it does not own - for
+  example from a GKE cluster, or one destroyed without cleanup - it never changes; delete those by hand. A
+  destroy removes them first: `flux-pre-destroy.sh` deletes the published Ingresses and waits for
+  external-dns to delete their records.
 - **TLS, edge:** visitors get Cloudflare's certificate. The zone SSL mode is **Full (strict)**:
   Cloudflare validates the origin certificate.
 - **TLS, origin:** cert-manager issues every Ingress certificate from **Cloudflare Origin CA**

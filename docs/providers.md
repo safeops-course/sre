@@ -33,11 +33,16 @@ example to copy from.
 - [ ] **A profile, `flux/bootstrap/profiles/<provider>`:** the provider-neutral base + the components
   the cluster can run + patches only for what is provider-specific (load balancer annotations, ...).
   The base never names a provider.
-- [ ] **Clusters of different providers never run at the same time:** they share the DNS names (one
-  external-dns owner) and image automation writes to the same branch.
+- [ ] **Clusters of different providers never run at the same time:** they share the DNS names and image
+  automation writes to the same branch. The module still writes `cloud_provider` to cluster-config (required:
+  the external-dns owner ID is `k8s-external-dns-<cluster_name>-<cloud_provider>`), so if two do run, the
+  first keeps the names and the other skips them instead of both rewriting them every minute. The
+  pre-destroy hook (`flux-pre-destroy.sh`) deletes the DNS records before the cluster goes.
 - [ ] **Backups go to Cloudflare R2,** the same target for every provider.
 - [ ] **Dual-stack:** IPv4 and IPv6 for nodes, pods and Services (conformance C13); the load balancer gets both families
-  (C5); a pod range that is not in fc00::/7 is cut out of `allow-backend-egress-https` by the profile (GKE does it).
+  (C5); the module writes its pod IPv6 range to cluster-config `cluster_ipv6_range`, which
+  `allow-backend-egress-https` cuts out of `::/0` (on GKE it is global, not in fc00::/7). Every app pod answers on
+  both of its addresses (`make smoke-test`: an image that listens on IPv4 only fails there, not as a 502 later).
 
 ## Proof
 

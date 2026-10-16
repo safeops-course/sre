@@ -58,9 +58,11 @@ resource "kubernetes_config_map_v1" "cluster_config" {
 
   data = {
     cloudflare_proxied = "enabled"
-    cluster_name       = var.cluster_name
-    image_registry     = var.image_registry
-    git_owner          = var.git_owner
+    # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
+    cloud_provider = "gke"
+    cluster_name   = var.cluster_name
+    image_registry = var.image_registry
+    git_owner      = var.git_owner
     # The subnet's global IPv6 range (EXTERNAL): nodes and Pods get their IPv6 from it - not in fc00::/7
     # here, so NetworkPolicies cut this range out of ::/0 (postBuild), as 10.0.0.0/8 out of 0.0.0.0/0.
     cluster_ipv6_range = google_compute_subnetwork.nodes.external_ipv6_prefix
