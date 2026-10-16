@@ -208,7 +208,7 @@ variable "cilium_version" {
   description = "Cilium Helm chart version - the CNI. Keep it equal to kube-hetzner's cilium_version (hcloud_cluster), so kind proves what Hetzner runs."
   type        = string
   # renovate: datasource=helm depName=cilium registryUrl=https://helm.cilium.io/
-  default = "1.19.3"
+  default = "1.20.3"
 }
 
 variable "metrics_server_chart_version" {

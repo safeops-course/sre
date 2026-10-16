@@ -138,7 +138,7 @@ module "kube_hetzner" {
   cni_plugin = "cilium"
   # Pinned here, not left to the module's default: the same version as kind (kind_cluster cilium_version),
   # so a kube-hetzner upgrade cannot move Hetzner to another Cilium unnoticed.
-  cilium_version    = "1.19.3"
+  cilium_version    = "1.20.3"
   cluster_ipv6_cidr = "fdf9:a717:c7cc::/56"
   service_ipv6_cidr = "fdf9:a717:c7cc:100::/112"
   # An ipBlock matches node addresses too, as in Kubernetes' own model: Cilium leaves nodes out of CIDR

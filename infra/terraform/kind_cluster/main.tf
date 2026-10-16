@@ -201,8 +201,24 @@ resource "null_resource" "merge_kubeconfig" {
 
 # Give the API server a moment before Helm and Kubernetes resources talk to it.
 # https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep
+# Every node Ready, or the apply stops here with the nodes' state - not 10 minutes later in a Helm release
+# that times out for want of a network (metrics-server did, 2026-10-16).
+resource "null_resource" "wait_for_nodes" {
+  depends_on = [helm_release.cilium]
+
+  provisioner "local-exec" {
+    when        = create
+    interpreter = ["/bin/bash", "-c"]
+    command     = "kubectl --kubeconfig=\"${local.kubeconfig_path}\" wait --for=condition=Ready nodes --all --timeout=300s || { kubectl --kubeconfig=\"${local.kubeconfig_path}\" get nodes; kubectl --kubeconfig=\"${local.kubeconfig_path}\" -n kube-system get pods -l k8s-app=cilium; exit 1; }"
+  }
+
+  lifecycle {
+    replace_triggered_by = [kind_cluster.sre]
+  }
+}
+
 resource "time_sleep" "wait_for_cluster" {
-  depends_on      = [helm_release.cilium]
+  depends_on      = [null_resource.wait_for_nodes]
   create_duration = "30s"
 
   # A new kind cluster (for example a new node_image) needs this step again;
@@ -250,8 +266,11 @@ removed {
 # Cilium: the cluster's network (CNI) and its NetworkPolicy engine, dual-stack. The values follow
 # kube-hetzner's own Cilium (hcloud_cluster, cni_plugin = "cilium"), so kind proves what Hetzner runs:
 # Kubernetes-assigned pod ranges of both families, tunnel (VXLAN) routing, kube-proxy kept (iptables),
-# no Hubble. One operator replica: two nodes. wait: the release is done when Cilium runs and the nodes
-# are Ready - everything after wait_for_cluster needs a working network.
+# no Hubble. One operator replica: two nodes. Helm's wait does not catch a crash-looping agent (it
+# returned after 3 s while every agent restarted - 2026-10-16), so null_resource.wait_for_nodes below
+# waits for Ready nodes: a node is Ready only once its CNI runs.
+# 1.20.3, not kube-hetzner's 1.19.3 default: Cilium before 1.19.8 does not start on Linux 7.2 (OrbStack's
+# kernel; cilium/cilium#48016 - its BPF feature probe is refused by the newer verifier).
 # https://docs.cilium.io/en/stable/installation/kind/
 resource "helm_release" "cilium" {
   name       = "cilium"
