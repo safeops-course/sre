@@ -38,7 +38,7 @@ done
 # Every PrometheusRule under flux/, found by its kind (yq, not a text search: a quoted or indented
 # kind counts too), one document at a time - promtool reads only the first document of a file. A new
 # rules file is checked without a list to keep up to date.
-pairs="$(find "${repo_root}/flux" -name '*.yaml' -print0 \
+pairs="$(find "${repo_root}/flux" \( -name '*.yaml' -o -name '*.yml' \) -print0 \
   | xargs -0 yq -N 'select(tag == "!!map" and .kind == "PrometheusRule") | filename + " " + (.metadata.namespace // "-") + " " + .metadata.name')"
 # None found is a broken search, not a clean result.
 [ -n "${pairs}" ] || { echo "platform-alerts: no PrometheusRule found under flux/" >&2; exit 1; }
