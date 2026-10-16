@@ -332,7 +332,7 @@ fi
 documents=0
 # shellcheck disable=SC2016 # $p is a yq variable, not a shell one
 if ! sources="$(find flux -type f \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/patches/*' -print0 | sort -z |
-  xargs -0 yq -N "${WORKLOAD_LINKS}"' | [.kind, .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
+  xargs -0 -r yq -N "${WORKLOAD_LINKS}"' | [.kind, (.metadata.namespace // "-") + "/" + .metadata.name, (($p | tag) + " " + ($p | tostring)), filename] | @tsv' 2>"${render_tmp}/err")"; then
   failures+=("flux/: yq could not read the workload files: $(cat "${render_tmp}/err")")
   sources=""
 fi
@@ -343,6 +343,9 @@ while IFS=$'\t' read -r kind name value file; do
     failures+=("${file}: ${kind} ${name} (checked in the file) has enableServiceLinks ${value#* } (${value%% *}) - it must be the boolean false")
   fi
 done <<<"${sources}"
+if ((documents == 0)); then
+  failures+=("flux/: no workload document found - nothing was checked as written for enableServiceLinks")
+fi
 
 if ((${#failures[@]} > 0)); then
   echo "check-app-security: ${#failures[@]} problem(s):" >&2
