@@ -52,7 +52,7 @@ flux_git_repository_url = "https://github.com/safeops-course/sre.git"
 # TF_VAR_flux_git_repository_branch when a cycle tests a branch.
 flux_kustomization_path = "./flux/bootstrap/profiles/hetzner"
 # flux_version             = "2.x"
-# flux_operator_version    = "0.60.0"
+# flux_operator_version    = "0.61.0"   # every version needs its line in ../scripts/flux-operator.sha256
 
 # ─── Image Registry ────────────────────────────────────────────────────────────
 # Change these if you fork the repos to your own GitHub account.

@@ -237,7 +237,8 @@ jobs:
         if: env.APPLY == 'true' && steps.plan.outputs.has_changes == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: terraform-hcloud-tfplan
+          # the attempt in the name: a re-run downloads its own plan, never an earlier attempt's
+          name: terraform-hcloud-tfplan-${{ github.run_attempt }}
           path: |
             infra/terraform/hcloud_cluster/tfplan.enc
             infra/terraform/hcloud_cluster/plan.txt
@@ -251,6 +252,9 @@ jobs:
     # Approval: the "production" environment requires a reviewer (Settings > Environments). The job
     # waits in the run page ("Review deployments") - no issue, no third-party action with a token.
     environment: production
+    permissions:
+      contents: read
+      actions: read # gh run download of the plan artifact
     concurrency:
       group: terraform-hcloud
       cancel-in-progress: false
@@ -293,11 +297,13 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: terraform init -input=false
 
+      # gh run download, not actions/download-artifact: its latest release (v8.0.2) prints a Node
+      # DEP0005 (Buffer) deprecation warning on every run. gh is on the runner; the token reads only
+      # this repository's Actions artifacts (permissions: actions: read).
       - name: Download tfplan artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: terraform-hcloud-tfplan
-          path: infra/terraform/hcloud_cluster
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" --name "terraform-hcloud-tfplan-${GITHUB_RUN_ATTEMPT}" --dir .
 
       - name: Decrypt tfplan
         env:
