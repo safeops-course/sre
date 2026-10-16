@@ -80,8 +80,6 @@ provider "kubernetes" {
 
 # Values computed once and reused below. https://developer.hashicorp.com/terraform/language/values/locals
 locals {
-  # The address families of the cluster (kind: "dual" or "ipv4") - also the promise in cluster-config ip_stack.
-  ip_family                = "dual"
   kubeconfig_path          = pathexpand("${path.module}/kubeconfig.yaml")
   flux_pull_secret_yaml    = var.flux_git_token != "" ? "    pullSecret: \"flux-system\"\n" : ""
   backup_s3_secret_enabled = nonsensitive(var.backup_s3_access_key_id != "" && var.backup_s3_secret_access_key != "")
@@ -129,7 +127,7 @@ resource "kind_cluster" "sre" {
       api_server_address  = "127.0.0.1"
       api_server_port     = 6443
       kube_proxy_mode     = "iptables"
-      ip_family           = local.ip_family
+      ip_family           = "dual"
       pod_subnet          = "10.244.0.0/16,fd00:10:244::/56"
       service_subnet      = "10.96.0.0/16,fd00:10:96::/112"
       disable_default_cni = true
@@ -519,8 +517,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "disabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "kind"
-    # The address families this provider promises (dual where it has IPv6 by default): conformance C13.
-    ip_stack = local.ip_family == "dual" ? "dual" : "ipv4"
+    # A fact about the provider (IPv6 by default: dual), never read from the setting it checks: turning
+    # IPv6 off must fail conformance C13, not change the promise.
+    ip_stack = "dual"
     # The pods' IPv6 range (networking.pod_subnet above): NetworkPolicies cut it out of ::/0 (postBuild).
     cluster_ipv6_range    = "fd00:10:244::/56"
     cluster_name          = "sre-control-plane"

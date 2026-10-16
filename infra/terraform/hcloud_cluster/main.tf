@@ -138,6 +138,10 @@ module "kube_hetzner" {
   # (allow_inbound_icmp, off here) and "in-tcp-4240" / "out-tcp-4240" (multinetwork, off here) - turning
   # those on needs their addresses added here.
   # https://docs.cilium.io/en/stable/operations/system_requirements/#firewall-rules
+  # Set here, not left to the module's default: with any outbound rule (the one below) a Hetzner firewall
+  # drops every other outbound packet - without kube-hetzner's own outbound rules (DNS, HTTP(S), NTP)
+  # the nodes would reach nothing but TCP 4240.
+  restrict_outbound_traffic = true
   extra_firewall_rules = [
     {
       description     = "Cilium health check between the nodes over IPv6"
@@ -350,7 +354,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "enabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "hetzner"
-    # The address families this provider promises (dual where it has IPv6 by default): conformance C13.
+    # A fact about the provider (IPv6 by default: dual), never read from the setting it checks: turning
+    # IPv6 off must fail conformance C13, not change the promise.
     ip_stack     = "dual"
     cluster_name = var.cluster_name
     # The pods' IPv6 range (cluster_ipv6_cidr): NetworkPolicies cut it out of ::/0 (postBuild).

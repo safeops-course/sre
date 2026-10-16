@@ -6,7 +6,7 @@
 # the ingress, metrics-server, reachable admission webhooks, backups to S3, images for the nodes'
 # architecture, and the address families the provider promises (C13: cluster-config ip_stack - "dual",
 # IPv4 and IPv6 for every node, pod and Service, where the provider has IPv6 by default; "ipv4" where it
-# has not; C2 and C5 then check both families on a dual-stack cluster). This script checks the contract on a running cluster with the platform installed -
+# has not; on "dual" C2 and C5 check both families - even when IPv6 is gone, so they fail too). This script checks the contract on a running cluster with the platform installed -
 # the layer below tests/smoke-test.sh (do the apps answer?). One line per item: PASS, FAIL or SKIP
 # with the reason. A SKIP is never a quiet pass: it names what was not checked and why.
 #
@@ -137,22 +137,26 @@ server_ready=true
 k -n "$NS" wait --for=condition=Ready pod/server --timeout=120s >/dev/null 2>&1 || server_ready=false
 
 # Dual-stack (C13, printed last): every node has a pod range of each family, and the test Service got
-# an address of each. Decided here, because C2 and C5 check both families when the cluster has them.
+# an address of each. Decided here, with the provider's promise below, because C2 and C5 depend on it.
 families_of() { local v4=no v6=no x; for x in $1; do case "$x" in *:*) v6=yes ;; *.*) v4=yes ;; esac; done; echo "$v4 $v6"; }
+# nodes_not FAMILIES - the nodes whose pod ranges are not FAMILIES (a families_of answer, e.g. "yes yes").
+nodes_not() { local name cidrs; while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "$1" ] || echo "$name"; done <<<"$node_cidrs"; }
 node_cidrs="$(k get nodes -o json | jq -r '.items[] | "\(.metadata.name) \((.spec.podCIDRs // []) | join(" "))"')" || node_cidrs=""
-single_nodes="$(while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "yes yes" ] || echo "$name"; done <<<"$node_cidrs")"
+single_nodes="$(nodes_not "yes yes")"
 svc_ips="$(k -n "$NS" get service server -o jsonpath='{.spec.clusterIPs[*]}' 2>/dev/null)" || svc_ips=""
 dual=false
 [ -n "$node_cidrs" ] && [ -z "$single_nodes" ] && [ "$(families_of "$svc_ips")" = "yes yes" ] && dual=true
 # The promise: cluster-config ip_stack, written by the module's Terraform ("dual" where the provider has
 # IPv6 by default, "ipv4" where it has not). A dual-stack promise makes C2 and C5 test both families even
 # when IPv6 is gone - they fail then too, not only C13. An unreadable ConfigMap is not "no promise".
-ip_stack_note=""
-if cluster_config="$(k -n flux-system get configmap cluster-config -o json 2>&1)"; then
-  ip_stack="$(jq -r '.data.ip_stack // ""' <<<"$cluster_config")"
+# stderr apart from the JSON: a kubectl warning must not break the parse (or end the run).
+ip_stack_note="" ip_stack="" errf="$(mktemp)"
+if cluster_config="$(k -n flux-system get configmap cluster-config -o json 2>"$errf")"; then
+  ip_stack="$(jq -r '.data.ip_stack // ""' <<<"$cluster_config" 2>/dev/null)" || ip_stack_note="flux-system/cluster-config is not JSON"
 else
-  ip_stack=""; ip_stack_note="could not read flux-system/cluster-config: $(head -c 150 <<<"$cluster_config")"
+  cluster_config="{}"; ip_stack_note="could not read flux-system/cluster-config: $(head -c 150 "$errf")"
 fi
+rm -f "$errf"
 want_dual="$dual"
 case "$ip_stack" in dual) want_dual=true ;; ipv4) want_dual=false ;; esac
 families=4; [ "$want_dual" = true ] && families="4 6"
@@ -367,7 +371,7 @@ skip C10 "node upgrades - a procedure, Chapter 20"
 # C11 - the platform's own images exist for every node architecture (kind on a Mac is arm64, the
 # clouds mostly amd64). Third-party images come from multi-arch charts; ours are built by build.yml.
 archs="$(k get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.architecture}{"\n"}{end}' | sort -u)" || archs=""
-registry="$(k -n flux-system get configmap cluster-config -o jsonpath='{.data.image_registry}' 2>/dev/null || true)"
+registry="$(jq -r '.data.image_registry // ""' <<<"$cluster_config" 2>/dev/null || true)"
 if ! command -v docker >/dev/null 2>&1; then
   skip C11 "image architectures - docker not found (nodes: $(tr '\n' ' ' <<<"$archs"))"
 elif [ -z "$archs" ]; then
@@ -399,16 +403,18 @@ skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scr
 # Terraform. "dual": IPv4 and IPv6 for every node's pods and for Services (decided before C2) - a provider
 # with IPv6 by default never loses it quietly. "ipv4": a provider without it (docs/providers.md); a
 # cluster that is dual-stack after all fails too, so the promise in Git stays true.
-v6_nodes="$(while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "yes no" ] || echo "$name"; done <<<"$node_cidrs")"
+# On "ipv4" a node must not have an IPv6 pod range; one without pod ranges is fine - a CNI that hands out
+# pod addresses itself (EKS's VPC CNI) leaves spec.podCIDRs empty.
+v6_nodes="$(while read -r name cidrs; do case "$cidrs" in *:*) echo "$name" ;; esac; done <<<"$node_cidrs")"
 if [ -n "$ip_stack_note" ]; then
   fail C13 "address families - $ip_stack_note"
 elif [ "$ip_stack" = ipv4 ]; then
   if [ "$dual" = true ]; then
     fail C13 "cluster-config says ip_stack ipv4, but the cluster is dual-stack (a Service gets $svc_ips) - set ip_stack dual"
   elif [ -z "$node_cidrs" ]; then
-    fail C13 "IPv4 only - could not read the nodes' pod ranges"
+    fail C13 "IPv4 only - could not read the nodes"
   elif [ -n "$v6_nodes" ]; then
-    fail C13 "cluster-config says ip_stack ipv4, but these nodes have no IPv4-only pod range: $(tr '\n' ' ' <<<"$v6_nodes")"
+    fail C13 "cluster-config says ip_stack ipv4, but these nodes have an IPv6 pod range: $(tr '\n' ' ' <<<"$v6_nodes")"
   elif [ "$(families_of "$svc_ips")" = "yes no" ]; then
     pass C13 "IPv4 only, as cluster-config ip_stack promises (the provider has no IPv6 by default); a Service gets $svc_ips"
   else
