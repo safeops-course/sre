@@ -46,6 +46,9 @@ spec:
     policy: sync
     sources:
       - ingress
-    # Each cloud profile adds its provider (k8s-external-dns-sre-gke, -hetzner): one owner per provider,
-    # so two clusters never rewrite each other's records. A new provider adds the same patch.
-    txtOwnerId: "k8s-external-dns-${cluster_name}"
+    # external-dns changes only records with its own owner ID (a TXT record next to each). One per
+    # provider (cluster-config cloud_provider, written by each Terraform module): cluster_name is "sre"
+    # everywhere, and two clusters with one ID rewrote each other's records every minute (Hetzner + GKE,
+    # 2026-10-16). A record another owner left is skipped - flux-pre-destroy.sh removes the Ingresses
+    # and waits for external-dns to delete their records before a cluster goes.
+    txtOwnerId: "k8s-external-dns-${cluster_name}-${cloud_provider}"

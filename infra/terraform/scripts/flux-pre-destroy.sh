@@ -7,6 +7,8 @@
 #      running backend (failurePolicy Fail) blocks every delete in the namespaces;
 #      remove every PodDisruptionBudget outside kube-system - in a teardown it only makes a drain or an
 #      eviction wait (GKE waits up to an hour per node pool, billed);
+#      delete the Ingresses external-dns publishes and wait until it deleted their DNS records: each
+#      provider has its own owner ID, so a record left behind is skipped by the next cluster for ever;
 #      delete every LoadBalancer Service and wait for it: the cloud's load balancer goes only with it;
 #   2. delete the target namespaces except flux-system - with them go the workloads, CNPG clusters
 #      and their PVCs, so no controller recreates a PVC; then stop their pods at once (grace period
@@ -26,11 +28,12 @@
 # Usage: flux-pre-destroy.sh <kubeconfig> [namespaces, comma-separated]
 #   Called by the destroy-time provisioner of null_resource.flux_pre_destroy in
 #   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and gke_cluster/flux.tf - not meant to be run by hand.
-# Needs kubectl (and jq only for the last-resort namespace finalize). It talks only to the cluster in
+# Needs kubectl and jq (the published Ingresses, the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
 # Changes the cluster: it suspends Flux, stops Kyverno, deletes the webhooks, every PodDisruptionBudget
-# outside kube-system, the given namespaces (their pods at once), every PVC, and the ResourceSets and
-# input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT (seconds, default 300 / 180).
+# outside kube-system, the Ingresses external-dns publishes (and so their DNS records), the given namespaces (their pods at once), every PVC, and the ResourceSets and
+# input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT / PRE_DESTROY_DNS_TIMEOUT
+# (seconds, default 300 / 180 / 180).
 # Without kubectl, the kubeconfig or a reachable cluster it warns and exits 0 - nothing to clean.
 
 set -o errexit
@@ -42,6 +45,7 @@ TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability
 PV_TIMEOUT="${PRE_DESTROY_PV_TIMEOUT:-300}"
 LB_TIMEOUT="${PRE_DESTROY_LB_TIMEOUT:-300}"
 NS_TIMEOUT="${PRE_DESTROY_NS_TIMEOUT:-180}"
+DNS_TIMEOUT="${PRE_DESTROY_DNS_TIMEOUT:-180}"
 
 # log MESSAGE / warn MESSAGE - progress on stdout, problems on stderr, both prefixed.
 log() {
@@ -185,6 +189,38 @@ delete_load_balancers() {
   fi
 }
 
+# delete_dns_records - delete every Ingress external-dns publishes (annotation cloudflare-proxied=enabled)
+# and wait until external-dns logged the deletion of each one's records. It runs with --policy=sync and
+# deletes only records with its own owner ID (one per provider); a record left behind points at a load
+# balancer that is gone, and the next cluster - another owner - skips it (found 2026-10-16: dex and
+# headlamp, whose namespace auth is not deleted here, kept their records). Flux is suspended, so nothing
+# recreates the Ingresses. external-dns runs every minute; on a timeout the hosts left are named.
+delete_dns_records() {
+  local ingresses hosts host start left=""
+  kc -n external-dns get deployment external-dns >/dev/null 2>&1 || return 0
+  ingresses="$(kc get ingress -A -o json 2>/dev/null)" || { warn "could not list Ingresses - DNS records may stay in Cloudflare"; return 0; }
+  hosts="$(jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled") | .spec.rules[]?.host // empty' <<<"${ingresses}" | sort -u)"
+  [[ -z "${hosts}" ]] && return 0
+  start="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  log "deleting the published Ingresses, then waiting for external-dns to delete the records of: $(tr '\n' ' ' <<<"${hosts}")"
+  jq -r '.items[] | select(.metadata.annotations["cloudflare-proxied"] == "enabled") | "\(.metadata.namespace) \(.metadata.name)"' <<<"${ingresses}" \
+    | while read -r ns name; do
+        kc -n "${ns}" delete ingress "${name}" --ignore-not-found=true --wait=false >/dev/null 2>&1 \
+          || warn "could not delete Ingress ${ns}/${name}"
+      done
+  local deadline=$((SECONDS + DNS_TIMEOUT)) logs
+  while (( SECONDS < deadline )); do
+    logs="$(kc -n external-dns logs deployment/external-dns --since-time="${start}" 2>/dev/null)" || logs=""
+    left=""
+    for host in ${hosts}; do
+      grep -qF "action=DELETE record=${host} " <<<"${logs}" || left+=" ${host}"
+    done
+    [[ -z "${left}" ]] && { log "external-dns deleted the DNS records"; return 0; }
+    sleep 10
+  done
+  warn "external-dns did not delete the records of${left} within ${DNS_TIMEOUT}s - delete them in Cloudflare (A, AAAA and their TXT owner records), or the next cluster skips them"
+}
+
 # stop_pods NS... - delete every pod in these (already terminating) namespaces with grace period 0.
 # Their data goes with the cluster; waiting for a graceful stop only keeps disks attached - Postgres
 # (CloudNativePG) may take 30 minutes - while the PVs wait and the nodes are billed.
@@ -319,6 +355,7 @@ done
 suspend_flux
 remove_admission_webhooks
 remove_disruption_budgets
+delete_dns_records
 delete_load_balancers
 if (( ${#app_namespaces[@]} > 0 )); then
   delete_namespaces "${app_namespaces[@]}"

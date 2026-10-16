@@ -108,6 +108,12 @@ variable "location" {
   description = "Hetzner location for servers and load balancer (e.g. nbg1, fsn1, hel1)."
   type        = string
   default     = "nbg1"
+
+  # main.tf needs Hetzner's IPv6 range of the location (local.hetzner_ipv6_range, Cilium health rules).
+  validation {
+    condition     = contains(["fsn1", "nbg1", "hel1"], var.location)
+    error_message = "location must be fsn1, nbg1 or hel1 - for another one add its Hetzner IPv6 range to local.hetzner_ipv6_range in main.tf."
+  }
 }
 
 variable "load_balancer_type" {

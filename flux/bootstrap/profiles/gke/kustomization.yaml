@@ -1,11 +1,10 @@
 # GKE profile: the full platform on the GKE cluster (infra/terraform/gke_cluster) - the same as on
-# Hetzner. Clusters of the two providers never run at the same time: they share the DNS names (each
-# provider has its own external-dns owner ID, so the first one keeps them) and image automation writes
-# to the same branch.
+# Hetzner. Clusters of the two providers never run at the same time: they share the DNS names (one
+# external-dns owner) and image automation writes to the same branch.
 #
 #   base         flux/bootstrap/flux-system - what every cluster runs
 #   components   every one, as on Hetzner
-#   patches      external-dns owner ID k8s-external-dns-<cluster_name>-gke; Traefik's LoadBalancer Service gets GKE's backend-service load balancer class - the
+#   patches      Traefik's LoadBalancer Service gets GKE's backend-service load balancer class - the
 #                only one with a dual-stack (IPv4 + IPv6) external passthrough load balancer before GKE
 #                1.37, where it becomes the default. GKE deletes the load balancer with the Service (the
 #                destroy removes the Service first: infra/terraform/gke_cluster/flux.tf)
@@ -47,22 +46,3 @@ patches:
                   service:
                     spec:
                       loadBalancerClass: networking.gke.io/l4-regional-external
-
-  # --- external-dns: an owner ID per provider ---------------------------------
-  # external-dns marks every record it writes with its owner ID (a TXT record) and changes only its own.
-  # cluster_name is "sre" on every provider, so without a suffix two clusters running at the same time
-  # (found 2026-10-16: Hetzner + GKE) both claim the records and rewrite them every minute. With the
-  # suffix the first cluster keeps the names and the other one logs that it skips them.
-  - target: { kind: Kustomization, name: dns-and-certificates }
-    patch: |-
-      - op: add
-        path: /spec/patches
-        value:
-          - target: { kind: HelmRelease, name: external-dns }
-            patch: |-
-              apiVersion: helm.toolkit.fluxcd.io/v2
-              kind: HelmRelease
-              metadata: { name: external-dns }
-              spec:
-                values:
-                  txtOwnerId: "k8s-external-dns-${cluster_name}-gke"

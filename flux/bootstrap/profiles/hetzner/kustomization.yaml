@@ -3,8 +3,7 @@
 #   base         flux/bootstrap/flux-system - what every cluster runs
 #   components   every one: the platform's secrets, the public edge (Cloudflare DNS + Origin CA, Dex,
 #                Headlamp), image automation, alert routing, OpenTelemetry
-#   patches      what only Hetzner has: the load balancer kube-hetzner creates, taken over by Traefik;
-#                external-dns owner ID k8s-external-dns-<cluster_name>-hetzner
+#   patches      what only Hetzner has: the load balancer kube-hetzner creates, taken over by Traefik
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -68,22 +67,3 @@ patches:
                         trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
                       forwardedHeaders:
                         trustedIPs: [127.0.0.1/32, 10.0.0.0/8]
-
-  # --- external-dns: an owner ID per provider ---------------------------------
-  # external-dns marks every record it writes with its owner ID (a TXT record) and changes only its own.
-  # cluster_name is "sre" on every provider, so without a suffix two clusters running at the same time
-  # (found 2026-10-16: Hetzner + GKE) both claim the records and rewrite them every minute. With the
-  # suffix the first cluster keeps the names and the other one logs that it skips them.
-  - target: { kind: Kustomization, name: dns-and-certificates }
-    patch: |-
-      - op: add
-        path: /spec/patches
-        value:
-          - target: { kind: HelmRelease, name: external-dns }
-            patch: |-
-              apiVersion: helm.toolkit.fluxcd.io/v2
-              kind: HelmRelease
-              metadata: { name: external-dns }
-              spec:
-                values:
-                  txtOwnerId: "k8s-external-dns-${cluster_name}-hetzner"

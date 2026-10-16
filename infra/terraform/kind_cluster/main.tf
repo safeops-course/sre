@@ -514,6 +514,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
 
   data = {
     cloudflare_proxied = "disabled"
+    # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
+    cloud_provider = "kind"
     # The pods' IPv6 range (networking.pod_subnet above): NetworkPolicies cut it out of ::/0 (postBuild).
     cluster_ipv6_range    = "fd00:10:244::/56"
     cluster_name          = "sre-control-plane"
