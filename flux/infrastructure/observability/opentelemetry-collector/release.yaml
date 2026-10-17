@@ -101,10 +101,14 @@ spec:
             initial_interval: 10s
             max_interval: 300s
             max_elapsed_time: 0
+          # The queue is kept on the node too (file_storage - the extension storeCheckpoints adds), so the
+          # batches waiting for Uptrace survive a restart: a file position is saved once a line is read,
+          # not once it is sent.
           sending_queue:
             enabled: true
             num_consumers: 2
             queue_size: 100
+            storage: file_storage
         debug:
           verbosity: basic
           sampling_initial: 5

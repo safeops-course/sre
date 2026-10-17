@@ -27,6 +27,8 @@ Secrets (really secret):
 - `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`. An ephemeral Terraform
   variable written through `data_wo`: never in the plan or the state, so every plan and apply needs
   it. After rotating it, bump `sops_age_key_revision`, otherwise Terraform does not re-send it
+- `UPTRACE_DSN` - where the OpenTelemetry collectors send logs, traces and metrics (the Uptrace project's
+  DSN, ingest only); the plan fails without it (`uptrace_dsn` is required)
 - `TFPLAN_PASSPHRASE` - encrypts the saved Terraform plan between the plan and the apply job. The
   plan file contains every input variable in plain text, and artifacts of a public repository are
   downloadable by anyone. The artifact holds `tfplan.enc` (the encrypted plan) and `plan.txt` (the

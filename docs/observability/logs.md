@@ -1,8 +1,13 @@
 # Logs - what is collected, and where it goes
 
-Two OpenTelemetry collectors send the cluster's logs to Uptrace (the project the DSN names), on every
-cloud cluster - the component `flux/bootstrap/components/opentelemetry` is in each cloud profile. kind runs
-neither: its logs stay on the nodes (`kubectl logs`).
+Two OpenTelemetry collectors send the cluster's logs to Uptrace (the project the DSN names). They run on
+every cluster - the component `flux/bootstrap/components/opentelemetry` is in every profile. On kind they
+read the same and send to their own log instead (the debug exporter prints how many records each batch
+held), so what is collected can be checked there for free:
+
+```bash
+kubectl --context kind-sre-control-plane -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --tail=20
+```
 
 | Collector | Where | Reads |
 |---|---|---|
@@ -10,6 +15,7 @@ neither: its logs stay on the nodes (`kubectl logs`).
 | `otel-events` (Deployment, one replica) | `.../release-events.yaml` | Kubernetes Events of the whole cluster: reason, Normal/Warning, the object, how many times |
 
 Each record carries the cluster (`k8s.cluster.name`), and the pod logs their namespace, pod, container and node.
+The DaemonSet skips its own log but reads `otel-events`' - like any other pod's.
 
 ## Not collected
 
@@ -19,14 +25,18 @@ Each record carries the cluster (`k8s.cluster.name`), and the pod logs their nam
 | The control plane of a managed cluster (GKE, EKS) | It runs at the provider, not on our nodes | The provider's logging (Cloud Logging on GKE) |
 | The API server's audit log (who changed what) | Not turned on | - |
 
-On kind the control plane runs as static pods, so its logs are among the pod logs.
+On kind the control plane runs as static pods, so its logs are among the pod logs; on k3s it does not.
 
-## Not lost
+## What survives, and what does not
 
-- **Restarts:** the DaemonSet keeps each file's read position on the node (`storeCheckpoints`), so a restarted
-  collector goes on where it stopped instead of skipping what was written meanwhile.
-- **Uptrace unreachable:** each collector queues batches and retries without end; a full queue drops the
-  newest batches - the collector's log says so.
+- **A restart of the DaemonSet:** it keeps each file's read position and the batches waiting for Uptrace on
+  the node (`storeCheckpoints`, and `sending_queue.storage`), so it goes on where it stopped. Lost: files
+  it has never seen - a pod started and gone, or a log rotated, while it was down - are most likely read
+  from their end (`start_at: end`; not tested). The events collector keeps nothing on disk: Events of the minutes it is down are not sent.
+- **Uptrace unreachable:** each collector queues batches and retries without end; a full queue refuses new
+  batches - the collector's log says so.
+- **A wrong DSN:** Uptrace refuses it, the refusal is not retried, and the log says `Exporting failed.
+  Dropping data.` (seen on kind with a fake DSN).
 - **No DSN:** the Terraform plan fails (`uptrace_dsn` is required) - a collector without one would drop
   everything it reads.
 
