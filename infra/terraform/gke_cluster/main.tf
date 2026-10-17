@@ -39,6 +39,7 @@ locals {
 
 # ─── Network ──────────────────────────────────────────────────────────────────
 resource "google_compute_network" "this" {
+  # checkov:skip=CKV2_GCP_18:no rule of our own - a custom VPC starts with only the implied deny-all ingress, and GKE adds the rules the cluster and its load balancers need
   name                    = var.cluster_name
   auto_create_subnetworks = false # custom mode: only the subnet below, no subnet in every region
   routing_mode            = "REGIONAL"

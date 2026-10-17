@@ -15,6 +15,14 @@
 # CKV_TF_1 (module source by commit hash) is skipped for all: the modules come from the Terraform
 # registry, which takes a version, not a commit - they are pinned to an exact version instead.
 #
+# Registry modules are not downloaded (Checkov warns "Failed to download module ..."): their code is the
+# upstream's, pinned and read when it is bumped. With --download-external-modules Checkov reports every
+# policy document a module carries, also of features turned off (34 findings in eks-pod-identity on
+# 2026-10-17, none of them created), and a finding inside a module cannot be skipped where it is made.
+#
+# CI pins the Checkov version (.github/workflows/pre-commit.yml); a newer one can bring new checks, so a
+# local run with an older Checkov can pass where CI fails.
+#
 # Usage: scripts/terraform-security.sh   (from the repository root). Needs checkov; changes nothing.
 set -e
 if ! command -v checkov &>/dev/null; then
