@@ -66,11 +66,14 @@ make -C infra/terraform/aws_foundation bootstrap
 
 It runs, in order:
 1. **preflight**: names any missing setting or unknown profile before anything runs;
-2. **plan**: saved, with the account and identity checks;
-3. **one question**: apply this plan?
-4. **apply**: exactly that plan;
-5. **delete-default-vpc**: the default VPC of the region;
-6. **verify**: no drift and no default VPC.
+2. **first question**: delete the default VPC of the region?
+3. **delete-default-vpc**: first, so the plan below carries no warning about it;
+4. **plan**: saved, with the account and identity checks;
+5. **second question**: apply this plan?
+6. **apply**: exactly that plan;
+7. **verify**: no drift and no default VPC.
+
+Run `make ... plan` before `delete-default-vpc` and the plan warns `Check block assertion failed` for `no_default_vpc`: that is the check doing its job, and the warning goes away once the VPC is deleted.
 
 AWS does not ask to confirm the budget e-mail address. The first e-mail arrives when spending crosses 50 %.
 

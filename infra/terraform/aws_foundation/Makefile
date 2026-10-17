@@ -98,9 +98,12 @@ delete-default-vpc: preflight ## One-time: delete the default VPC of the region 
 	$(AWS) ec2 delete-vpc --vpc-id $$vpc; \
 	echo "deleted the default VPC $$vpc of $(AWS_REGION)"
 
-# The whole first setup, in order. One question - the plan is shown and must be confirmed.
-bootstrap: plan ## First setup: plan, confirm, apply, delete the default VPC, verify
+# The whole first setup, in order. Two questions: the default VPC goes first, so the plan is read without
+# the check "no_default_vpc" warning about it; then the plan is shown and must be confirmed.
+bootstrap: preflight ## First setup: delete the default VPC, plan, confirm, apply, verify
+	@read -r -p "Delete the default VPC of $(AWS_REGION) in AWS account $$TF_VAR_account_id? [y/N] " answer; [ "$$answer" = y ] || { echo "default VPC kept - nothing changed"; exit 1; }
+	@$(MAKE) --no-print-directory delete-default-vpc CONFIRM=yes
+	@$(MAKE) --no-print-directory plan
 	@read -r -p "Apply this plan to AWS account $$TF_VAR_account_id? [y/N] " answer; [ "$$answer" = y ] || { echo "not applied"; exit 1; }
 	@$(MAKE) --no-print-directory apply
-	@$(MAKE) --no-print-directory delete-default-vpc CONFIRM=yes
 	@$(MAKE) --no-print-directory verify
