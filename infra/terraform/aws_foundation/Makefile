@@ -80,14 +80,27 @@ verify: preflight init ## The foundation matches the code and the region has no 
 # route table, network ACL and security group go with it. Not undone by Terraform, so it asks for CONFIRM=yes.
 # Every lookup is read into a variable first (set -e stops on a failed one): a failed lookup (an expired
 # login) must stop the target, not run an empty loop and blame the VPC's contents.
+# It runs before any plan (bootstrap), so it checks the identity itself, as the plan would: the account and
+# the caller must be the expected ones before anything is deleted.
+# A network interface in the VPC (an instance, a load balancer) blocks the subnet delete half-way, after the
+# internet gateway is gone - so any interface stops the target before the first delete.
 # Only var.region: the other regions' default VPCs stay - nothing of the platform runs there.
 delete-default-vpc: preflight ## One-time: delete the default VPC of the region (CONFIRM=yes)
 	@test "$(CONFIRM)" = yes || { echo "deletes the default VPC of $(AWS_REGION) - run again with CONFIRM=yes" >&2; exit 2; }
 	@set -e; \
+	identity="$$($(AWS) sts get-caller-identity --output json)"; \
+	account="$$(jq -er .Account <<<"$$identity")"; arn="$$(jq -er .Arn <<<"$$identity")"; \
+	if [ "$$account" != "$$TF_VAR_account_id" ] || [ "$$arn" != "$$TF_VAR_expected_principal_arn" ]; then \
+	  echo "profile $$TF_VAR_aws_profile is $$arn (account $$account), expected $$TF_VAR_expected_principal_arn (account $$TF_VAR_account_id) - nothing deleted" >&2; exit 1; \
+	fi; \
 	vpc="$$($(AWS) ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[].VpcId' --output text)"; \
 	if [ -z "$$vpc" ]; then echo "no default VPC in $(AWS_REGION)"; exit 0; fi; \
 	igws="$$($(AWS) ec2 describe-internet-gateways --filters Name=attachment.vpc-id,Values=$$vpc --query 'InternetGateways[].InternetGatewayId' --output text)"; \
 	subnets="$$($(AWS) ec2 describe-subnets --filters Name=vpc-id,Values=$$vpc --query 'Subnets[].SubnetId' --output text)"; \
+	enis="$$($(AWS) ec2 describe-network-interfaces --filters Name=vpc-id,Values=$$vpc --query 'length(NetworkInterfaces)' --output text)"; \
+	if [ "$$enis" != 0 ]; then \
+	  echo "the default VPC $$vpc has $$enis network interface(s) - something runs there; nothing deleted (docs/aws.md, troubleshooting)" >&2; exit 1; \
+	fi; \
 	for igw in $$igws; do \
 	  $(AWS) ec2 detach-internet-gateway --internet-gateway-id $$igw --vpc-id $$vpc; \
 	  $(AWS) ec2 delete-internet-gateway --internet-gateway-id $$igw; \

@@ -44,7 +44,7 @@ aws login --profile platform        # browser: password + passkey
 aws sts get-caller-identity --profile platform
 ```
 
-`aws login` gives credentials that refresh every 15 minutes and end after at most 12 hours. Run it again when they end. No access key exists, so none can leak.
+`aws login` gives temporary credentials that refresh every 15 minutes and end after at most 12 hours. Run it again when they end. No long-lived IAM access key exists. The temporary credentials and the refresh token are cached on your machine (`~/.aws/login/cache`), and until they end they work for anyone who copies them: protect that directory like a key, and never copy it into a repository, a backup or a chat.
 
 If this machine also holds other AWS accounts, keep this account's profile in a config file of its own (`export AWS_CONFIG_FILE=...` before `aws login`, in every terminal you use for it).
 
@@ -54,7 +54,7 @@ If this machine also holds other AWS accounts, keep this account's profile in a 
 cp .env.aws.example .env.aws        # git-ignored
 ```
 
-Fill in the account id, the profile, the expected identity (`aws sts get-caller-identity --profile platform --query Arn`), the alert e-mail and the R2 key. The non-personal settings (region, budget, cluster name, GitHub repository ids) are in `infra/terraform/aws_foundation/terraform.tfvars`, so change them there for your own account.
+Fill in the account id, the profile, the expected identity (`aws sts get-caller-identity --profile platform --query Arn --output text`), the alert e-mail and the R2 key. The non-personal settings (region, budget, cluster name, GitHub repository ids) are in `infra/terraform/aws_foundation/terraform.tfvars`, so change them there for your own account.
 
 The Makefile exports the R2 key as `AWS_ACCESS_KEY_ID`, because the S3 state backend reads that name. The aws provider never signs with it: a profile set in the provider block beats those variables. Every AWS CLI call in the Makefile runs with `--profile` and without the R2 key in its environment.
 
@@ -106,4 +106,5 @@ aws budgets describe-budgets $P --account-id ACCOUNT_ID --query 'Budgets[].[Budg
 | `AWS account ID not allowed` | The profile points at another account | Use this account's profile (`TF_VAR_aws_profile`). |
 | `Your session has expired. Please reauthenticate using 'aws login'` | The `aws login` session ended (at most 12 hours) | `aws login --profile ...` again. |
 | `missing: ...` or `no AWS CLI profile` from preflight | A setting is not in `.env.aws` or your shell, or the profile is not in the AWS config file | Add it (template: `.env.aws.example`, step 2). |
-| `DependencyViolation` from `delete-default-vpc` | Something runs in the default VPC (an instance, an ENI) | Find it (`aws ec2 describe-network-interfaces --filters Name=vpc-id,Values=VPC_ID`), move or delete it, run again. |
+| `profile ... is X, expected Y - nothing deleted` from `delete-default-vpc` | The profile signs in as another user or account | As the first row. |
+| `network interface(s) - ... nothing deleted` or `DependencyViolation` from `delete-default-vpc` | Something runs in the default VPC (an instance, an ENI) | Find it (`aws ec2 describe-network-interfaces --filters Name=vpc-id,Values=VPC_ID`), move or delete it, run again. |
