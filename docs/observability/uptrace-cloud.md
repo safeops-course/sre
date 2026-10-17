@@ -25,25 +25,24 @@ This guide covers the Uptrace Cloud integration for unified observability (logs,
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Kubernetes Cluster                        │
 │                                                                  │
-│  ┌──────────────┐                                               │
-│  │   Backend    │  OTLP/gRPC (traces, metrics, logs)            │
-│  │ (Go + OTel)  │────────┐                                      │
-│  └──────────────┘        │                                      │
-│                          ▼                                      │
-│                   ┌────────────────┐                            │
-│                   │ OTel Collector │                            │
-│                   │   (DaemonSet)  │                            │
-│                   └────────────────┘                            │
-│                          │                                      │
-│                          │ OTLP/gRPC + DSN                      │
-└──────────────────────────┼──────────────────────────────────────┘
-                           │
-                           ▼
+│  ┌──────────────┐        ┌────────────────────────────────┐     │
+│  │   Backend    │        │ OTel Collectors                │     │
+│  │ (Go + OTel)  │        │ DaemonSet: pod logs, kubelet   │     │
+│  └──────────────┘        │ metrics, OTLP :4317/:4318      │     │
+│         │                │ Deployment: Kubernetes Events  │     │
+│         │                └────────────────────────────────┘     │
+│         │ OTLP/HTTP + DSN              │ OTLP/HTTP + DSN        │
+└─────────┼──────────────────────────────┼────────────────────────┘
+          │  (traces, metrics, logs)     │
+          ▼                              ▼
                   ┌─────────────────┐
                   │ Uptrace Cloud ☁️ │
                   │ api.uptrace.dev  │
                   └─────────────────┘
 ```
+
+The backend exports straight to Uptrace (`backend/TELEMETRY.md`), not through the collector. The
+collector's OTLP receivers (gRPC 4317, HTTP 4318) are there for other applications.
 
 ## Setup Instructions
 
@@ -60,27 +59,24 @@ The DSN format:
 https://<token>@api.uptrace.dev?grpc=4317
 ```
 
-### 2. Create Encrypted Secret
+### 2. Give the DSN to the Backend and the Collectors
 
-Use the SOPS helper script to create an encrypted secret:
+The backend reads the DSN from the Secret `backend-secrets` in its namespace (key `uptrace-dsn`; key
+`uptrace-headers` becomes `OTEL_EXPORTER_OTLP_HEADERS` and may stay empty). On a cloud cluster it is a
+SOPS file per environment, `flux/secrets/<env>/backend-secrets.yaml`:
 
 ```bash
-# Copy the example secret
-cp flux/secrets/develop/uptrace-secrets.yaml.example \
-   flux/secrets/develop/uptrace-secrets.yaml
+# Edit with SOPS (decrypts in your editor, encrypts on save)
+sops flux/secrets/develop/backend-secrets.yaml
 
-# Edit with SOPS (will encrypt on save)
-sops flux/secrets/develop/uptrace-secrets.yaml
-
-# Replace the DSN value with your actual token:
+# Set the DSN:
 stringData:
-  dsn: "https://YOUR-TOKEN@api.uptrace.dev?grpc=4317"
-
-# Save and exit - SOPS will automatically encrypt
+  uptrace-dsn: "https://YOUR-TOKEN@api.uptrace.dev?grpc=4317"
 ```
 
-**IMPORTANT**: The secret is already referenced in `flux/apps/backend/base/deployment.yaml` (Backend
-application). The collectors take the DSN from `cluster-secrets`, written by Terraform (`uptrace_dsn`).
+On kind, Terraform generates `backend-secrets` (`infra/terraform/kind_cluster/local-profile.tf`).
+
+The collectors take the DSN from `cluster-secrets`, written by Terraform (`uptrace_dsn`).
 
 ### 3. Deploy OpenTelemetry Collector
 
@@ -124,18 +120,17 @@ The backend deployment includes:
 env:
   - name: SERVICE_NAME
     value: "backend"
-  - name: SERVICE_VERSION
-    value: "v1.0.0"
   - name: DEPLOYMENT_ENVIRONMENT
-    value: "development"
-  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-    value: "http://otel-collector.observability.svc.cluster.local:4317"
+    value: "${ENVIRONMENT}"
   - name: UPTRACE_DSN
     valueFrom:
       secretKeyRef:
-        name: uptrace-secrets
-        key: dsn
+        name: backend-secrets
+        key: uptrace-dsn
 ```
+
+(`flux/apps/backend/base/deployment.yaml`; no `SERVICE_VERSION`: the backend reports the version baked
+into its image.)
 
 ## Verification
 
@@ -197,54 +192,52 @@ curl http://localhost:8080/delay/2
 
 1. **Check DSN Secret**:
    ```bash
-   # Decrypt and verify secret
-   sops -d flux/secrets/develop/uptrace-secrets.yaml
+   # Decrypt and verify the backend's secret
+   sops -d flux/secrets/develop/backend-secrets.yaml
    ```
 
 2. **Check OTel Collector Logs**:
    ```bash
-   kubectl -n observability logs -l app=otel-collector --tail=200
+   kubectl -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --tail=200
    ```
 
    Look for errors like:
-   - `failed to connect to api.uptrace.dev:4317`
+   - `Exporting failed. Dropping data.`
    - `authentication failed`
    - `context deadline exceeded`
 
 3. **Check Backend Logs**:
    ```bash
-   kubectl -n backend logs -l app=backend --tail=100
+   kubectl -n develop logs -l app=backend --tail=100
    ```
 
-   Should see:
-   ```
-   OpenTelemetry initialized: service=backend version=v1.0.0 env=development
-   ```
+   Should see `OpenTelemetry initialized: service=backend version=... env=...`; with no DSN,
+   `OpenTelemetry running without Uptrace export: UPTRACE_DSN is not set`; export errors start with
+   `OpenTelemetry error:`.
 
 ### OTel Collector Not Starting
 
 ```bash
 # Check pod status
-kubectl -n observability describe pod -l app=otel-collector
+kubectl -n observability describe pod -l app.kubernetes.io/name=opentelemetry-collector
+flux get helmreleases -n flux-system | grep otel
 
 # Common issues:
-# - Secret not found: uptrace-secrets doesn't exist
-# - ConfigMap error: otel-collector-config invalid YAML
+# - Flux cannot substitute ${uptrace_dsn}: cluster-secrets is missing (Terraform writes it)
+# - an invalid collector config: the pod logs name the component
 # - Permission denied: RBAC not configured
 ```
 
 ### Backend Not Sending Telemetry
 
-1. **Verify OTLP Endpoint**:
+1. **Check Environment Variables** (names only - the DSN is a secret):
    ```bash
-   # From within backend pod
-   kubectl -n backend exec -it deploy/backend -- sh
-   nc -zv otel-collector.observability.svc.cluster.local 4317
+   kubectl -n develop exec deploy/backend -- env | grep -E 'OTEL|UPTRACE' | cut -d= -f1
    ```
 
-2. **Check Environment Variables**:
+2. **Check that Uptrace is reachable** from the backend's namespace (NetworkPolicy egress):
    ```bash
-   kubectl -n backend exec deploy/backend -- env | grep -E 'OTEL|UPTRACE'
+   scripts/lab-pod.sh -n develop -i curlimages/curl:8.22.0 -l app=backend -- curl -sS -o /dev/null -w '%{http_code}\n' https://api.uptrace.dev
    ```
 
 ## Development Workflow
