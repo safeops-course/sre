@@ -95,6 +95,8 @@ jobs:
           TF_VAR_flux_git_repository_branch: main
           TF_VAR_flux_kustomization_path: ./flux/bootstrap/profiles/hetzner
           TF_VAR_sops_age_key: ${{ secrets.SOPS_AGE_KEY }}
+          # Required by the module's validation - also on destroy, which would be refused without it.
+          TF_VAR_uptrace_dsn: ${{ secrets.UPTRACE_DSN }}
           TF_VAR_backup_s3_access_key_id: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
           TF_VAR_backup_s3_secret_access_key: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
           TF_VAR_backup_s3_bucket: ${{ vars.BACKUP_S3_BUCKET }}
