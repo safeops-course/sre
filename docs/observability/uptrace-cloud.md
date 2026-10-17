@@ -192,8 +192,11 @@ curl http://localhost:8080/delay/2
 
 1. **Check DSN Secret**:
    ```bash
-   # Decrypt and verify the backend's secret
-   sops -d flux/secrets/develop/backend-secrets.yaml
+   # The key is there and holds an https:// DSN - the value itself is never printed;
+   # a decryption error, a missing key or a malformed value exits nonzero
+   dsn=$(sops -d --extract '["stringData"]["uptrace-dsn"]' flux/secrets/develop/backend-secrets.yaml) \
+     && case "$dsn" in https://*) echo "uptrace-dsn: set" ;; *) echo "uptrace-dsn: not an https:// DSN" >&2; false ;; esac
+   unset dsn
    ```
 
 2. **Check OTel Collector Logs**:
