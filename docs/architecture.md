@@ -47,7 +47,7 @@ Reference services are maintained as companion repos (`backend/`, `frontend/`) i
 - Includes dashboards and alert rules for backend service metrics.
 - Alertmanager is disabled; alert delivery path is `k8s-ai-monitor` webhook routing.
 - `k8s-ai-monitor` is deployed via `flux/infrastructure/observability/k8s-ai-monitor/` and uses Prometheus + Kubernetes context for incident analysis.
-- OpenTelemetry collector manifests exist under `flux/infrastructure/observability/opentelemetry-collector/`; it is wired by the component `flux/bootstrap/components/opentelemetry` (Hetzner profile; needs the Uptrace DSN).
+- Two OpenTelemetry collectors (`flux/infrastructure/observability/opentelemetry-collector/`: pod logs, OTLP and kubelet metrics per node; Kubernetes Events once per cluster) send to Uptrace; the component `flux/bootstrap/components/opentelemetry` is in every cloud profile, and Terraform requires the Uptrace DSN. What is and is not collected: `docs/observability/logs.md`.
 
 ## Secrets and Security Model
 - Secrets are committed as SOPS-encrypted manifests under `flux/secrets/**`.

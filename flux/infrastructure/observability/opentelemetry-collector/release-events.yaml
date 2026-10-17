@@ -1,0 +1,124 @@
+# Kubernetes Events (FailedScheduling, BackOff, OOMKilling, PolicyViolation, ...) as logs in Uptrace.
+# The API server keeps an Event for about an hour; after that only this copy is left.
+#
+# A Deployment with one replica, not part of the DaemonSet in release.yaml: every DaemonSet pod would
+# watch the same Events and send each one once per node. The k8s_events receiver (preset
+# kubernetesEvents, useK8sEventsReceiver) turns each Event into a log record - the note as the body,
+# reason, kind and name of the object as attributes - and the chart adds the ClusterRole to watch them.
+# Nothing sends to this collector, so it has no Service and no receiver ports.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: otel-events
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: opentelemetry-collector
+      version: "0.175.1"
+      sourceRef:
+        kind: HelmRepository
+        name: open-telemetry
+        namespace: flux-system
+      interval: 12h
+  targetNamespace: observability
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    mode: deployment
+    replicaCount: 1
+
+    image:
+      repository: otel/opentelemetry-collector-contrib
+
+    presets:
+      kubernetesEvents:
+        enabled: true
+        useK8sEventsReceiver: true
+
+    extraEnvs:
+      - name: UPTRACE_DSN
+        value: "${uptrace_dsn}"
+      - name: DEPLOYMENT_ENVIRONMENT
+        value: "${cluster_name}"
+      - name: K8S_CLUSTER_NAME
+        value: "${cluster_name}"
+
+    config:
+      receivers:
+        jaeger: null
+        zipkin: null
+        prometheus: null
+        otlp: null
+
+      processors:
+        memory_limiter:
+          check_interval: 1s
+          limit_mib: 200
+          spike_limit_mib: 50
+        batch:
+          send_batch_size: 1000
+          timeout: 10s
+        resource:
+          attributes:
+            - key: deployment.environment
+              value: $${env:DEPLOYMENT_ENVIRONMENT}
+              action: upsert
+            - key: k8s.cluster.name
+              value: $${env:K8S_CLUSTER_NAME}
+              action: upsert
+
+      exporters:
+        otlp_http/uptrace:
+          endpoint: https://api.uptrace.dev
+          headers:
+            uptrace-dsn: $${env:UPTRACE_DSN}
+          compression: gzip
+          retry_on_failure:
+            enabled: true
+            initial_interval: 10s
+            max_interval: 300s
+            max_elapsed_time: 0
+          sending_queue:
+            enabled: true
+            num_consumers: 2
+            queue_size: 100
+
+      service:
+        pipelines:
+          logs:
+            receivers: [k8s_events]
+            processors: [memory_limiter, batch, resource]
+            exporters: [otlp_http/uptrace]
+          traces: null
+          metrics: null
+
+    service:
+      enabled: false
+    ports:
+      otlp:
+        enabled: false
+      otlp-http:
+        enabled: false
+      jaeger-compact:
+        enabled: false
+      jaeger-thrift:
+        enabled: false
+      jaeger-grpc:
+        enabled: false
+      zipkin:
+        enabled: false
+
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 256Mi

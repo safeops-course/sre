@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - repository.yaml
   - release.yaml
+  - release-events.yaml

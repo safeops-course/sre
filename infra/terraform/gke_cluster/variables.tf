@@ -146,11 +146,28 @@ variable "sops_age_key_revision" {
   default     = 1
 }
 
+variable "logging_components" {
+  description = <<-EOT
+    What GKE sends to Cloud Logging. SYSTEM_COMPONENTS: kube-system and GKE's own agents on the nodes - the
+    only record of what Google runs for you. WORKLOADS: every container's stdout/stderr, a second copy next
+    to Uptrace (the OpenTelemetry collector reads the same lines), kept in Google Cloud 30 days. Billed per GiB
+    ingested beyond the free monthly allotment of each project.
+  EOT
+  type        = list(string)
+  default     = ["SYSTEM_COMPONENTS", "WORKLOADS"]
+}
+
 variable "uptrace_dsn" {
-  description = "Uptrace DSN for the OpenTelemetry collector (cluster-secrets). Empty: the collector runs and its exports fail."
+  description = "Uptrace DSN the OpenTelemetry collectors send logs, traces and metrics to (cluster-secrets)."
   type        = string
-  default     = ""
   sensitive   = true
+
+  # Required, not optional: the OpenTelemetry collector runs on this cluster whatever the value, and with
+  # no DSN every log, trace and metric it reads is dropped, with nothing but an error in its own log.
+  validation {
+    condition     = startswith(var.uptrace_dsn, "https://")
+    error_message = "uptrace_dsn is required: the Uptrace project's DSN (https://<token>@api.uptrace.dev...). Uptrace Cloud has a free plan: https://uptrace.dev. Destroying without one: any https:// value passes."
+  }
 }
 
 variable "image_registry" {

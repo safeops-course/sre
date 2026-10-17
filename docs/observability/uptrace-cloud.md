@@ -2,8 +2,7 @@
 
 This guide covers the Uptrace Cloud integration for unified observability (logs, traces, and metrics).
 
-> Current MVP note (2026-02-16): this repo uses **direct export to Uptrace** from frontend/backend and does **not** require an in-cluster OpenTelemetry Collector.  
-> Execution plan: `docs/observability/uptrace-e2e-plan.md`.
+> Which logs the in-cluster collectors read, and which they do not: `docs/observability/logs.md`.
 
 ## Overview
 
@@ -80,29 +79,19 @@ stringData:
 # Save and exit - SOPS will automatically encrypt
 ```
 
-**IMPORTANT**: The secret is already referenced in:
-- `flux/infrastructure/observability/opentelemetry-collector/daemonset.yaml` (OTel Collector)
-- `flux/apps/backend/base/deployment.yaml` (Backend application)
+**IMPORTANT**: The secret is already referenced in `flux/apps/backend/base/deployment.yaml` (Backend
+application). The collectors take the DSN from `cluster-secrets`, written by Terraform (`uptrace_dsn`).
 
 ### 3. Deploy OpenTelemetry Collector
 
-The OpenTelemetry Collector is deployed as a DaemonSet (one pod per node):
+Flux installs two collectors (the component `flux/bootstrap/components/opentelemetry`, in every cloud
+profile): a DaemonSet for pod logs, OTLP and kubelet metrics, and a one-replica Deployment for Kubernetes
+Events (`docs/observability/logs.md`).
 
 ```bash
-# Apply Flux Kustomization (if not already bootstrapped)
-# (the component flux/bootstrap/components/opentelemetry - part of the Hetzner profile)
-kubectl apply -f flux/bootstrap/components/opentelemetry/opentelemetry.yaml
-
-# Verify deployment
-kubectl -n observability get daemonset otel-collector
-kubectl -n observability get pods -l app=otel-collector
-kubectl -n observability logs -l app=otel-collector --tail=50
+kubectl -n observability get pods -l app.kubernetes.io/name=opentelemetry-collector
+kubectl -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --tail=50
 ```
-
-**OTel Collector Configuration:**
-- **Receivers**: OTLP (gRPC + HTTP), Prometheus, File logs
-- **Processors**: Memory limiter, batch, resource detection
-- **Exporters**: Uptrace Cloud via OTLP
 
 ### 4. Backend Instrumentation
 
@@ -153,12 +142,8 @@ env:
 ### 1. Check OTel Collector
 
 ```bash
-# Check logs for successful export
-kubectl -n observability logs -l app=otel-collector --tail=100 | grep -i uptrace
-
-# Check metrics endpoint
-kubectl -n observability port-forward svc/otel-collector 8888:8888
-curl http://localhost:8888/metrics
+# No export errors
+kubectl -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --tail=100 | grep -i -E 'error|dropp'
 ```
 
 ### 2. Check Backend Application

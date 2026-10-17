@@ -37,6 +37,10 @@ apps_pool = {
   spot           = true
 }
 
+# Workload logs go to Uptrace only in these test cycles - a saving while the course is built, not a
+# recommendation: a cluster that matters keeps the default (SYSTEM_COMPONENTS and WORKLOADS).
+logging_components = ["SYSTEM_COMPONENTS"]
+
 nat_min_ports_per_vm = 64
 nat_max_ports_per_vm = 4096
 

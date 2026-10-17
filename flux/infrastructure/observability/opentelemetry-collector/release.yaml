@@ -28,10 +28,18 @@ spec:
     image:
       repository: otel/opentelemetry-collector-contrib
 
+    # logsCollection: stdout/stderr of every container on the node (/var/log/pods), every namespace,
+    # kube-system included. Not here: services outside pods (kubelet, containerd, k3s - the control plane
+    # on k3s - write to journald) and Kubernetes Events (release-events.yaml).
+    # storeCheckpoints: the read position of each file is kept on the node (/var/lib/otelcol, hostPath),
+    # so a restarted collector goes on where it stopped; without it, it starts at the end of every file
+    # and the lines written while it was down are lost. The chart then runs the collector as root: the
+    # hostPath directory is root-owned (default capabilities - nothing added).
     presets:
       logsCollection:
         enabled: true
         includeCollectorLogs: false
+        storeCheckpoints: true
       kubernetesAttributes:
         enabled: true
       kubeletMetrics:

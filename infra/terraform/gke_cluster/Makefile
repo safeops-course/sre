@@ -1,7 +1,7 @@
 # The GKE cluster - created for a test cycle and destroyed after it (docs/gcp.md). Settings come from
 # ENV_FILE (default .env.gcp in the repository root, git-ignored) or your shell: TF_VAR_expected_principal,
 # GOOGLE_APPLICATION_CREDENTIALS, the R2 state key (R2_* or AWS_*), SOPS_AGE_KEY_FILE (the platform's age
-# key Flux decrypts flux/secrets with), optionally TF_VAR_uptrace_dsn.
+# key Flux decrypts flux/secrets with), TF_VAR_uptrace_dsn.
 SHELL := /bin/bash
 TF    := terraform
 
@@ -43,7 +43,7 @@ help: ## List available targets
 # What Terraform needs for any run.
 settings: ## Check that every setting is there (no cloud calls)
 	@missing=""; \
-	for v in TF_VAR_expected_principal AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
+	for v in TF_VAR_expected_principal AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TF_VAR_uptrace_dsn \
 	         TF_VAR_backup_s3_bucket TF_VAR_backup_s3_access_key_id TF_VAR_backup_s3_secret_access_key; do [ -n "$${!v:-}" ] || missing="$$missing $$v"; done; \
 	[ -n "$${TF_VAR_sops_age_key:-}" ] || missing="$$missing SOPS_AGE_KEY_FILE($(if $(SOPS_AGE_KEY_FILE),$(SOPS_AGE_KEY_FILE) not readable,not set))"; \
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.gcp.example)" >&2; exit 2; }
