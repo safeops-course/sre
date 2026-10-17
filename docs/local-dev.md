@@ -12,7 +12,7 @@ Use Terraform to provision a local multi-node kind cluster. Terraform manages li
 
 `terraform apply` with the defaults reconciles `flux/bootstrap/profiles/local`: the same GitOps tree as production **minus** everything that needs a cloud account, a DNS zone or the platform's SOPS key:
 
-| Included on kind | Excluded on kind (Hetzner profile only) |
+| Included on kind | Excluded on kind (the cloud profiles only) |
 |---|---|
 | namespaces, NetworkPolicies, ResourceQuotas/LimitRanges | cert-manager, external-dns, Cloudflare DNS/TLS |
 | backend + frontend in develop/staging/production | Dex, Headlamp, OIDC RBAC |
