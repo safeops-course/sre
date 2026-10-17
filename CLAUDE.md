@@ -118,8 +118,10 @@ scripts/             # Pre-commit hooks, automation scripts
 ### Terraform
 - State is remote in R2 — never delete state files manually without understanding implications
 - Use `make destroy` (not bare `terraform destroy`) — it handles Flux/k8s resource cleanup first
-- All sensitive variables come via `TF_VAR_*` from `load-env.sh`
-- `.tfvars` files are gitignored — use `terraform.tfvars.example` as template
+- Sensitive variables come as `TF_VAR_*` from git-ignored env files - `.env.local` through `load-env.sh` (Hetzner),
+  `.env.gcp` / `.env.aws` read by the module Makefiles (templates `.env.*.example`) - never from a committed file
+- A cloud module's `terraform.tfvars` is committed and holds only public choices (region, sizes, GitHub ids);
+  kind keeps a git-ignored `terraform.tfvars` from `terraform.tfvars.example`
 
 ### FluxCD / Kubernetes
 - Environments: develop, staging, production — each has its own namespace and overlays

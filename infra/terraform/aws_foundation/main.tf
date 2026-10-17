@@ -89,7 +89,7 @@ resource "aws_iam_role_policy_attachment" "eks_nodes" {
 # AWS's own policy for it. The association to the driver's service account is made by the cluster module.
 module "ebs_csi_role" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 2.9"
+  version = "2.9.0" # exact: the LBC policy comes from inside the module - a new release must be a change here
 
   name            = "${var.cluster_name}-ebs-csi"
   use_name_prefix = false
@@ -105,7 +105,7 @@ module "ebs_csi_role" {
 # version moves, check that the module's policy has what the new controller's iam_policy.json lists.
 module "aws_lbc_role" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 2.9"
+  version = "2.9.0" # exact: the LBC policy comes from inside the module - a new release must be a change here
 
   name               = "${var.cluster_name}-aws-lbc"
   use_name_prefix    = false
@@ -130,7 +130,9 @@ locals {
 # deployer role. No key is stored in GitHub. The trust policy is the lock: only runs of one repository
 # and its owner (by numeric id - a name can be registered again by anyone, an id cannot), on one ref.
 # A pull request's code never gets in. AWS checks these GitHub claims itself since 2026-02; it still
-# requires a condition on `sub`, which carries the repository's name.
+# requires a condition on `sub`, which carries the repository's name - and GitHub changes `sub` to
+# "repo:OWNER/REPO:environment:NAME" for a job with an approval environment, so `sub` checks only the
+# repository; the ref is checked by its own claim, present in both forms.
 # https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html#condition-keys-wif
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
@@ -151,9 +153,9 @@ data "aws_iam_policy_document" "deployer_assume" {
       values   = ["sts.amazonaws.com"]
     }
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:${var.github_ref}"]
+      values   = ["repo:${var.github_repository}:*"]
     }
     condition {
       test     = "StringEquals"
@@ -183,8 +185,13 @@ resource "aws_iam_role" "deployer" {
 # What the EKS workflow runs as: enough for a cluster, its network and its node groups in one region,
 # nothing more. No IAM writes - the roles above are passed, never made. ec2:* is regional and limited to
 # var.region: EKS node groups need launch templates, instances, security groups, the VPC with its NAT,
-# and listing the actions one by one would break on every module update.
+# and listing the actions one by one would break on every module update. What ec2:* would also allow -
+# undoing this module's account defaults - is denied explicitly (GuardAccountDefaults).
+# Not here, on purpose: CloudWatch Logs writes, KMS keys and an IRSA OIDC provider - the cluster module
+# turns them off (control-plane logs off with a comment, AWS-owned secrets encryption, Pod Identity);
+# turning one on means adding its rights here first.
 data "aws_iam_policy_document" "deployer" {
+  # checkov:skip=CKV_AWS_356:"*" only where AWS has no resource ARN (eks list/describe-addon-versions, service-linked roles by service name), with the region condition (ec2), or in the Deny
   statement {
     sid     = "EksThisCluster"
     actions = ["eks:*"]
@@ -215,6 +222,13 @@ data "aws_iam_policy_document" "deployer" {
       variable = "aws:RequestedRegion"
       values   = [var.region]
     }
+  }
+
+  # The AMI release of a node group (AL2023): AWS's public parameters, read-only.
+  statement {
+    sid       = "EksAmiParameters"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters"]
+    resources = ["arn:aws:ssm:${var.region}::parameter/aws/service/eks/*"]
   }
 
   statement {
@@ -250,6 +264,26 @@ data "aws_iam_policy_document" "deployer" {
         "spot.amazonaws.com",
       ]
     }
+  }
+
+  # An explicit Deny beats every Allow: a workflow run cannot switch off what "Account defaults" below
+  # sets, nor make a disk snapshot or an image public.
+  statement {
+    sid    = "GuardAccountDefaults"
+    effect = "Deny"
+    actions = [
+      "ec2:DisableEbsEncryptionByDefault",
+      "ec2:ModifyEbsDefaultKmsKeyId",
+      "ec2:ResetEbsDefaultKmsKeyId",
+      "ec2:ModifyInstanceMetadataDefaults",
+      "ec2:CreateDefaultVpc",
+      "ec2:CreateDefaultSubnet",
+      "ec2:ModifySnapshotAttribute",
+      "ec2:ModifyImageAttribute",
+      "ec2:DisableSnapshotBlockPublicAccess",
+      "ec2:DisableImageBlockPublicAccess",
+    ]
+    resources = ["*"]
   }
 }
 

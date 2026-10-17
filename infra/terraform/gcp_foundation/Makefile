@@ -37,6 +37,7 @@ preflight: ## Check that every setting is there (no cloud calls)
 	if [ -n "$${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ ! -f "$$GOOGLE_APPLICATION_CREDENTIALS" ]; then \
 	  missing="$$missing GOOGLE_APPLICATION_CREDENTIALS(file not found)"; fi; \
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.gcp.example)" >&2; exit 2; }
+	@for t in gcloud jq; do command -v $$t >/dev/null || { echo "$$t is not installed (docs/gcp.md, prerequisites)" >&2; exit 2; }; done
 	@echo "project $(GCP_PROJECT), expected identity $$TF_VAR_expected_principal, credentials $${GOOGLE_APPLICATION_CREDENTIALS:-(gcloud default directory)}"
 
 init: ## Terraform init (state in R2)
@@ -56,7 +57,9 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 # in the check block is re-read on every apply, so that exit code would always say "changes".
 verify: preflight init ## The foundation matches the code and the project has no default VPC
 	@$(TF) plan -input=false -lock=false -out=verify.tfplan >/dev/null || { echo "FAIL the plan did not run" >&2; rm -f verify.tfplan; exit 1; }
-	@changes="$$($(TF) show -json verify.tfplan | jq -r '[.resource_changes[]? | select(.mode == "managed" and .change.actions != ["no-op"]) | .address] | join(" ")')"; \
+	@set -o pipefail; \
+	changes="$$($(TF) show -json verify.tfplan | jq -er '[.resource_changes[]? | select(.mode == "managed" and .change.actions != ["no-op"]) | .address] | join(" ")')" \
+	  || { echo "FAIL could not read the plan (terraform show / jq error above)" >&2; rm -f verify.tfplan; exit 1; }; \
 	rm -f verify.tfplan; \
 	if [ -n "$$changes" ]; then echo "FAIL drift: $$changes - run make plan and read it" >&2; exit 1; fi; \
 	echo "OK   no drift: the project matches the code"

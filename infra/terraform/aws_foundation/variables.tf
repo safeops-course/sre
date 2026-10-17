@@ -44,7 +44,7 @@ variable "budget_amount" {
 }
 
 variable "cluster_name" {
-  description = "Name of the EKS cluster the deployer may build. Every IAM role, policy and log group the cluster module creates starts with it - the deployer's IAM rights end there."
+  description = "Name of the EKS cluster the deployer may build. The cluster IAM roles here start with it, and the deployer's EKS rights end at this one cluster."
   type        = string
 }
 

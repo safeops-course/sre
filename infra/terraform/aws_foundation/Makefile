@@ -20,11 +20,14 @@ ifneq ($(R2_ACCESS_KEY_ID),)
 export AWS_ACCESS_KEY_ID     := $(R2_ACCESS_KEY_ID)
 export AWS_SECRET_ACCESS_KEY := $(R2_SECRET_ACCESS_KEY)
 endif
+# Leftovers of another AWS session in the shell never reach Terraform or the CLI: a session token would be
+# paired with the R2 key by the backend; the provider and the CLI name their profile themselves.
+unexport AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE
 
 AWS_REGION := $(shell sed -n 's/^region *= *"\(.*\)".*/\1/p' terraform.tfvars)
 # The AWS CLI as the foundation's profile, never with the R2 key: an explicit --profile already beats
 # AWS_ACCESS_KEY_ID, and the key is taken out of its environment as well, so no command can sign with it.
-AWS := env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN aws --profile "$(TF_VAR_aws_profile)" --region $(AWS_REGION)
+AWS := env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY aws --profile "$(TF_VAR_aws_profile)" --region "$(AWS_REGION)"
 
 .PHONY: help init preflight plan apply verify delete-default-vpc bootstrap
 
@@ -39,6 +42,8 @@ preflight: ## Check that every setting is there (no cloud calls)
 	  [ -n "$${!v:-}" ] || missing="$$missing $$v"; \
 	done; \
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.aws.example)" >&2; exit 2; }
+	@test -n "$(AWS_REGION)" || { echo "no region in terraform.tfvars" >&2; exit 2; }
+	@for t in aws jq; do command -v $$t >/dev/null || { echo "$$t is not installed (docs/aws.md, prerequisites)" >&2; exit 2; }; done
 	@profiles="$$(aws configure list-profiles)" || { echo "could not list the AWS CLI profiles (aws error above)" >&2; exit 2; }; \
 	grep -qxF -- "$$TF_VAR_aws_profile" <<<"$$profiles" || { echo "no AWS CLI profile '$$TF_VAR_aws_profile' in $${AWS_CONFIG_FILE:-~/.aws/config} (docs/aws.md, step 2)" >&2; exit 2; }
 	@echo "account $$TF_VAR_account_id, region $(AWS_REGION), profile $$TF_VAR_aws_profile, expected identity $$TF_VAR_expected_principal_arn"
@@ -60,7 +65,9 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 # -detailed-exitcode: the data source in the check block is re-read on every plan).
 verify: preflight init ## The foundation matches the code and the region has no default VPC
 	@$(TF) plan -input=false -lock=false -out=verify.tfplan >/dev/null || { echo "FAIL the plan did not run" >&2; rm -f verify.tfplan; exit 1; }
-	@changes="$$($(TF) show -json verify.tfplan | jq -r '[.resource_changes[]? | select(.mode == "managed" and .change.actions != ["no-op"]) | .address] | join(" ")')"; \
+	@set -o pipefail; \
+	changes="$$($(TF) show -json verify.tfplan | jq -er '[.resource_changes[]? | select(.mode == "managed" and .change.actions != ["no-op"]) | .address] | join(" ")')" \
+	  || { echo "FAIL could not read the plan (terraform show / jq error above)" >&2; rm -f verify.tfplan; exit 1; }; \
 	rm -f verify.tfplan; \
 	if [ -n "$$changes" ]; then echo "FAIL drift: $$changes - run make plan and read it" >&2; exit 1; fi; \
 	echo "OK   no drift: the account matches the code"
@@ -71,17 +78,21 @@ verify: preflight init ## The foundation matches the code and the region has no 
 # The default VPC AWS creates in every region has public subnets; nothing here uses it (main.tf, check
 # "no_default_vpc"). A VPC is deleted only without its internet gateway and subnets, so they go first; its
 # route table, network ACL and security group go with it. Not undone by Terraform, so it asks for CONFIRM=yes.
+# Every lookup is read into a variable first (set -e stops on a failed one): a failed lookup (an expired
+# login) must stop the target, not run an empty loop and blame the VPC's contents.
 # Only var.region: the other regions' default VPCs stay - nothing of the platform runs there.
 delete-default-vpc: preflight ## One-time: delete the default VPC of the region (CONFIRM=yes)
 	@test "$(CONFIRM)" = yes || { echo "deletes the default VPC of $(AWS_REGION) - run again with CONFIRM=yes" >&2; exit 2; }
 	@set -e; \
 	vpc="$$($(AWS) ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[].VpcId' --output text)"; \
 	if [ -z "$$vpc" ]; then echo "no default VPC in $(AWS_REGION)"; exit 0; fi; \
-	for igw in $$($(AWS) ec2 describe-internet-gateways --filters Name=attachment.vpc-id,Values=$$vpc --query 'InternetGateways[].InternetGatewayId' --output text); do \
+	igws="$$($(AWS) ec2 describe-internet-gateways --filters Name=attachment.vpc-id,Values=$$vpc --query 'InternetGateways[].InternetGatewayId' --output text)"; \
+	subnets="$$($(AWS) ec2 describe-subnets --filters Name=vpc-id,Values=$$vpc --query 'Subnets[].SubnetId' --output text)"; \
+	for igw in $$igws; do \
 	  $(AWS) ec2 detach-internet-gateway --internet-gateway-id $$igw --vpc-id $$vpc; \
 	  $(AWS) ec2 delete-internet-gateway --internet-gateway-id $$igw; \
 	done; \
-	for subnet in $$($(AWS) ec2 describe-subnets --filters Name=vpc-id,Values=$$vpc --query 'Subnets[].SubnetId' --output text); do \
+	for subnet in $$subnets; do \
 	  $(AWS) ec2 delete-subnet --subnet-id $$subnet; \
 	done; \
 	$(AWS) ec2 delete-vpc --vpc-id $$vpc; \

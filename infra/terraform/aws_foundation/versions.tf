@@ -1,5 +1,5 @@
 # Terraform and provider versions. "~> 6.69" means 6.69 or newer, but below 7.0, so a minor update never
-# breaks the module; the exact version picked is pinned in .terraform.lock.hcl.
+# breaks the module; the exact version picked is recorded in .terraform.lock.hcl (local, git-ignored).
 #   aws  AWS - IAM (GitHub OIDC, the deployer role), the budget, account-wide defaults (S3, EBS, IMDS).
 #        https://registry.terraform.io/providers/hashicorp/aws/latest/docs
 terraform {
