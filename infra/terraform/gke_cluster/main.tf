@@ -245,10 +245,11 @@ resource "google_container_cluster" "this" {
     }
   }
 
-  # Cloud Logging gets system and workload logs. Cloud Monitoring gets system metrics only: the
-  # platform runs its own Prometheus, so Google's managed Prometheus would collect everything twice.
+  # Cloud Logging: what var.logging_components names (system and workload logs by default). Cloud
+  # Monitoring gets system metrics only: the platform runs its own Prometheus, so Google's managed
+  # Prometheus would collect everything twice.
   logging_config {
-    enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS"]
+    enable_components = var.logging_components
   }
   monitoring_config {
     enable_components = ["SYSTEM_COMPONENTS"]

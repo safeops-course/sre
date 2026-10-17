@@ -12,15 +12,16 @@ Use Terraform to provision a local multi-node kind cluster. Terraform manages li
 
 `terraform apply` with the defaults reconciles `flux/bootstrap/profiles/local`: the same GitOps tree as production **minus** everything that needs a cloud account, a DNS zone or the platform's SOPS key:
 
-| Included on kind | Excluded on kind (Hetzner profile only) |
+| Included on kind | Excluded on kind (the cloud profiles only) |
 |---|---|
 | namespaces, NetworkPolicies, ResourceQuotas/LimitRanges | cert-manager, external-dns, Cloudflare DNS/TLS |
 | backend + frontend in develop/staging/production | Dex, Headlamp, OIDC RBAC |
-| kube-prometheus-stack (Prometheus, Grafana) | OpenTelemetry collector, Uptrace export |
+| kube-prometheus-stack (Prometheus, Grafana) | Uptrace export of the collectors (on kind they print to their own log) |
 | CloudNativePG operator + one cluster per environment | Slack delivery (the Guardian logs its alerts instead) |
 | **MinIO** as the CNPG backup target (replaces Hetzner Object Storage) | Flux image automation (needs a git write token) |
 | Kyverno + both policy packs (Audit) | `flux/secrets/*` encrypted for the platform key |
 | Flagger (develop canaries are opt-in, Ch19), Chaos Monkey | |
+| The OpenTelemetry collectors (pod logs, Kubernetes Events; `docs/observability/logs.md`) | |
 | **The Guardian** (k8s-ai-monitor, Ch14): Alertmanager hands it every alert but `Watchdog` and `InfoInhibitor`; with your own LLM key (below) it analyses production incidents | |
 | `secrets-local`: your own SOPS secrets under `flux/secrets/local/` | |
 | `lab` namespace: Pod Security *warn/audit* instead of enforce, for drills that must observe a violation (Kyverno reports) | |

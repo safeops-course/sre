@@ -1,8 +1,9 @@
 # Local (kind) profile.
 #
-# The base (flux/bootstrap/flux-system) and none of the components: each needs something kind does not
-# have - a DNS zone and a load balancer (public-edge), a Git write token (image-automation), alert
-# receivers (alerting), an Uptrace DSN (opentelemetry), the platform's SOPS key (platform-secrets).
+# The base (flux/bootstrap/flux-system) and one component, opentelemetry - the same collectors as on every
+# cluster, sending to their own log (debug exporter) instead of Uptrace (patch below). The others each need
+# something kind does not have - a DNS zone and a load balancer (public-edge), a Git write token
+# (image-automation), alert receivers (alerting), the platform's SOPS key (platform-secrets).
 # What is added:
 #   - minio          S3-compatible target for CNPG backups instead of Hetzner Object Storage
 #   - secrets-local  the learner's own SOPS-encrypted secrets (secrets chapter)
@@ -22,6 +23,8 @@ resources:
   - secrets-local.yaml
   - lab.yaml
   - alerting-routing.yaml
+components:
+  - ../../components/opentelemetry
 patches:
   # Point the self-managing Kustomization at this profile, not at the base.
   - target: { kind: Kustomization, name: flux-system }
@@ -111,6 +114,40 @@ patches:
                       enabled: true
                     kubernetesCRD:
                       enabled: true
+
+  # --- OpenTelemetry: the collectors' own log instead of Uptrace ------------
+  # kind has no Uptrace DSN to count on (the apps send traces straight to one, if the learner set it).
+  # The collectors read exactly what they read on a cloud cluster; the debug exporter prints how many
+  # records each batch held (kubectl logs), so what is collected can be checked here for free.
+  # op add on /spec/patches sets the whole list: the component's Kustomization has none of its own today -
+  # if it gets one, add these to it instead.
+  - target: { kind: Kustomization, name: opentelemetry-collector }
+    patch: |-
+      - op: add
+        path: /spec/patches
+        value:
+          - target: { kind: HelmRelease, name: otel-collector }
+            patch: |-
+              - op: replace
+                path: /spec/values/config/exporters
+                value: { debug: { verbosity: basic } }
+              - op: replace
+                path: /spec/values/config/service/pipelines/logs/exporters
+                value: [debug]
+              - op: replace
+                path: /spec/values/config/service/pipelines/traces/exporters
+                value: [debug]
+              - op: replace
+                path: /spec/values/config/service/pipelines/metrics/exporters
+                value: [debug]
+          - target: { kind: HelmRelease, name: otel-events }
+            patch: |-
+              - op: replace
+                path: /spec/values/config/exporters
+                value: { debug: { verbosity: basic } }
+              - op: replace
+                path: /spec/values/config/service/pipelines/logs/exporters
+                value: [debug]
 
   # --- observability no longer waits for cert-manager -----------------------
   - target: { kind: Kustomization, name: observability }
