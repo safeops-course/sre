@@ -17,6 +17,7 @@ FLUX_VERSION := 2.9.6
 	capstone-fault capstone-check \
 	kind-plan kind-apply kind-drift kind-destroy \
 	hcloud-plan hcloud-apply hcloud-drift hcloud-destroy \
+	gcp-plan gcp-apply gcp-verify gke-plan gke-apply gke-destroy gke-leftovers aws-plan aws-apply aws-verify \
 	terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
 
 help: ## List available targets
@@ -37,6 +38,12 @@ versions: ## Show pinned CLI versions
 # only that saved plan and refuses one older than TF_MAX_AGE minutes.
 KIND_DIR   := infra/terraform/kind_cluster
 HCLOUD_DIR := infra/terraform/hcloud_cluster
+# The cloud modules keep their logic in their own Makefile; the gcp-*, gke-* and aws-* targets below only
+# call it, so `make help` lists every provider. Their one-time targets (bootstrap, delete-default-*) stay
+# there: make -C <dir> help.
+GCP_DIR    := infra/terraform/gcp_foundation
+GKE_DIR    := infra/terraform/gke_cluster
+AWS_DIR    := infra/terraform/aws_foundation
 TF_MAX_AGE ?= 60
 GUARD_TF   := scripts/guard-terraform-plan.sh
 
@@ -45,12 +52,14 @@ tf: ## List the Terraform modules and how to run them
 	@echo "  kind    $(KIND_DIR)    local kind cluster        make kind-plan | kind-apply | kind-drift | kind-destroy"
 	@echo "  hcloud  $(HCLOUD_DIR)  Hetzner cluster (Cloud)   make hcloud-plan | hcloud-apply | hcloud-drift | hcloud-destroy"
 	@echo "                                                     (needs the TF_VAR_* from load-env.sh; normally CI applies it)"
-	@echo "  gcp     infra/terraform/gcp_foundation   Google Cloud foundation   once, by a person: make -C infra/terraform/gcp_foundation plan | apply"
-	@echo "                                                     (APIs, service accounts, GitHub Workload Identity, alert e-mail, budget)"
-	@echo "  gke     infra/terraform/gke_cluster      GKE cluster (Cloud)       per test cycle: make -C infra/terraform/gke_cluster plan | apply | destroy"
-	@echo "                                                     (destroy ends with make leftovers: nothing billable may stay)"
-	@echo "  aws     infra/terraform/aws_foundation   AWS foundation            once, by a person: make -C infra/terraform/aws_foundation plan | apply"
-	@echo "                                                     (cluster IAM roles, GitHub OIDC deployer, budget, account defaults)"
+	@echo "  gcp     $(GCP_DIR)   Google Cloud foundation   once, by a person: make gcp-plan | gcp-apply | gcp-verify"
+	@echo "                                                     (APIs, service accounts, GitHub Workload Identity, alert e-mail, budget;"
+	@echo "                                                      first setup: make -C $(GCP_DIR) bootstrap)"
+	@echo "  gke     $(GKE_DIR)      GKE cluster (Cloud)       per test cycle: make gke-plan | gke-apply | gke-destroy | gke-leftovers"
+	@echo "                                                     (destroy ends with leftovers: nothing billable may stay)"
+	@echo "  aws     $(AWS_DIR)   AWS foundation            once, by a person: make aws-plan | aws-apply | aws-verify"
+	@echo "                                                     (cluster IAM roles, GitHub OIDC deployer, budget, account defaults;"
+	@echo "                                                      first setup: make -C $(AWS_DIR) bootstrap)"
 	@echo "  lab     infra/terraform/state-lab       Chapter 02 state lab      run by hand, as the lab says"
 	@echo "Check without credentials: make validate"
 
@@ -74,6 +83,29 @@ kind-destroy: ## kind: delete the local cluster and empty its state
 hcloud-plan: terraform-hcloud-plan ## Hetzner: plan and save it (read it before hcloud-apply)
 hcloud-apply: terraform-hcloud-apply ## Hetzner: apply exactly the saved plan (costs money - destroy after)
 hcloud-destroy: terraform-hcloud-destroy ## Hetzner: pre-destroy cleanup, destroy, check nothing is left
+
+gcp-plan: ## Google Cloud foundation: plan and save it (read it before gcp-apply)
+	@$(MAKE) --no-print-directory -C $(GCP_DIR) plan
+gcp-apply: ## Google Cloud foundation: apply exactly the saved plan
+	@$(MAKE) --no-print-directory -C $(GCP_DIR) apply
+gcp-verify: ## Google Cloud foundation: no drift and no default VPC
+	@$(MAKE) --no-print-directory -C $(GCP_DIR) verify
+
+gke-plan: ## GKE: plan and save it (read it before gke-apply)
+	@$(MAKE) --no-print-directory -C $(GKE_DIR) plan
+gke-apply: ## GKE: apply exactly the saved plan (costs money - destroy after)
+	@$(MAKE) --no-print-directory -C $(GKE_DIR) apply
+gke-destroy: ## GKE: destroy the cluster and its network, check nothing is left
+	@$(MAKE) --no-print-directory -C $(GKE_DIR) destroy
+gke-leftovers: ## GKE: list billable leftovers in the project (exit 1 when any)
+	@$(MAKE) --no-print-directory -C $(GKE_DIR) leftovers
+
+aws-plan: ## AWS foundation: plan and save it (read it before aws-apply)
+	@$(MAKE) --no-print-directory -C $(AWS_DIR) plan
+aws-apply: ## AWS foundation: apply exactly the saved plan
+	@$(MAKE) --no-print-directory -C $(AWS_DIR) apply
+aws-verify: ## AWS foundation: no drift and no default VPC
+	@$(MAKE) --no-print-directory -C $(AWS_DIR) verify
 
 hcloud-drift: ## Hetzner: does the cloud match the code? (0 = yes, 2 = drift, 1 = error)
 	@$(MAKE) --no-print-directory -C $(HCLOUD_DIR) init >/dev/null
