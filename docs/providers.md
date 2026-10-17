@@ -3,7 +3,7 @@
 The platform runs the same way on every provider: kind locally, Hetzner, GKE - and, by the same
 pattern, AWS, Azure or any other. A new provider is a checklist, not a new design. GKE
 (`infra/terraform/gcp_foundation`, `infra/terraform/gke_cluster`, `docs/gcp.md`) is the most recent
-example to copy from.
+full example to copy from; AWS (`infra/terraform/aws_foundation`, `docs/aws.md`) is on its way.
 
 ## Terraform
 

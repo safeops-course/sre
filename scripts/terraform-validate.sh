@@ -4,7 +4,7 @@ set -e
 # staged); `make validate` and the Pre-commit CI job run it too.
 #
 # Validate every Terraform module the course uses: the local kind cluster
-# (core track), the Hetzner cluster (cloud track), the Google Cloud foundation and the state lab.
+# (core track), the Hetzner cluster (cloud track), the Google Cloud and AWS foundations, the GKE cluster and the state lab.
 # Usage: scripts/terraform-validate.sh   (from the repository root). Needs terraform; changes no
 # state and no cluster.
 #
@@ -68,7 +68,7 @@ release_lock() {
 data_dir=""
 # On every exit: the current module's data dir (init or validate may fail) and the lock.
 trap 'if [ -n "${data_dir}" ]; then rm -rf "${data_dir}"; fi; release_lock' EXIT
-for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation infra/terraform/gke_cluster infra/terraform/state-lab; do
+for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation infra/terraform/gke_cluster infra/terraform/aws_foundation infra/terraform/state-lab; do
   echo "terraform validate: ${dir}"
   data_dir="$(mktemp -d)"
   TF_DATA_DIR="${data_dir}" terraform -chdir="${dir}" init -input=false -backend=false >/dev/null

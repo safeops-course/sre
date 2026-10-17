@@ -39,6 +39,7 @@ locals {
 
 # ─── Network ──────────────────────────────────────────────────────────────────
 resource "google_compute_network" "this" {
+  # checkov:skip=CKV2_GCP_18:no rule of our own - a custom VPC starts with only the implied deny-all ingress, and GKE adds the rules the cluster and its load balancers need
   name                    = var.cluster_name
   auto_create_subnetworks = false # custom mode: only the subnet below, no subnet in every region
   routing_mode            = "REGIONAL"
@@ -50,6 +51,8 @@ resource "google_compute_network" "this" {
 # NetworkPolicies see real Pod IPs. Private Google Access: nodes without a public IP still reach
 # Google APIs (image pulls from Artifact Registry, logging, monitoring) without going through NAT.
 resource "google_compute_subnetwork" "nodes" {
+  # checkov:skip=CKV_GCP_26:VPC Flow Logs are billed per GB and nobody reads them in a test cycle
+  # checkov:skip=CKV_GCP_76:IPv6 Private Google Access not set - nodes reach Google APIs over IPv4 Private Google Access; IPv6 to Google untested
   name                     = "${var.cluster_name}-nodes"
   network                  = google_compute_network.this.id
   region                   = var.region
@@ -170,6 +173,13 @@ resource "google_monitoring_alert_policy" "nat_dropped_out_of_resources" {
 
 # ─── Cluster ──────────────────────────────────────────────────────────────────
 resource "google_container_cluster" "this" {
+  # Checkov findings that are decisions, not gaps (each explained where the setting is):
+  # checkov:skip=CKV_GCP_12:Dataplane V2 (datapath_provider) enforces NetworkPolicy; the network_policy block is the legacy Calico one
+  # checkov:skip=CKV_GCP_20:DNS endpoint only, no IP endpoint - IAM decides who gets in, there is no IP to allow-list
+  # checkov:skip=CKV_GCP_61:flow logs and intranode visibility are billed logs nobody reads in a test cycle
+  # checkov:skip=CKV_GCP_65:no Google Workspace organization - RBAC groups come from Dex (GitHub teams)
+  # checkov:skip=CKV_GCP_66:images are verified by Kyverno (supply-chain pack), the same on every provider
+  # checkov:skip=CKV_GCP_69:GKE_METADATA is set on each node pool (workload_metadata_config); the default pool is removed
   name     = var.cluster_name
   location = var.zone
 
@@ -254,6 +264,11 @@ resource "google_container_cluster" "this" {
 
   cost_management_config {
     enabled = true
+  }
+
+  # On the bill and in the cost breakdown: which cluster it was (cluster resources are labelled too).
+  resource_labels = {
+    cluster = var.cluster_name
   }
 
   deletion_protection = var.deletion_protection
