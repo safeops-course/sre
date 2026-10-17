@@ -42,8 +42,14 @@ spec:
         storeCheckpoints: true
       kubernetesAttributes:
         enabled: true
-      kubeletMetrics:
-        enabled: true
+    # Kubelet metrics come from kubelet_stats below, not from the kubeletMetrics preset: the preset (chart
+    # 0.175.1) still names the receiver "kubeletstats", a deprecated alias the collector warns about on
+    # every start. What the preset added besides the receiver - read access to nodes/stats - is here.
+    clusterRole:
+      rules:
+        - apiGroups: [""]
+          resources: ["nodes/stats"]
+          verbs: ["get", "watch", "list"]
 
     extraEnvs:
       - name: UPTRACE_DSN
@@ -64,8 +70,10 @@ spec:
               endpoint: 0.0.0.0:4317
             http:
               endpoint: 0.0.0.0:4318
-        kubeletstats:
+        kubelet_stats:
+          collection_interval: 20s
           auth_type: serviceAccount
+          endpoint: $${env:K8S_NODE_IP}:10250
           insecure_skip_verify: true
 
       processors:
@@ -76,7 +84,7 @@ spec:
         batch:
           send_batch_size: 10000
           timeout: 10s
-        cumulativetodelta: {}
+        cumulative_to_delta: {}
         resource:
           attributes:
             - key: deployment.environment
@@ -115,9 +123,27 @@ spec:
           sampling_thereafter: 200
 
       service:
+        # The chart's default names the collector's own resource in the old inline-map form, which the
+        # collector warns about on every start; each old key is removed (null) and the same attributes are
+        # given as the list it expects.
+        telemetry:
+          resource:
+            host.name: null
+            k8s.namespace.name: null
+            k8s.node.ip: null
+            k8s.node.name: null
+            k8s.pod.ip: null
+            k8s.pod.name: null
+            attributes:
+              - { name: host.name, value: "$${env:OTEL_K8S_NODE_NAME}" }
+              - { name: k8s.namespace.name, value: "$${env:OTEL_K8S_NAMESPACE}" }
+              - { name: k8s.node.ip, value: "$${env:OTEL_K8S_NODE_IP}" }
+              - { name: k8s.node.name, value: "$${env:OTEL_K8S_NODE_NAME}" }
+              - { name: k8s.pod.ip, value: "$${env:OTEL_K8S_POD_IP}" }
+              - { name: k8s.pod.name, value: "$${env:OTEL_K8S_POD_NAME}" }
         pipelines:
           logs:
-            receivers: [filelog]
+            receivers: [file_log]
             processors: [memory_limiter, batch, resource, attributes]
             exporters: [otlp_http/uptrace, debug]
           traces:
@@ -125,8 +151,8 @@ spec:
             processors: [memory_limiter, batch, resource, attributes]
             exporters: [otlp_http/uptrace, debug]
           metrics:
-            receivers: [otlp, kubeletstats]
-            processors: [memory_limiter, cumulativetodelta, batch, resource]
+            receivers: [otlp, kubelet_stats]
+            processors: [memory_limiter, cumulative_to_delta, batch, resource]
             exporters: [otlp_http/uptrace, debug]
 
     ports:
