@@ -145,7 +145,7 @@ repos:
         entry: tests/platform-alerts.test.sh
         language: script
         # Any manifest under flux/ may be a PrometheusRule (the test finds them by kind; ~1 s).
-        files: ^(flux/.*\.yaml|tests/platform-alerts/.*|tests/platform-alerts\.test\.sh)$
+        files: ^(flux/.*\.ya?ml|tests/platform-alerts/.*|tests/platform-alerts\.test\.sh)$
         pass_filenames: false
         stages: [pre-commit]
 

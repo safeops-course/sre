@@ -8,8 +8,9 @@ metadata:
     app.kubernetes.io/name: backend
     app.kubernetes.io/component: api
 spec:
-  # Both families or no Service at all: on a single-stack cluster this fails loudly (the cluster must be
-  # dual-stack - every cluster of the platform is), instead of quietly leaving IPv6 out.
+  # Both families or no Service at all: on a single-stack cluster this fails loudly, instead of quietly
+  # leaving IPv6 out. The platform runs dual-stack where the provider has IPv6 by default; a provider
+  # without it patches PreferDualStack in its profile, as a written exception (docs/providers.md).
   ipFamilyPolicy: RequireDualStack
   ipFamilies: [IPv4, IPv6]
   type: ClusterIP

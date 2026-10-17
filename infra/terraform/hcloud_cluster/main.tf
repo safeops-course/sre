@@ -131,24 +131,41 @@ module "kube_hetzner" {
   # the nodes' own /128s are known only after the servers exist (a dependency cycle), and a separate
   # firewall is detached again by kube-hetzner's servers (they set firewall_ids) on every apply. If a node
   # ever gets an address outside the range, Cilium shows "1/2 reachable" again (cilium-health status).
+  # Both directions: kube-hetzner also restricts OUTBOUND traffic (restrict_outbound_traffic, on by default
+  # - ICMP, DNS, HTTP(S), NTP, ... only), so the inbound rule alone opened ping but not TCP 4240 (proved on
+  # Hetzner 2026-10-16: 4240 over IPv6 answered only after the outbound rule; then 2/2 reachable).
   # kube-hetzner keys its rules by direction-protocol-port: these replace its own "in-icmp-" rule
-  # (allow_inbound_icmp, off here) and "in-tcp-4240" (multinetwork, off here) - turning those on needs
-  # their sources added here.
+  # (allow_inbound_icmp, off here) and "in-tcp-4240" / "out-tcp-4240" (multinetwork, off here) - turning
+  # those on needs their addresses added here.
   # https://docs.cilium.io/en/stable/operations/system_requirements/#firewall-rules
+  # Set here, not left to the module's default: with any outbound rule (the one below) a Hetzner firewall
+  # drops every other outbound packet - without kube-hetzner's own outbound rules (DNS, HTTP(S), NTP)
+  # the nodes would reach nothing but TCP 4240.
+  restrict_outbound_traffic = true
   extra_firewall_rules = [
     {
-      description = "Cilium health check between the nodes over IPv6"
-      direction   = "in"
-      protocol    = "tcp"
-      port        = "4240"
-      source_ips  = [local.hetzner_ipv6_range[var.location]]
+      description     = "Cilium health check between the nodes over IPv6"
+      direction       = "in"
+      protocol        = "tcp"
+      port            = "4240"
+      source_ips      = [local.hetzner_ipv6_range[var.location]]
+      destination_ips = []
     },
     {
-      description = "Ping between the nodes over IPv6 (Cilium health)"
-      direction   = "in"
-      protocol    = "icmp"
-      port        = ""
-      source_ips  = [local.hetzner_ipv6_range[var.location]]
+      description     = "Cilium health check between the nodes over IPv6 (outbound)"
+      direction       = "out"
+      protocol        = "tcp"
+      port            = "4240"
+      source_ips      = []
+      destination_ips = [local.hetzner_ipv6_range[var.location]]
+    },
+    {
+      description     = "Ping between the nodes over IPv6 (Cilium health)"
+      direction       = "in"
+      protocol        = "icmp"
+      port            = ""
+      source_ips      = [local.hetzner_ipv6_range[var.location]]
+      destination_ips = []
     },
   ]
 
@@ -337,7 +354,10 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "enabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "hetzner"
-    cluster_name   = var.cluster_name
+    # A fact about the provider (IPv6 by default: dual), never read from the setting it checks: turning
+    # IPv6 off must fail conformance C13, not change the promise.
+    ip_stack     = "dual"
+    cluster_name = var.cluster_name
     # The pods' IPv6 range (cluster_ipv6_cidr): NetworkPolicies cut it out of ::/0 (postBuild).
     cluster_ipv6_range = "fdf9:a717:c7cc::/56"
     image_registry     = var.image_registry

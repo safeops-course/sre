@@ -96,7 +96,7 @@ KUBE_CONTEXT ?= kind-sre-control-plane
 smoke-test: ## Smoke tests against KUBE_CONTEXT (default: the local kind cluster)
 	KUBE_CONTEXT=$(KUBE_CONTEXT) bash tests/smoke-test.sh
 
-cluster-conformance: ## The cluster contract (C1-C12) against KUBE_CONTEXT - what the platform needs from any cluster
+cluster-conformance: ## The cluster contract (C1-C13) against KUBE_CONTEXT - what the platform needs from any cluster
 	@KUBE_CONTEXT=$(KUBE_CONTEXT) scripts/cluster-conformance.sh
 
 # --- Chapter 23 capstone ---------------------------------------------------

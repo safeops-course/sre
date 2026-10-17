@@ -39,10 +39,15 @@ example to copy from.
   first keeps the names and the other skips them instead of both rewriting them every minute. The
   pre-destroy hook (`flux-pre-destroy.sh`) deletes the DNS records before the cluster goes.
 - [ ] **Backups go to Cloudflare R2,** the same target for every provider.
-- [ ] **Dual-stack:** IPv4 and IPv6 for nodes, pods and Services (conformance C13); the load balancer gets both families
+- [ ] **IPv6 where the provider has it by default** - never switched off, never forced. With it, dual-stack: IPv4 and
+  IPv6 for nodes, pods and Services (conformance C13); the load balancer gets both families
   (C5); the module writes its pod IPv6 range to cluster-config `cluster_ipv6_range`, which
   `allow-backend-egress-https` cuts out of `::/0` (on GKE it is global, not in fc00::/7). Every app pod answers on
   both of its addresses (`make smoke-test`: an image that listens on IPv4 only fails there, not as a 502 later).
+  Without it by default (EKS gives a cluster IPv4 or IPv6, not both), the profile patches the app and Traefik
+  Services (`ipFamilyPolicy: PreferDualStack` and no `ipFamilies` - a listed IPv6 would be refused) - a written
+  exception - and the module writes `ip_stack = "ipv4"` to cluster-config (`"dual"` everywhere else) - conformance C13
+  checks the promise.
 
 ## Proof
 
