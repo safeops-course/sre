@@ -84,8 +84,8 @@ application). The collectors take the DSN from `cluster-secrets`, written by Ter
 
 ### 3. Deploy OpenTelemetry Collector
 
-Flux installs two collectors (the component `flux/bootstrap/components/opentelemetry`, in every cloud
-profile): a DaemonSet for pod logs, OTLP and kubelet metrics, and a one-replica Deployment for Kubernetes
+Flux installs two collectors (the component `flux/bootstrap/components/opentelemetry`, in every profile;
+on kind they print to their own log instead): a DaemonSet for pod logs, OTLP and kubelet metrics, and a one-replica Deployment for Kubernetes
 Events (`docs/observability/logs.md`).
 
 ```bash

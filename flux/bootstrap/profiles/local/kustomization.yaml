@@ -119,6 +119,8 @@ patches:
   # kind has no Uptrace DSN to count on (the apps send traces straight to one, if the learner set it).
   # The collectors read exactly what they read on a cloud cluster; the debug exporter prints how many
   # records each batch held (kubectl logs), so what is collected can be checked here for free.
+  # op add on /spec/patches sets the whole list: the component's Kustomization has none of its own today -
+  # if it gets one, add these to it instead.
   - target: { kind: Kustomization, name: opentelemetry-collector }
     patch: |-
       - op: add

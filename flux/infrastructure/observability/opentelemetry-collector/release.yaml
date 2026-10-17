@@ -73,7 +73,7 @@ spec:
         kubelet_stats:
           collection_interval: 20s
           auth_type: serviceAccount
-          endpoint: $${env:K8S_NODE_IP}:10250
+          endpoint: $${env:OTEL_K8S_NODE_IP}:10250   # the chart always sets it (status.hostIP)
           insecure_skip_verify: true
 
       processors:
