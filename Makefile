@@ -49,6 +49,8 @@ tf: ## List the Terraform modules and how to run them
 	@echo "                                                     (APIs, service accounts, GitHub Workload Identity, alert e-mail, budget)"
 	@echo "  gke     infra/terraform/gke_cluster      GKE cluster (Cloud)       per test cycle: make -C infra/terraform/gke_cluster plan | apply | destroy"
 	@echo "                                                     (destroy ends with make leftovers: nothing billable may stay)"
+	@echo "  aws     infra/terraform/aws_foundation   AWS foundation            once, by a person: make -C infra/terraform/aws_foundation plan | apply"
+	@echo "                                                     (cluster IAM roles, GitHub OIDC deployer, budget, account defaults)"
 	@echo "  lab     infra/terraform/state-lab       Chapter 02 state lab      run by hand, as the lab says"
 	@echo "Check without credentials: make validate"
 

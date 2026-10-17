@@ -1,6 +1,7 @@
 .DS_Store
 .env.local
 .env.gcp
+.env.aws
 /bin/
 /node_modules/
 /.venv/

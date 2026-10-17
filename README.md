@@ -45,6 +45,7 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 - `infra/terraform/hcloud_cluster/` -- Hetzner k3s production cluster (kube-hetzner module)
 - `infra/terraform/kind_cluster/` -- local multi-node kind cluster + Flux install
 - `infra/terraform/gcp_foundation/` -- Google Cloud foundation (APIs, service accounts, Workload Identity), applied once
+- `infra/terraform/aws_foundation/` -- AWS foundation (cluster IAM roles, GitHub OIDC deployer, budget, account defaults), applied once
 - `infra/terraform/gke_cluster/` -- GKE cluster per test cycle (created, tested, destroyed); `docs/providers.md` lists what every provider needs
 - `flux/` -- FluxCD GitOps configuration (bootstrap, infrastructure, apps, secrets)
 - `config/` -- shared configuration files

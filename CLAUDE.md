@@ -64,6 +64,10 @@ infra/terraform/
                      # Cloud NAT, DNS endpoint only, pools "platform" + "apps"; `make plan|apply|destroy|leftovers`,
                      # kubeconfig.yaml context gke-sre-control-plane (no credentials; gke-gcloud-auth-plugin);
                      # flux.tf: the same Flux bootstrap as Hetzner, profile flux/bootstrap/profiles/gke
+  aws_foundation/    # AWS: the cluster's IAM roles (EKS, nodes, EBS CSI, Load Balancer Controller), GitHub OIDC +
+                     # deployer role (passes those roles, creates none), budget, account defaults (S3 public access
+                     # blocked, EBS encryption, IMDSv2) - applied once by a person, nothing billed (docs/aws.md;
+                     # `make -C infra/terraform/aws_foundation bootstrap`, settings in .env.aws, `aws login` profile)
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap: a profile per cluster on the provider-neutral base flux-system/.
@@ -186,7 +190,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - `make install-hooks` — install all pre-commit hooks
 - `make pre-commit` — run all hooks manually
 - `make fmt` — terraform fmt recursive
-- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, state-lab), no backend, no credentials
+- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, state-lab), no backend, no credentials
 - `make tf` — list the Terraform modules and their targets
 - `make kind-plan` / `kind-apply` / `kind-drift` / `kind-destroy` — local cluster; plan is saved with
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)
