@@ -41,7 +41,7 @@ This guide covers the Uptrace Cloud integration for unified observability (logs,
                   └─────────────────┘
 ```
 
-The backend exports straight to Uptrace (`backend/TELEMETRY.md`), not through the collector. The
+The backend exports straight to Uptrace ([`TELEMETRY.md` of the backend repository](https://github.com/safeops-course/backend/blob/main/TELEMETRY.md)), not through the collector. The
 collector's OTLP receivers (gRPC 4317, HTTP 4318) are there for other applications.
 
 ## Setup Instructions

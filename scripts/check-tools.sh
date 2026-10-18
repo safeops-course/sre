@@ -23,6 +23,8 @@ MIN_COSIGN="3.0"     # Chapter 17 verifies Sigstore bundles stored as OCI referr
 MIN_KYVERNO="1.19"   # tests/kyverno-policies.test.sh: 1.17 lets a wrong expectation pass
 MIN_PROMTOOL="3.0"   # tests/platform-alerts.test.sh - the clusters run Prometheus 3
 MIN_HELM="3.0"       # tests/tool-versions.test.sh asks the pinned charts what they install (helm show)
+# Checkov: the version CI runs (.github/workflows/pre-commit.yml) - an older one can pass a scan CI fails.
+MIN_CHECKOV="$(sed -n 's/.*checkov==\([0-9.]*\).*/\1/p' "$(dirname "$0")/../.github/workflows/pre-commit.yml")"
 
 # Resources Docker gives the kind nodes. Measured on the full local profile:
 # ~5.1 GiB used and ~0.4 cores busy at rest, ~2.7 cores requested. Labs add
@@ -62,8 +64,7 @@ hint() {
     age-keygen:*)      echo "apt install age  | https://github.com/FiloSottile/age#installation" ;;
     pre-commit:Darwin) echo "brew install pre-commit  | https://pre-commit.com/#install" ;;
     pre-commit:*)      echo "pip install pre-commit  | https://pre-commit.com/#install" ;;
-    checkov:Darwin)    echo "brew install checkov  | https://www.checkov.io/2.Basics/Installing%20Checkov.html" ;;
-    checkov:*)         echo "pip install checkov  | https://www.checkov.io/2.Basics/Installing%20Checkov.html" ;;
+    checkov:*)         echo "uv tool install checkov==${MIN_CHECKOV} (or pipx / pip; Homebrew lags behind)  | https://www.checkov.io/2.Basics/Installing%20Checkov.html" ;;
     git:Darwin)        echo "xcode-select --install or brew install git" ;;
     git:*)             echo "apt install git" ;;
     make:Darwin)       echo "xcode-select --install" ;;
@@ -130,7 +131,13 @@ check flux       "$MIN_FLUX"      "flux version --client"
 check sops       ""               "sops --version"
 check age-keygen ""               "age-keygen --version"
 check pre-commit ""               "pre-commit --version"
-check checkov    ""               "checkov --version"   # the terraform-security pre-commit hook fails without it
+# An unreadable pin would make the minimum "any version": report it instead.
+pin_re='^[0-9]+\.[0-9]+(\.[0-9]+)?$'
+if [[ "$MIN_CHECKOV" =~ $pin_re ]]; then
+  check checkov  "$MIN_CHECKOV"   "checkov --version"   # the terraform-security pre-commit hook fails without it, or with an older one
+else
+  missing checkov "cannot read the Checkov pin (one 'checkov==X.Y.Z') from .github/workflows/pre-commit.yml"
+fi
 check jq         ""               "jq --version"        # the AI agent's kube-context hook (Chapter 01) and scripts/lab-pod.sh
 check yq         "4"              "yq --version"        # the pre-commit guardrails that read the Flux manifests (Chapter 03 on)
 check kyverno    "$MIN_KYVERNO"   "kyverno version"     # the admission policy tests in pre-commit (Chapter 16)
