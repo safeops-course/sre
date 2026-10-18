@@ -19,23 +19,24 @@ The parts:
 ```
 ┌──────────────────────────────────────┐
 │ Browser: Frontend (Vue 3 + OTel Web) │  spans, OTLP/HTTP (VITE_UPTRACE_DSN)
-│ - click "Get Version": span xyz      │─────────────────────────────┐
-│ - GET /api/version                   │                             │
-│   traceparent: 00-abc123-xyz-01      │                             │
+│ - span ui.api_explorer.test_endpoint │─────────────────────────────┐
+│   - HTTP span 00f0... GET /api/...   │                             │
+│     traceparent: 00-4bf9...-00f0...  │                             │
 └──────────────────┬───────────────────┘                             │
                    │ request                                         │
 ┌──────────────────┼──────────────────────────┐                      │
 │ Kubernetes Cluster                          │                      │
 │                  ▼                          │                      ▼
-│  ┌────────────────────────────────────┐     │  spans,     ┌──────────────────┐
-│  │ Backend (Go + OTel SDK)            │─────┼────────────▶│ Uptrace Cloud ☁️  │
-│  │ - reads traceparent, child span    │     │  OTLP/HTTP  │                  │
-│  └────────────────────────────────────┘     │  (UPTRACE_  │ Trace: abc123    │
-│                                             │   DSN)      │  ├─ Frontend     │
-│  ┌────────────────────────────────────┐     │             │  │  └─ HTTP GET  │
-│  │ OTel Collectors: pod logs, kubelet │─────┼────────────▶│  └─ Backend      │
-│  │ metrics, Kubernetes Events         │     │  logs,      │     └─ Handler   │
-│  └────────────────────────────────────┘     │  metrics    └──────────────────┘
+│  ┌────────────────────────────────────┐     │  spans,     ┌──────────────────────┐
+│  │ Backend (Go + OTel SDK)            │─────┼────────────▶│ Uptrace Cloud        │
+│  │ - reads traceparent: a child span  │     │  OTLP/HTTP  │                      │
+│  │   of 00f0..., + database queries   │     │  (UPTRACE_  │ Trace 4bf9...        │
+│  └────────────────────────────────────┘     │   DSN)      │ └─ ui.api_explorer.. │
+│                                             │             │    └─ HTTP GET       │
+│  ┌────────────────────────────────────┐     │             │       └─ backend GET │
+│  │ OTel Collectors: pod logs, kubelet │─────┼────────────▶│          └─ query    │
+│  │ metrics, Kubernetes Events         │     │  logs,      │                      │
+│  └────────────────────────────────────┘     │  metrics    └──────────────────────┘
 └─────────────────────────────────────────────┘
 ```
 
@@ -47,16 +48,16 @@ environment's namespace (`docs/observability/uptrace-cloud.md`, section 2; rotat
 
 | | Frontend (`flux/apps/frontend/base/deployment.yaml`) | Backend (`flux/apps/backend/base/deployment.yaml`) |
 |---|---|---|
-| Where spans go | `VITE_UPTRACE_DSN` | `UPTRACE_DSN`, `OTEL_EXPORTER_OTLP_HEADERS` (key `uptrace-headers`, may be empty) |
+| Where spans go | `VITE_UPTRACE_DSN` | `UPTRACE_DSN` (the Deployment also sets `OTEL_EXPORTER_OTLP_HEADERS` from the key `uptrace-headers`; the code ignores it and sends only the `uptrace-dsn` header) |
 | `service.name` | `frontend` (fixed in the code) | `SERVICE_NAME` (`backend`) |
 | `service.version` | the image's own tag | the version baked into the image (the same as `/version`) |
 | `deployment.environment.name` | `ENVIRONMENT` | `DEPLOYMENT_ENVIRONMENT` |
 | Cluster, namespace, pod | - (see below) | `OTEL_RESOURCE_ATTRIBUTES`: `k8s.cluster.name`, `k8s.namespace.name`, `k8s.pod.name` |
 
-The frontend's container writes its runtime settings into `/config.js` when it starts, and the browser
-reads them from there - so the DSN reaches every visitor. That is by design: the DSN can only send data
+The frontend's container writes its runtime settings into `/tmp/config.js` when it starts; nginx serves
+that file as `/config.js`, and the browser reads them from there - so the DSN reaches every visitor. That is by design: the DSN can only send data
 into the Uptrace project, not read it. The Deployment also sets `CLUSTER_NAME`, but the image does not
-write it into `/config.js` yet, so frontend spans carry no `k8s.cluster.name` (a fix in the frontend
+write it into the file yet, so frontend spans carry no `k8s.cluster.name` (a fix in the frontend
 repository).
 
 ## One Trace from the Click to the Database
@@ -72,14 +73,18 @@ repository).
                 └─ version
    ```
 
-3. The request goes to `/api/` on the page's own origin; the frontend's nginx passes it to the backend.
-   Same origin: no CORS, nothing for the backend to allow.
+3. The request goes to `/api/` on the page's own origin; the frontend's nginx passes it to the backend -
+   only the routes the dashboard calls (any other `/api/` path is a 404 from nginx). Same origin: no
+   CORS, nothing for the backend to allow.
 4. The backend reads `traceparent` and creates its span as a child, named after the route
-   (`GET /delay/{seconds}`), and one span per database query.
+   (`GET /delay/{seconds}`), and one span per database query when the route makes any (the
+   `/auth/...` routes; most others do not touch the database).
 5. Each side exports its own spans; Uptrace joins them by the trace id.
 
-Probes and metrics scrapes (`/healthz`, `/readyz`, `/livez`, `/metrics`) are traced on neither side:
-they would be most of the spans and say nothing about users.
+The HTTP calls to the probes and metrics (`/healthz`, `/readyz`, `/livez`, `/metrics`) get no span on
+either side: they would be most of the spans and say nothing about users. The dashboard still records
+one `ui.dashboard.fetch_health` and one `ui.dashboard.fetch_metrics` span for each poll (every 5
+seconds while its tab is visible).
 
 ## Checking It
 
@@ -89,7 +94,7 @@ On a running environment, open the site with the browser's developer tools:
    URL configured: spans are not exported` means `VITE_UPTRACE_DSN` was empty.
 2. The network tab shows `POST https://api.uptrace.dev/v1/traces` answered with 200.
 3. A test request in the API Explorer appears in Uptrace as a `ui.api_explorer.test_endpoint` span, with
-   the backend's span and its database spans in the same trace.
+   the backend's span in the same trace (and its database spans, for the `/auth/...` routes).
 
 From the cluster (the DSN itself is never printed):
 
@@ -104,8 +109,9 @@ When spans do not arrive:
 
 - **Browser**: a console warning `... is not allowed by the CSP ...; spans are not exported` - the image
   allows `connect-src` only to its own origin and `https://api.uptrace.dev`.
-- **Backend**: `OpenTelemetry running without Uptrace export: UPTRACE_DSN is not set`, or
-  `OpenTelemetry error: ...` lines; whether the namespace may reach Uptrace at all (NetworkPolicy
+- **Backend**: `OpenTelemetry running without Uptrace export: UPTRACE_DSN is not set`,
+  `OpenTelemetry export disabled: ...` (a DSN it refuses, such as a token over `http://` to a host that
+  is not this machine), or `OpenTelemetry error: ...` lines; whether the namespace may reach Uptrace at all (NetworkPolicy
   egress): `docs/observability/uptrace-cloud.md`, *Backend Not Sending Telemetry*.
 - **Two traces instead of one**: the request's URL did not get `traceparent` - the API was called on an
   origin the frontend does not propagate to.
