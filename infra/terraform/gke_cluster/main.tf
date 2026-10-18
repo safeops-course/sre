@@ -51,7 +51,6 @@ resource "google_compute_network" "this" {
 # NetworkPolicies see real Pod IPs. Private Google Access: nodes without a public IP still reach
 # Google APIs (image pulls from Artifact Registry, logging, monitoring) without going through NAT.
 resource "google_compute_subnetwork" "nodes" {
-  # checkov:skip=CKV_GCP_26:VPC Flow Logs are billed per GB and nobody reads them in a test cycle
   # checkov:skip=CKV_GCP_76:IPv6 Private Google Access not set - nodes reach Google APIs over IPv4 Private Google Access; IPv6 to Google untested
   name                     = "${var.cluster_name}-nodes"
   network                  = google_compute_network.this.id
@@ -66,6 +65,17 @@ resource "google_compute_subnetwork" "nodes" {
   # IPv6 ranges itself (a /64 here, a /96 per node, a /112 for each node's Pods); free of charge.
   stack_type       = "IPV4_IPV6"
   ipv6_access_type = "EXTERNAL"
+
+  # VPC Flow Logs (var.flow_logs): Google's defaults - flows aggregated per 5 seconds, half of them
+  # sampled, with the metadata (VM, GKE Pod and Service names).
+  dynamic "log_config" {
+    for_each = var.flow_logs ? [1] : []
+    content {
+      aggregation_interval = "INTERVAL_5_SEC"
+      flow_sampling        = 0.5
+      metadata             = "INCLUDE_ALL_METADATA"
+    }
+  }
 
   secondary_ip_range {
     range_name    = "pods"
@@ -175,8 +185,8 @@ resource "google_monitoring_alert_policy" "nat_dropped_out_of_resources" {
 resource "google_container_cluster" "this" {
   # Checkov findings that are decisions, not gaps (each explained where the setting is):
   # checkov:skip=CKV_GCP_12:Dataplane V2 (datapath_provider) enforces NetworkPolicy; the network_policy block is the legacy Calico one
+  # checkov:skip=CKV_GCP_61:flow logs and intranode visibility are on by default (var.flow_logs); only the course's test cycle turns them off in terraform.tfvars, which Checkov reads
   # checkov:skip=CKV_GCP_20:DNS endpoint only, no IP endpoint - IAM decides who gets in, there is no IP to allow-list
-  # checkov:skip=CKV_GCP_61:flow logs and intranode visibility are billed logs nobody reads in a test cycle
   # checkov:skip=CKV_GCP_65:no Google Workspace organization - RBAC groups come from Dex (GitHub teams)
   # checkov:skip=CKV_GCP_66:images are verified by Kyverno (supply-chain pack), the same on every provider
   # checkov:skip=CKV_GCP_69:GKE_METADATA is set on each node pool (workload_metadata_config); the default pool is removed
@@ -196,6 +206,10 @@ resource "google_container_cluster" "this" {
   # The node pools below replace the default one (which would run as the Compute default account).
   remove_default_node_pool = true
   initial_node_count       = 1
+
+  # Pod-to-Pod traffic on one node goes through the VPC too, so the subnet's flow logs see it
+  # (var.flow_logs; without flow logs it shows nothing extra).
+  enable_intranode_visibility = var.flow_logs
 
   release_channel {
     channel = var.release_channel

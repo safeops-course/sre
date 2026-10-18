@@ -131,7 +131,13 @@ check flux       "$MIN_FLUX"      "flux version --client"
 check sops       ""               "sops --version"
 check age-keygen ""               "age-keygen --version"
 check pre-commit ""               "pre-commit --version"
-check checkov    "$MIN_CHECKOV"   "checkov --version"   # the terraform-security pre-commit hook fails without it, or with an older one
+# An unreadable pin would make the minimum "any version": report it instead.
+pin_re='^[0-9]+\.[0-9]+(\.[0-9]+)?$'
+if [[ "$MIN_CHECKOV" =~ $pin_re ]]; then
+  check checkov  "$MIN_CHECKOV"   "checkov --version"   # the terraform-security pre-commit hook fails without it, or with an older one
+else
+  missing checkov "cannot read the Checkov pin (one 'checkov==X.Y.Z') from .github/workflows/pre-commit.yml"
+fi
 check jq         ""               "jq --version"        # the AI agent's kube-context hook (Chapter 01) and scripts/lab-pod.sh
 check yq         "4"              "yq --version"        # the pre-commit guardrails that read the Flux manifests (Chapter 03 on)
 check kyverno    "$MIN_KYVERNO"   "kyverno version"     # the admission policy tests in pre-commit (Chapter 16)

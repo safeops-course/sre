@@ -41,6 +41,10 @@ apps_pool = {
 # recommendation: a cluster that matters keeps the default (SYSTEM_COMPONENTS and WORKLOADS).
 logging_components = ["SYSTEM_COMPONENTS"]
 
+# The same for VPC Flow Logs: off in these test cycles to save the per-GiB charge, not a recommendation -
+# a cluster that matters keeps the default (true).
+flow_logs = false
+
 nat_min_ports_per_vm = 64
 nat_max_ports_per_vm = 4096
 

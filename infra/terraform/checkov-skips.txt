@@ -9,7 +9,6 @@ gcp_foundation CKV_GCP_125
 gke_cluster CKV2_GCP_18
 gke_cluster CKV_GCP_12
 gke_cluster CKV_GCP_20
-gke_cluster CKV_GCP_26
 gke_cluster CKV_GCP_61
 gke_cluster CKV_GCP_65
 gke_cluster CKV_GCP_66

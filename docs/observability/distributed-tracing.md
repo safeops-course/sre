@@ -373,7 +373,7 @@ env:
         key: uptrace-dsn
 ```
 
-The backend exports straight to Uptrace over OTLP/HTTP (`backend/TELEMETRY.md`), not through the
+The backend exports straight to Uptrace over OTLP/HTTP ([`TELEMETRY.md` of the backend repository](https://github.com/safeops-course/backend/blob/main/TELEMETRY.md)), not through the
 collector.
 
 ## Viewing Traces in Uptrace Cloud

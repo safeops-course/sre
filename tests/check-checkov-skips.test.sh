@@ -45,5 +45,15 @@ run_case "a listed skip the code no longer has" fail "echo 'gke_cluster CKV_GCP_
 run_case "a skip inside a downloaded module (.terraform/) is not ours" pass \
   "mkdir -p infra/terraform/gke_cluster/.terraform/modules/x; echo '# checkov:skip=CKV_GCP_99' > infra/terraform/gke_cluster/.terraform/modules/x/main.tf"
 run_case "comments and blank lines in the list" pass "printf '\n# a note\n\n' >> ${LIST}"
+run_case "a stray space and CR at the end of a list line" pass "echo '${NEW}' >> ${TF}; printf 'gke_cluster CKV_GCP_99 \r\n' >> ${LIST}"
+# The other prefixes Checkov accepts (checkov/common/comment/enum.py) are skips too.
+run_case "bridgecrew:skip, not listed" fail "echo '  # bridgecrew:skip=CKV_GCP_99:a reason long enough to read' >> ${TF}"
+run_case "cortex:skip without a reason, listed" fail "echo '  # cortex:skip=CKV_GCP_99' >> ${TF}; echo 'gke_cluster CKV_GCP_99' >> ${LIST}"
+run_case "cortex:skip with a reason, listed" pass "echo '  # cortex:skip=CKV_GCP_99:a reason long enough to read' >> ${TF}; echo 'gke_cluster CKV_GCP_99' >> ${LIST}"
+run_case "spaces after = (Checkov allows them), listed" pass "echo '  # checkov:skip=  CKV_GCP_99:a reason long enough to read' >> ${TF}; echo 'gke_cluster CKV_GCP_99' >> ${LIST}"
+run_case "two ids in one skip, both listed" pass "echo '  # checkov:skip=CKV_GCP_98,CKV_GCP_99:a reason long enough to read' >> ${TF}; printf 'gke_cluster CKV_GCP_98\ngke_cluster CKV_GCP_99\n' >> ${LIST}"
+run_case "two ids in one skip, one listed" fail "echo '  # checkov:skip=CKV_GCP_98,CKV_GCP_99:a reason long enough to read' >> ${TF}; echo 'gke_cluster CKV_GCP_99' >> ${LIST}"
+run_case "a | in the reason" pass "echo '  # checkov:skip=CKV_GCP_99:a | b, a reason long enough to read' >> ${TF}; echo 'gke_cluster CKV_GCP_99' >> ${LIST}"
+run_case "a skip with no id" fail "echo '  # checkov:skip=:a reason long enough to read' >> ${TF}"
 
 exit "${FAILED}"

@@ -38,6 +38,7 @@ changes, and Flux rolls the pods like any release - a new pod Ready before an ol
 | Reader | Where the annotation lives |
 |---|---|
 | backend | `flux/apps/backend/<env>/kustomization.yaml` - the `secrets-rotated` patch |
+| frontend | `flux/apps/frontend/overlays/<env>/patches/deployment.yaml` |
 | k8s-ai-monitor | `flux/infrastructure/observability/k8s-ai-monitor/deployment.yaml` |
 | Dex, Headlamp, external-dns | the HelmRelease's `spec.values.podAnnotations` |
 | OpenTelemetry collectors | nothing - the DSN is substituted into the HelmRelease, so a new one rolls them ([Third-Party URLs and DSNs](#third-party-urls-and-dsns)) |
@@ -265,24 +266,27 @@ The heartbeat URL:
 3. Verify: the heartbeat check shows a fresh ping.
 4. Delete the old check.
 
-The Uptrace DSN has two kinds of readers, and each gets it its own way:
+The Uptrace DSN has three readers, and each gets it its own way:
 
 | Reader | Where the DSN comes from | Picks up a new one |
 |---|---|---|
-| backend (each environment) | `flux/secrets/<env>/backend-secrets.yaml` (`uptrace-dsn`, `uptrace-headers`) | the `secrets-rotated` annotation ([Restarting the Readers](#restarting-the-readers)) |
-| OpenTelemetry collectors (`otel-collector`, `otel-events`) | Terraform variable `uptrace_dsn` → Secret `flux-system/cluster-secrets` → Flux substitutes it into both HelmReleases | by itself: a changed value changes the pod template, and Flux rolls the pods within one interval of the `opentelemetry-collector` Kustomization (10 minutes; seen on kind 2026-10-18) |
+| backend (each environment) | Secret `backend-secrets` (`uptrace-dsn`, `uptrace-headers`): `flux/secrets/<env>/backend-secrets.yaml` on a cloud cluster, Terraform (`uptrace_dsn`) on kind | the `secrets-rotated` annotation ([Restarting the Readers](#restarting-the-readers)) |
+| frontend (each environment) | the same Secret, key `uptrace-dsn` - handed to the browser, which sends its traces with it (ingest only, so public by design) | the `secrets-rotated` annotation in `flux/apps/frontend/overlays/<env>/patches/deployment.yaml` |
+| OpenTelemetry collectors (`otel-collector`, `otel-events`) | Terraform variable `uptrace_dsn` → Secret `flux-system/cluster-secrets` → Flux substitutes it into both HelmReleases | by itself: a changed value changes the pod template, and Flux rolls the pods within one interval of the `opentelemetry-collector` Kustomization (10 minutes). Seen on kind on 2026-10-18 - the roll only: on kind the collectors print to their own log, not to Uptrace |
 
 1. Create a new DSN in the Uptrace project's settings (Project → DSN).
 2. Every place in `lives_in`:
    - `gh secret set UPTRACE_DSN --org safeops-course --visibility all` (paste at the prompt; the CI
      runs read it), `UPTRACE_DSN` in `.env.local` and `TF_VAR_uptrace_dsn` in `.env.gcp` (no quotes:
-     the variable's validation wants `https://`); on kind, `uptrace_dsn` in
+     the variable's validation wants `https://`), and `uptrace_dsn` in
      `infra/terraform/kind_cluster/terraform.tfvars` if one is set there;
-   - `sops edit` the three `backend-secrets.yaml`, with the `secrets-rotated` annotation of each
-     environment in the same pull request. Merge.
-3. **A cluster is running:** apply its Terraform (Hetzner: the workflow with *apply*; GKE:
-   `make gke-plan` and `make gke-apply`). The apply rewrites `cluster-secrets`; nothing else is needed for
-   the collectors.
+   - `sops edit` the three `backend-secrets.yaml`, with the `secrets-rotated` annotation of the backend
+     and the frontend of each environment in the same pull request. Merge.
+3. Every running cluster: apply its Terraform - Hetzner: the workflow with *apply*; GKE: `make gke-plan`
+   and `make gke-apply`; kind: `make kind-plan` and `make kind-apply`. The apply rewrites
+   `cluster-secrets` (and on kind `backend-secrets` too); nothing else is needed for the collectors.
+   On kind, set the `secrets-rotated` annotations to a new time as well - the backend and the frontend
+   read a Secret Terraform changed, and no pull request rolled them.
 4. Verify:
    ```bash
    # both collectors restarted after the apply, and no export errors since

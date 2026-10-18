@@ -5,6 +5,11 @@ metadata:
   name: frontend
 spec:
   template:
+    metadata:
+      annotations:
+        # The frontend reads uptrace-dsn from backend-secrets: after a rotation, set this to the current UTC
+        # time (date -u +%FT%TZ) in the same pull request, and Flux rolls the pods (docs/credential-rotation.md).
+        safeops.io/secrets-rotated: "2026-09-26T00:00:00Z"
     spec:
       containers:
       - name: frontend

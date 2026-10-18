@@ -28,13 +28,22 @@
 # Usage: scripts/terraform-security.sh   (from the repository root). Needs checkov; changes nothing.
 set -e
 pinned="$(sed -n 's/.*checkov==\([0-9.]*\).*/\1/p' .github/workflows/pre-commit.yml)"
+# Exactly one version: an empty pin would let any Checkov through, two would refuse every one.
+if ! [[ "${pinned}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "ERROR: cannot read the Checkov pin (one 'checkov==X.Y.Z') from .github/workflows/pre-commit.yml" >&2
+    exit 1
+fi
 install_hint="uv tool install checkov==${pinned} (or pipx / pip install checkov==${pinned})"
 if ! command -v checkov &>/dev/null; then
     echo "ERROR: checkov is not installed - the Terraform security scan cannot run" >&2
     echo "Install: ${install_hint}" >&2
     exit 1
 fi
-installed="$(checkov --version)"
+installed="$(checkov --version | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)"
+if [ -z "${installed}" ]; then
+    echo "ERROR: 'checkov --version' printed no version - reinstall: ${install_hint}" >&2
+    exit 1
+fi
 # The lower of the two by version order is the pin when the installed one is the pin or newer.
 if [ "$(printf '%s\n%s\n' "${pinned}" "${installed}" | sort -V | head -n 1)" != "${pinned}" ]; then
     echo "ERROR: checkov ${installed} is older than ${pinned}, the version CI runs - a scan here can pass where CI fails" >&2
