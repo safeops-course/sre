@@ -159,7 +159,6 @@ else
 fi
 
 # --- 4. Critical secrets present ---
-# (uptrace-secrets is not part of flux/secrets/develop; the DSN lives in backend-secrets)
 for secret in backend-secrets app-postgres-app; do
   run_test "Secret $secret exists in develop" \
     k get secret "$secret" -n develop

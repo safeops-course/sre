@@ -100,6 +100,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: check-checkov-skips-test
+        name: Checkov skip check tests (throw-away copy, no checkov)
+        entry: tests/check-checkov-skips.test.sh
+        language: script
+        files: ^(scripts/check-checkov-skips\.sh|tests/check-checkov-skips\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: capstone-fault-test
         name: capstone fault tests (throw-away copy, no cluster, no GitHub)
         entry: tests/capstone-fault.test.sh
@@ -221,6 +229,14 @@ repos:
         files: \.(tf|tfvars)$
         pass_filenames: false
         require_serial: true
+        stages: [pre-commit]
+
+      - id: checkov-skips
+        name: Every Checkov skip has a reason and is in infra/terraform/checkov-skips.txt
+        entry: scripts/check-checkov-skips.sh
+        language: script
+        files: ^(infra/terraform/.*\.tf|infra/terraform/checkov-skips\.txt|scripts/check-checkov-skips\.sh)$
+        pass_filenames: false
         stages: [pre-commit]
 
       - id: terraform-security

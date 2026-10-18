@@ -21,13 +21,24 @@
 # 2026-10-17, none of them created), and a finding inside a module cannot be skipped where it is made.
 #
 # CI pins the Checkov version (.github/workflows/pre-commit.yml); a newer one can bring new checks, so a
-# local run with an older Checkov can pass where CI fails.
+# local run with an older Checkov can pass where CI fails (CKV2_GCP_18, 2026-10-17: 3.3.20 here, 3.3.27
+# in CI). The scan therefore refuses a Checkov older than that pin. Homebrew lags behind PyPI, so the
+# install hint is the pinned version from PyPI.
 #
 # Usage: scripts/terraform-security.sh   (from the repository root). Needs checkov; changes nothing.
 set -e
+pinned="$(sed -n 's/.*checkov==\([0-9.]*\).*/\1/p' .github/workflows/pre-commit.yml)"
+install_hint="uv tool install checkov==${pinned} (or pipx / pip install checkov==${pinned})"
 if ! command -v checkov &>/dev/null; then
     echo "ERROR: checkov is not installed - the Terraform security scan cannot run" >&2
-    echo "Install: brew install checkov (macOS) or pip install checkov; see scripts/check-tools.sh" >&2
+    echo "Install: ${install_hint}" >&2
+    exit 1
+fi
+installed="$(checkov --version)"
+# The lower of the two by version order is the pin when the installed one is the pin or newer.
+if [ "$(printf '%s\n%s\n' "${pinned}" "${installed}" | sort -V | head -n 1)" != "${pinned}" ]; then
+    echo "ERROR: checkov ${installed} is older than ${pinned}, the version CI runs - a scan here can pass where CI fails" >&2
+    echo "Install: ${install_hint}" >&2
     exit 1
 fi
 

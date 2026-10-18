@@ -364,18 +364,17 @@ RUN echo '#!/bin/sh' > /docker-entrypoint.d/40-generate-env-config.sh && \
 env:
   - name: SERVICE_NAME
     value: "backend"
-  - name: SERVICE_VERSION
-    value: "v1.0.0"
   - name: DEPLOYMENT_ENVIRONMENT
-    value: "development"
-  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-    value: "http://otel-collector.observability.svc.cluster.local:4317"
+    value: "${ENVIRONMENT}"
   - name: UPTRACE_DSN
     valueFrom:
       secretKeyRef:
-        name: uptrace-secrets
-        key: dsn
+        name: backend-secrets
+        key: uptrace-dsn
 ```
+
+The backend exports straight to Uptrace over OTLP/HTTP (`backend/TELEMETRY.md`), not through the
+collector.
 
 ## Viewing Traces in Uptrace Cloud
 

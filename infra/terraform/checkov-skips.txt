@@ -1,0 +1,17 @@
+# Every Checkov finding the Terraform modules skip: <module> <check id>, one per line.
+#
+# A skip is a decision made in the code (`# checkov:skip=ID:reason` inside the resource, the reason
+# next to it). This list is the one place that shows them all, and it makes a new skip a deliberate
+# second change a reviewer sees. scripts/check-checkov-skips.sh fails when the code and this list
+# differ in either direction.
+aws_foundation CKV_AWS_356
+gcp_foundation CKV_GCP_125
+gke_cluster CKV2_GCP_18
+gke_cluster CKV_GCP_12
+gke_cluster CKV_GCP_20
+gke_cluster CKV_GCP_26
+gke_cluster CKV_GCP_61
+gke_cluster CKV_GCP_65
+gke_cluster CKV_GCP_66
+gke_cluster CKV_GCP_69
+gke_cluster CKV_GCP_76

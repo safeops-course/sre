@@ -39,7 +39,8 @@ changes, and Flux rolls the pods like any release - a new pod Ready before an ol
 |---|---|
 | backend | `flux/apps/backend/<env>/kustomization.yaml` - the `secrets-rotated` patch |
 | k8s-ai-monitor | `flux/infrastructure/observability/k8s-ai-monitor/deployment.yaml` |
-| Dex, Headlamp, external-dns, OpenTelemetry collector | the HelmRelease's `spec.values.podAnnotations` |
+| Dex, Headlamp, external-dns | the HelmRelease's `spec.values.podAnnotations` |
+| OpenTelemetry collectors | nothing - the DSN is substituted into the HelmRelease, so a new one rolls them ([Third-Party URLs and DSNs](#third-party-urls-and-dsns)) |
 | origin-ca-issuer | the HelmRelease's `spec.values.controller.podAnnotations` |
 
 **Not `kubectl rollout restart`** on a Flux-managed Deployment. It sets an annotation that is not in
@@ -256,11 +257,37 @@ The Guardian's Gemini key (Chapter 14) is billed per request on the owner's Goog
 The Alertmanager heartbeat URL and the Uptrace DSN are secrets in a URL: whoever has the heartbeat URL
 can report that Alertmanager is alive, and the DSN lets anyone send data into the Uptrace project.
 
-1. Create the new one at the provider (a new heartbeat check URL; a new DSN in the Uptrace project's
-   settings).
-2. `sops edit` every file in `lives_in` - the DSN is in four.
-3. In the same pull request, the annotation of the readers: the backend of each environment and the
-   collector's `podAnnotations` ([Restarting the Readers](#restarting-the-readers)). Alertmanager
-   reads its configuration without a restart. Merge.
-4. Verify: the heartbeat check shows a fresh ping; new traces arrive in Uptrace.
-5. Delete the old check or DSN.
+The heartbeat URL:
+
+1. Create a new heartbeat check URL at the provider.
+2. `sops edit flux/secrets/observability/alertmanager-heartbeat.yaml`. Alertmanager reads its
+   configuration without a restart. Merge.
+3. Verify: the heartbeat check shows a fresh ping.
+4. Delete the old check.
+
+The Uptrace DSN has two kinds of readers, and each gets it its own way:
+
+| Reader | Where the DSN comes from | Picks up a new one |
+|---|---|---|
+| backend (each environment) | `flux/secrets/<env>/backend-secrets.yaml` (`uptrace-dsn`, `uptrace-headers`) | the `secrets-rotated` annotation ([Restarting the Readers](#restarting-the-readers)) |
+| OpenTelemetry collectors (`otel-collector`, `otel-events`) | Terraform variable `uptrace_dsn` → Secret `flux-system/cluster-secrets` → Flux substitutes it into both HelmReleases | by itself: a changed value changes the pod template, and Flux rolls the pods within one interval of the `opentelemetry-collector` Kustomization (10 minutes; seen on kind 2026-10-18) |
+
+1. Create a new DSN in the Uptrace project's settings (Project → DSN).
+2. Every place in `lives_in`:
+   - `gh secret set UPTRACE_DSN --org safeops-course --visibility all` (paste at the prompt; the CI
+     runs read it), `UPTRACE_DSN` in `.env.local` and `TF_VAR_uptrace_dsn` in `.env.gcp` (no quotes:
+     the variable's validation wants `https://`); on kind, `uptrace_dsn` in
+     `infra/terraform/kind_cluster/terraform.tfvars` if one is set there;
+   - `sops edit` the three `backend-secrets.yaml`, with the `secrets-rotated` annotation of each
+     environment in the same pull request. Merge.
+3. **A cluster is running:** apply its Terraform (Hetzner: the workflow with *apply*; GKE:
+   `make gke-plan` and `make gke-apply`). The apply rewrites `cluster-secrets`; nothing else is needed for
+   the collectors.
+4. Verify:
+   ```bash
+   # both collectors restarted after the apply, and no export errors since
+   kubectl -n observability get pods -l app.kubernetes.io/name=opentelemetry-collector
+   kubectl -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --since=10m | grep -c 'Exporting failed' || true
+   ```
+   and new logs, traces and Kubernetes Events arrive in Uptrace.
+5. Delete the old DSN in Uptrace.
