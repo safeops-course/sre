@@ -7,56 +7,33 @@ Complete guide for end-to-end distributed tracing from browser to backend using 
 Our distributed tracing implementation provides full request visibility across:
 - **Frontend (Browser)**: Vue 3 SPA with OpenTelemetry Web SDK
 - **Backend (Go)**: HTTP API with OpenTelemetry SDK
-- **OpenTelemetry Collector**: Aggregates and forwards traces
+- **OpenTelemetry Collectors** (in the cluster): pod logs, kubelet metrics and Kubernetes Events - not
+  the traces of the frontend or the backend, which go straight to Uptrace
 - **Uptrace Cloud**: Visualizes distributed traces
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Browser                                   │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │  Frontend (Vue 3 + OTel Web SDK)                           │ │
-│  │  - User clicks "Get Version"                               │ │
-│  │  - OTel creates span: trace_id=abc123, span_id=xyz         │ │
-│  │  - HTTP GET /version                                       │ │
-│  │  - Header: traceparent: 00-abc123-xyz-01                  │ │
-│  └────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┼───────────────────┘
-                                              │
-                                              ▼
-                                    ┌──────────────────┐
-                                    │ OTel Collector   │
-                                    │ :4318 (HTTP)     │
-                                    └──────────────────┘
-                                              │
-┌─────────────────────────────────────────────┼───────────────────┐
-│                    Kubernetes Cluster       │                   │
-│  ┌────────────────────────────────────────┐ │                   │
-│  │  Backend (Go + OTel SDK)               │ │                   │
-│  │  - Receives request with traceparent   │ │                   │
-│  │  - Extracts trace_id=abc123, parent=xyz│ │                   │
-│  │  - Creates child span: span_id=def     │ │                   │
-│  │  - Processes /version handler          │ │                   │
-│  └────────────────────────────────────────┘ │                   │
-│                                              │                   │
-│                                              ▼                   │
-│                                    ┌──────────────────┐         │
-│                                    │ OTel Collector   │         │
-│                                    │ :4317 (gRPC)     │         │
-│                                    └──────────────────┘         │
-└─────────────────────────────────────────────┼───────────────────┘
-                                              │
-                                              ▼
-                                    ┌──────────────────┐
-                                    │ Uptrace Cloud ☁️  │
-                                    │                  │
-                                    │ Trace: abc123    │
-                                    │  ├─ Frontend     │
-                                    │  │  └─ HTTP GET  │
-                                    │  └─ Backend      │
-                                    │     └─ Handler   │
-                                    └──────────────────┘
+┌──────────────────────────────────────┐
+│ Browser: Frontend (Vue 3 + OTel Web) │  spans, OTLP/HTTP (VITE_UPTRACE_DSN)
+│ - click "Get Version": span xyz      │─────────────────────────────┐
+│ - GET /api/version                   │                             │
+│   traceparent: 00-abc123-xyz-01      │                             │
+└──────────────────┬───────────────────┘                             │
+                   │ request                                         │
+┌──────────────────┼──────────────────────────┐                      │
+│ Kubernetes Cluster                          │                      │
+│                  ▼                          │                      ▼
+│  ┌────────────────────────────────────┐     │  spans,     ┌──────────────────┐
+│  │ Backend (Go + OTel SDK)            │─────┼────────────▶│ Uptrace Cloud ☁️  │
+│  │ - reads traceparent, child span    │     │  OTLP/HTTP  │                  │
+│  └────────────────────────────────────┘     │  (UPTRACE_  │ Trace: abc123    │
+│                                             │   DSN)      │  ├─ Frontend     │
+│  ┌────────────────────────────────────┐     │             │  │  └─ HTTP GET  │
+│  │ OTel Collectors: pod logs, kubelet │─────┼────────────▶│  └─ Backend      │
+│  │ metrics, Kubernetes Events         │     │  logs,      │     └─ Handler   │
+│  └────────────────────────────────────┘     │  metrics    └──────────────────┘
+└─────────────────────────────────────────────┘
 ```
 
 ## Frontend Instrumentation

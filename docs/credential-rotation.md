@@ -289,9 +289,17 @@ The Uptrace DSN has three readers, and each gets it its own way:
    read a Secret Terraform changed, and no pull request rolled them.
 4. Verify:
    ```bash
-   # both collectors restarted after the apply, and no export errors since
+   # both collectors restarted after the apply, and no export errors since. --tail=-1: with a selector,
+   # kubectl logs shows only 10 lines per pod. A failed call or no pods at all (kubectl then exits 0 with
+   # no lines) is no count of zero.
    kubectl -n observability get pods -l app.kubernetes.io/name=opentelemetry-collector
-   kubectl -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --since=10m | grep -c 'Exporting failed' || true
+   if logs=$(kubectl -n observability logs -l app.kubernetes.io/name=opentelemetry-collector --since=10m --tail=-1) \
+     && [[ -n "$logs" ]]; then
+     echo "export errors: $(grep -c 'Exporting failed' <<<"$logs")"
+   else
+     echo "no collector logs read - check the pods above" >&2
+   fi
+   unset logs
    ```
    and new logs, traces and Kubernetes Events arrive in Uptrace.
 5. Delete the old DSN in Uptrace.

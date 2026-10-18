@@ -159,10 +159,11 @@ variable "logging_components" {
 
 variable "flow_logs" {
   description = <<-EOF
-    VPC Flow Logs on the nodes' subnet and intranode visibility on the cluster: a record of every connection
-    (source, destination, port, bytes, sampled), also Pod to Pod on one node - what answers "who talked to
-    what" after an incident and what a NetworkPolicy change really blocked. Sent to Cloud Logging and billed
-    per GiB from the first byte (network telemetry pricing; not part of Cloud Logging's free allotment).
+    VPC Flow Logs on the nodes' subnet and intranode visibility on the cluster: sampled connection records
+    (source, destination, port, bytes; half of the flows, so a short connection may be missing), also Pod to
+    Pod on one node - what answers "who talked to what" after an incident. Not a record of what a
+    NetworkPolicy denied: that is GKE's network policy logging (Dataplane V2). Sent to Cloud Logging and
+    billed per GiB from the first byte (network telemetry pricing; not part of Cloud Logging's free allotment).
   EOF
   type        = bool
   default     = true
