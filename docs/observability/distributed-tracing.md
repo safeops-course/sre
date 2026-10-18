@@ -1,15 +1,18 @@
-# Distributed Tracing with OpenTelemetry
+# Distributed Tracing
 
-Complete guide for end-to-end distributed tracing from browser to backend using OpenTelemetry and Uptrace Cloud.
+How one request is traced from the browser through the backend to its database queries, and where
+this repository configures it. What each application's SDK does - initialization, instrumentations,
+span names, errors - is in its own repository, next to the code:
+[frontend `TELEMETRY.md`](https://github.com/safeops-course/frontend/blob/main/TELEMETRY.md),
+[backend `TELEMETRY.md`](https://github.com/safeops-course/backend/blob/main/TELEMETRY.md). This page
+does not copy their code: a copy here goes out of date the first time the code changes.
 
-## Overview
-
-Our distributed tracing implementation provides full request visibility across:
-- **Frontend (Browser)**: Vue 3 SPA with OpenTelemetry Web SDK
-- **Backend (Go)**: HTTP API with OpenTelemetry SDK
-- **OpenTelemetry Collectors** (in the cluster): pod logs, kubelet metrics and Kubernetes Events - not
-  the traces of the frontend or the backend, which go straight to Uptrace
-- **Uptrace Cloud**: Visualizes distributed traces
+The parts:
+- **Frontend (browser)**: Vue 3 with the OpenTelemetry Web SDK; sends its spans to Uptrace itself.
+- **Backend (Go)**: the OpenTelemetry SDK; sends traces, metrics and logs to Uptrace itself.
+- **OpenTelemetry collectors** (in the cluster): pod logs, kubelet metrics and Kubernetes Events
+  (`docs/observability/logs.md`) - not the traces of the frontend or the backend.
+- **Uptrace Cloud**: stores and shows the traces (`docs/observability/uptrace-cloud.md`).
 
 ## Architecture
 
@@ -36,648 +39,83 @@ Our distributed tracing implementation provides full request visibility across:
 └─────────────────────────────────────────────┘
 ```
 
-## Frontend Instrumentation
+## Where This Repository Configures It
 
-### OpenTelemetry Web SDK Setup
+Both applications read the same DSN, key `uptrace-dsn` of the Secret `backend-secrets` in each
+environment's namespace (`docs/observability/uptrace-cloud.md`, section 2; rotating it:
+`docs/credential-rotation.md`).
 
-**Dependencies** (`frontend/package.json`):
-```json
-{
-  "dependencies": {
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-trace-web": "^2.1.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.206.0",
-    "@opentelemetry/instrumentation": "^0.206.0",
-    "@opentelemetry/instrumentation-fetch": "^0.206.0",
-    "@opentelemetry/instrumentation-xml-http-request": "^0.206.0",
-    "@opentelemetry/instrumentation-document-load": "^0.52.0",
-    "@opentelemetry/instrumentation-user-interaction": "^0.51.0",
-    "@opentelemetry/resources": "^2.1.0",
-    "@opentelemetry/semantic-conventions": "^1.37.0"
-  }
-}
-```
+| | Frontend (`flux/apps/frontend/base/deployment.yaml`) | Backend (`flux/apps/backend/base/deployment.yaml`) |
+|---|---|---|
+| Where spans go | `VITE_UPTRACE_DSN` | `UPTRACE_DSN`, `OTEL_EXPORTER_OTLP_HEADERS` (key `uptrace-headers`, may be empty) |
+| `service.name` | `frontend` (fixed in the code) | `SERVICE_NAME` (`backend`) |
+| `service.version` | the image's own tag | the version baked into the image (the same as `/version`) |
+| `deployment.environment.name` | `ENVIRONMENT` | `DEPLOYMENT_ENVIRONMENT` |
+| Cluster, namespace, pod | - (see below) | `OTEL_RESOURCE_ATTRIBUTES`: `k8s.cluster.name`, `k8s.namespace.name`, `k8s.pod.name` |
 
-**Telemetry Service** (`frontend/src/services/telemetry.js`):
-```javascript
-import { WebTracerProvider } from '@opentelemetry/sdk-trace-web'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
-import { Resource } from '@opentelemetry/resources'
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-web'
-import { registerInstrumentations } from '@opentelemetry/instrumentation'
-import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch'
+The frontend's container writes its runtime settings into `/config.js` when it starts, and the browser
+reads them from there - so the DSN reaches every visitor. That is by design: the DSN can only send data
+into the Uptrace project, not read it. The Deployment also sets `CLUSTER_NAME`, but the image does not
+write it into `/config.js` yet, so frontend spans carry no `k8s.cluster.name` (a fix in the frontend
+repository).
 
-export function initTelemetry() {
-  const config = {
-    serviceName: 'frontend',
-    serviceVersion: '1.0.0',
-    collectorUrl: window.__ENV__?.VITE_OTEL_COLLECTOR_URL ||
-                  'http://localhost:4318/v1/traces',
-  }
+## One Trace from the Click to the Database
 
-  const resource = new Resource({
-    'service.name': config.serviceName,
-    'service.version': config.serviceVersion,
-  })
+1. The browser starts a span for the action (`ui.<view>.<action>`) and one for the HTTP call.
+2. It adds the W3C trace context to the request - only to URLs it is told to (the page's API origin,
+   `*.safeops.work`, `localhost`, `*.local`, `*.svc.cluster.local`), so no other site sees it:
 
-  const provider = new WebTracerProvider({ resource })
-
-  const exporter = new OTLPTraceExporter({
-    url: config.collectorUrl,
-  })
-
-  provider.addSpanProcessor(new BatchSpanProcessor(exporter))
-  provider.register()
-
-  registerInstrumentations({
-    instrumentations: [
-      new FetchInstrumentation({
-        propagateTraceHeaderCorsUrls: [
-          /localhost/,
-          /\.svc\.cluster\.local$/,
-        ],
-      }),
-    ],
-  })
-}
-```
-
-**Initialization** (`frontend/src/main.js`):
-```javascript
-import { initTelemetry } from './services/telemetry'
-
-// Initialize before Vue app
-initTelemetry()
-
-const app = createApp(App)
-app.mount('#app')
-```
-
-### Auto-Instrumentation Features
-
-**1. HTTP Requests (Fetch/Axios)**
-- Automatically creates spans for all HTTP requests
-- Injects `traceparent` header for trace propagation
-- Records HTTP method, URL, status code
-- Tracks request/response timing
-
-**2. Document Load**
-- Page load performance metrics
-- Resource timing
-- DOM content loaded
-- First contentful paint
-
-**3. User Interactions**
-- Click events with target element
-- Form submissions
-- Custom event names
-
-**Example Trace Output:**
-```
-Span: GET /version
-├─ trace_id: a1b2c3d4e5f6g7h8
-├─ span_id: xyz123
-├─ attributes:
-│  ├─ http.method: GET
-│  ├─ http.url: http://backend.frontend.svc.cluster.local:8080/version
-│  ├─ http.status_code: 200
-│  └─ http.response_content_length: 156
-└─ duration: 45ms
-```
-
-## Backend Instrumentation
-
-### OpenTelemetry Go SDK Setup
-
-**Dependencies** (`backend/go.mod`):
-```go
-require (
-    github.com/uptrace/uptrace-go v1.38.0
-    go.opentelemetry.io/otel v1.38.0
-    go.opentelemetry.io/otel/sdk v1.38.0
-    go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0
-)
-```
-
-**Telemetry Initialization** (`backend/pkg/telemetry/telemetry.go`):
-```go
-package telemetry
-
-import (
-    "context"
-    "github.com/uptrace/uptrace-go/uptrace"
-    "go.opentelemetry.io/otel"
-    "go.opentelemetry.io/otel/attribute"
-    "go.opentelemetry.io/otel/trace"
-)
-
-func Init(ctx context.Context) func() {
-    uptrace.ConfigureOpentelemetry(
-        uptrace.WithServiceName("backend"),
-        uptrace.WithServiceVersion("v1.0.0"),
-        uptrace.WithDeploymentEnvironment("development"),
-    )
-
-    return func() {
-        uptrace.Shutdown(ctx)
-    }
-}
-
-func Tracer() trace.Tracer {
-    return otel.Tracer("backend")
-}
-```
-
-**HTTP Middleware** (`backend/pkg/telemetry/middleware.go`):
-```go
-package telemetry
-
-import (
-    "net/http"
-    "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-)
-
-func HTTPMiddleware(next http.Handler) http.Handler {
-    return otelhttp.NewHandler(next, "backend",
-        otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-            return r.Method + " " + r.URL.Path
-        }),
-    )
-}
-```
-
-**CORS for Trace Headers** (`backend/pkg/server/server.go`):
-```go
-func (s *Server) corsMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Access-Control-Allow-Origin", "*")
-        w.Header().Set("Access-Control-Allow-Headers", "traceparent, tracestate")
-        w.Header().Set("Access-Control-Expose-Headers", "traceparent, tracestate")
-
-        if r.Method == "OPTIONS" {
-            w.WriteHeader(http.StatusOK)
-            return
-        }
-
-        next.ServeHTTP(w, r)
-    })
-}
-```
-
-### Custom Instrumentation
-
-**Creating Custom Spans:**
-```go
-import "github.com/safeops-course/sre/backend/pkg/telemetry"
-
-func processOrder(ctx context.Context, orderID string) error {
-    ctx, span := telemetry.StartSpan(ctx, "processOrder")
-    defer span.End()
-
-    telemetry.SetAttributes(ctx,
-        attribute.String("order.id", orderID),
-        attribute.Int("order.items", 5),
-    )
-
-    // Business logic here...
-
-    telemetry.AddEvent(ctx, "order.processed")
-    return nil
-}
-```
-
-**Error Recording:**
-```go
-func handleRequest(ctx context.Context) error {
-    ctx, span := telemetry.StartSpan(ctx, "handleRequest")
-    defer span.End()
-
-    if err := doSomething(); err != nil {
-        telemetry.RecordError(ctx, err)
-        return err
-    }
-
-    return nil
-}
-```
-
-## Trace Propagation
-
-### W3C Trace Context Standard
-
-**traceparent Header Format:**
-```
-traceparent: 00-{trace-id}-{parent-span-id}-{trace-flags}
-
-Example:
-traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
-             │  │                                │                │
-             │  └─ trace_id (32 hex chars)      │                └─ sampled flag
-             │                                   └─ parent span_id (16 hex)
-             └─ version (00)
-```
-
-**Propagation Flow:**
-
-1. **Frontend generates trace:**
-   ```javascript
-   // OTel Web SDK automatically creates:
-   trace_id: 4bf92f3577b34da6a3ce929d0e0e4736
-   span_id: 00f067aa0ba902b7
    ```
-
-2. **HTTP request with header:**
-   ```
-   GET /version HTTP/1.1
    traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                │  │                                │                └─ flags (01 = sampled)
+                │  └─ trace id (32 hex)             └─ the caller's span id (16 hex)
+                └─ version
    ```
 
-3. **Backend extracts context:**
-   ```go
-   // otelhttp middleware automatically:
-   // - Extracts trace_id and parent span_id
-   // - Creates child span with same trace_id
-   // - Sets parent relationship
-   ```
+3. The request goes to `/api/` on the page's own origin; the frontend's nginx passes it to the backend.
+   Same origin: no CORS, nothing for the backend to allow.
+4. The backend reads `traceparent` and creates its span as a child, named after the route
+   (`GET /delay/{seconds}`), and one span per database query.
+5. Each side exports its own spans; Uptrace joins them by the trace id.
 
-4. **Result in Uptrace:**
-   ```
-   Trace ID: 4bf92f3577b34da6a3ce929d0e0e4736
-   ├─ Frontend: user.click (span: 00f067aa0ba902b7)
-   │  └─ Frontend: HTTP GET (span: a1b2c3d4e5f6g7h8)
-   │     └─ Backend: GET /version (span: 0123456789abcdef)
-   │        └─ Backend: database.query (span: fedcba9876543210)
-   ```
+Probes and metrics scrapes (`/healthz`, `/readyz`, `/livez`, `/metrics`) are traced on neither side:
+they would be most of the spans and say nothing about users.
 
-## Deployment Configuration
+## Checking It
 
-### Frontend Deployment
+On a running environment, open the site with the browser's developer tools:
 
-**Kubernetes Manifest** (`flux/apps/frontend/base/deployment.yaml`):
-```yaml
-env:
-  - name: VITE_API_URL
-    value: "http://backend.frontend.svc.cluster.local:8080"
-  - name: VITE_OTEL_COLLECTOR_URL
-    value: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
-  - name: ENVIRONMENT
-    value: "development"
-```
+1. The console shows `[Telemetry] OpenTelemetry initialized successfully`; `No Uptrace DSN or collector
+   URL configured: spans are not exported` means `VITE_UPTRACE_DSN` was empty.
+2. The network tab shows `POST https://api.uptrace.dev/v1/traces` answered with 200.
+3. A test request in the API Explorer appears in Uptrace as a `ui.api_explorer.test_endpoint` span, with
+   the backend's span and its database spans in the same trace.
 
-**Runtime Config Generation** (Dockerfile):
-```dockerfile
-RUN echo '#!/bin/sh' > /docker-entrypoint.d/40-generate-env-config.sh && \
-    echo 'cat <<EOF > /usr/share/nginx/html/config.js' >> /docker-entrypoint.d/40-generate-env-config.sh && \
-    echo 'window.__ENV__ = {' >> /docker-entrypoint.d/40-generate-env-config.sh && \
-    echo '  VITE_OTEL_COLLECTOR_URL: "${VITE_OTEL_COLLECTOR_URL}"' >> /docker-entrypoint.d/40-generate-env-config.sh && \
-    echo '};' >> /docker-entrypoint.d/40-generate-env-config.sh && \
-    echo 'EOF' >> /docker-entrypoint.d/40-generate-env-config.sh
-```
+From the cluster (the DSN itself is never printed):
 
-### Backend Deployment
-
-**Kubernetes Manifest** (`flux/apps/backend/base/deployment.yaml`):
-```yaml
-env:
-  - name: SERVICE_NAME
-    value: "backend"
-  - name: DEPLOYMENT_ENVIRONMENT
-    value: "${ENVIRONMENT}"
-  - name: UPTRACE_DSN
-    valueFrom:
-      secretKeyRef:
-        name: backend-secrets
-        key: uptrace-dsn
-```
-
-The backend exports straight to Uptrace over OTLP/HTTP ([`TELEMETRY.md` of the backend repository](https://github.com/safeops-course/backend/blob/main/TELEMETRY.md)), not through the
-collector.
-
-## Viewing Traces in Uptrace Cloud
-
-### 1. Access Uptrace Dashboard
-
-Visit: https://app.uptrace.dev
-
-Navigate to your project → Traces
-
-### 2. Trace Visualization
-
-**Flame Graph View:**
-```
-Timeline (horizontal axis = time)
-─────────────────────────────────────────────────────────────
-│ Frontend: document.load                    │ 250ms
-│  ├─ Frontend: fetch /version   │ 45ms
-│  │  └─ Backend: GET /version  │ 40ms
-│  │     ├─ Backend: parse request │ 2ms
-│  │     ├─ Backend: process       │ 35ms
-│  │     └─ Backend: format response │ 3ms
-─────────────────────────────────────────────────────────────
-```
-
-**Trace Details:**
-- **Trace ID**: Full distributed trace identifier
-- **Duration**: Total request time
-- **Spans**: Individual operations
-- **Attributes**: Custom metadata
-- **Events**: Logged events within spans
-- **Errors**: Recorded exceptions
-
-### 3. Filtering Traces
-
-**By Service:**
-```
-service.name = "frontend"
-service.name = "backend"
-```
-
-**By HTTP Status:**
-```
-http.status_code >= 500  # Server errors
-http.status_code = 404   # Not found
-```
-
-**By Duration:**
-```
-duration > 1s            # Slow requests
-duration > 100ms         # Moderate latency
-```
-
-**By Custom Attribute:**
-```
-order.id = "12345"
-user.id = "abc"
-```
-
-### 4. Common Queries
-
-**Find slow requests:**
-```
-service.name = "backend" AND duration > 500ms
-```
-
-**Find failed requests:**
-```
-http.status_code >= 500
-```
-
-**Find requests from specific user:**
-```
-user.id = "user123"
-```
-
-**Find database queries:**
-```
-span.name LIKE "%database%"
-```
-
-## Performance Optimization
-
-### Sampling Configuration
-
-**Frontend (reduce trace volume):**
-```javascript
-import { ParentBasedSampler, TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-web'
-
-const provider = new WebTracerProvider({
-  resource,
-  sampler: new ParentBasedSampler({
-    root: new TraceIdRatioBasedSampler(0.1), // Sample 10% of traces
-  }),
-})
-```
-
-**Backend (tail-based sampling):**
-```yaml
-# OTel Collector config
-processors:
-  tail_sampling:
-    decision_wait: 10s
-    policies:
-      - name: error-traces
-        type: status_code
-        status_code: { status_codes: [ERROR] }
-      - name: slow-traces
-        type: latency
-        latency: { threshold_ms: 1000 }
-      - name: sample-10-percent
-        type: probabilistic
-        probabilistic: { sampling_percentage: 10 }
-```
-
-### Batch Processing
-
-**Frontend:**
-```javascript
-provider.addSpanProcessor(new BatchSpanProcessor(exporter, {
-  maxQueueSize: 100,
-  maxExportBatchSize: 10,
-  scheduledDelayMillis: 500,
-}))
-```
-
-**Backend:**
-Already configured via `uptrace.ConfigureOpentelemetry()`.
-
-## Troubleshooting
-
-### No Traces Appearing
-
-**Check Frontend Console:**
-```javascript
-// Should see:
-[Telemetry] Initializing OpenTelemetry...
-[Telemetry] OpenTelemetry initialized successfully
-```
-
-**Check Network Tab:**
-```
-POST http://otel-collector.observability:4318/v1/traces
-Status: 200 OK
-```
-
-**Check OTel Collector Logs:**
 ```bash
-kubectl -n observability logs -l app=otel-collector --tail=100
-
-# Should see:
-2025-10-10T10:15:30.123Z info Traces received {"#spans": 5}
+# the frontend's runtime config holds a DSN: 1 = yes, 0 = empty
+kubectl -n develop exec deploy/frontend -- grep -c 'VITE_UPTRACE_DSN: "https://' /tmp/config.js
+# the backend exports: "OpenTelemetry initialized: service=backend version=... env=..."
+kubectl -n develop logs deploy/backend -c backend | grep -m1 OpenTelemetry
 ```
 
-**Check Backend Logs:**
-```bash
-kubectl -n backend logs -l app=backend --tail=100
+When spans do not arrive:
 
-# Should see:
-OpenTelemetry initialized: service=backend version=v1.0.0 env=development
-```
+- **Browser**: a console warning `... is not allowed by the CSP ...; spans are not exported` - the image
+  allows `connect-src` only to its own origin and `https://api.uptrace.dev`.
+- **Backend**: `OpenTelemetry running without Uptrace export: UPTRACE_DSN is not set`, or
+  `OpenTelemetry error: ...` lines; whether the namespace may reach Uptrace at all (NetworkPolicy
+  egress): `docs/observability/uptrace-cloud.md`, *Backend Not Sending Telemetry*.
+- **Two traces instead of one**: the request's URL did not get `traceparent` - the API was called on an
+  origin the frontend does not propagate to.
 
-### Traces Not Correlated
+## Writing Good Spans
 
-**Verify CORS Headers:**
-```bash
-curl -I -X OPTIONS http://backend:8080/version \
-  -H "Origin: http://frontend:8080" \
-  -H "Access-Control-Request-Headers: traceparent"
-
-# Should include:
-Access-Control-Allow-Headers: traceparent, tracestate
-```
-
-**Verify traceparent Header:**
-```javascript
-// In browser console:
-fetch('http://backend:8080/version')
-  .then(r => console.log(r.headers.get('traceparent')))
-
-// Should output:
-00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
-```
-
-### High Cardinality Issues
-
-**Problem:** Too many unique span names
-
-**Solution:** Use span name formatter
-```go
-otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-    // Instead of: GET /users/123/orders/456
-    // Use: GET /users/{id}/orders/{id}
-    return r.Method + " " + routePattern(r)
-})
-```
-
-## Best Practices
-
-### 1. Span Naming
-
-**❌ Bad:**
-```
-span: http_request
-span: database
-span: process
-```
-
-**✅ Good:**
-```
-span: GET /api/users/{id}
-span: database.users.select
-span: order.process.payment
-```
-
-### 2. Attributes
-
-**❌ Bad:**
-```go
-span.SetAttribute("data", fmt.Sprintf("%+v", complexObject))
-```
-
-**✅ Good:**
-```go
-span.SetAttributes(
-    attribute.String("user.id", user.ID),
-    attribute.Int("order.items.count", len(items)),
-    attribute.String("payment.method", "credit_card"),
-)
-```
-
-### 3. Error Handling
-
-**❌ Bad:**
-```go
-if err != nil {
-    return err
-}
-```
-
-**✅ Good:**
-```go
-if err != nil {
-    telemetry.RecordError(ctx, err)
-    span.SetStatus(codes.Error, err.Error())
-    return err
-}
-```
-
-### 4. Sensitive Data
-
-**❌ Never log:**
-- Passwords
-- API keys
-- Credit card numbers
-- PII (email, phone, SSN)
-
-**✅ Use masked values:**
-```go
-span.SetAttributes(
-    attribute.String("email", maskEmail(user.Email)), // "u***@example.com"
-    attribute.String("card.last4", card.Last4),       // "4242"
-)
-```
-
-## Example: Complete Trace
-
-**User Story:** User clicks "Get Version" button
-
-**1. Frontend Click:**
-```
-Span: user.interaction
-├─ trace_id: abc123
-├─ span_id: span001
-├─ attributes:
-│  ├─ event.type: click
-│  └─ target.element: button#get-version
-└─ duration: 1ms
-```
-
-**2. Frontend HTTP Request:**
-```
-Span: GET /version
-├─ trace_id: abc123
-├─ span_id: span002
-├─ parent_id: span001
-├─ attributes:
-│  ├─ http.method: GET
-│  ├─ http.url: http://backend:8080/version
-│  └─ http.status_code: 200
-└─ duration: 45ms
-```
-
-**3. Backend Handler:**
-```
-Span: GET /version
-├─ trace_id: abc123
-├─ span_id: span003
-├─ parent_id: span002
-├─ attributes:
-│  ├─ http.method: GET
-│  ├─ http.route: /version
-│  └─ http.status_code: 200
-└─ duration: 40ms
-```
-
-**Result in Uptrace:**
-```
-Trace ID: abc123 (Total: 46ms)
-├─ [Frontend] user.interaction (1ms)
-│  └─ [Frontend] GET /version (45ms)
-│     └─ [Backend] GET /version (40ms)
-```
-
-## References
-
-- **W3C Trace Context**: https://www.w3.org/TR/trace-context/
-- **OpenTelemetry Docs**: https://opentelemetry.io/docs/
-- **Uptrace Documentation**: https://uptrace.dev/get/get-started.html
-- **OTel Web SDK**: https://opentelemetry.io/docs/languages/js/
-- **OTel Go SDK**: https://uptrace.dev/get/opentelemetry-go
-
-## Next Steps
-
-1. ✅ Distributed tracing configured
-2. 🔲 Add custom spans for business logic
-3. 🔲 Configure sampling for production
-4. 🔲 Create dashboards in Uptrace
-5. 🔲 Set up alerts for slow traces
-6. 🔲 Implement SLO tracking
+- **Bounded names**: the route pattern (`GET /users/{id}`), never the raw path (`GET /users/123`) - each
+  distinct name is a group of its own in Uptrace.
+- **Attributes, not text**: `order.items.count = 3`, not a formatted dump of an object.
+- **Errors on the span**: record the exception and set the status to ERROR where it is handled, so the
+  trace shows where it failed.
+- **No secrets or personal data**: no passwords, tokens or API keys; no e-mail addresses or phone
+  numbers - spans are kept and read by more people than the database.
