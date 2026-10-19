@@ -270,7 +270,7 @@ The Uptrace DSN has three readers, and each gets it its own way:
 
 | Reader | Where the DSN comes from | Picks up a new one |
 |---|---|---|
-| backend (each environment) | Secret `backend-secrets` (`uptrace-dsn`, `uptrace-headers`): `flux/secrets/<env>/backend-secrets.yaml` on a cloud cluster, Terraform (`uptrace_dsn`) on kind | the `secrets-rotated` annotation ([Restarting the Readers](#restarting-the-readers)) |
+| backend (each environment) | Secret `backend-secrets` (`uptrace-dsn`): `flux/secrets/<env>/backend-secrets.yaml` on a cloud cluster, Terraform (`uptrace_dsn`) on kind | the `secrets-rotated` annotation ([Restarting the Readers](#restarting-the-readers)) |
 | frontend (each environment) | the same Secret, key `uptrace-dsn` - handed to the browser, which sends its traces with it (ingest only, so public by design) | the `secrets-rotated` annotation in `flux/apps/frontend/overlays/<env>/patches/deployment.yaml` |
 | OpenTelemetry collectors (`otel-collector`, `otel-events`) | Terraform variable `uptrace_dsn` → Secret `flux-system/cluster-secrets` → Flux substitutes it into both HelmReleases | by itself: a changed value changes the pod template, and Flux rolls the pods within one interval of the `opentelemetry-collector` Kustomization (10 minutes). Seen on kind on 2026-10-18 - the roll only: on kind the collectors print to their own log, not to Uptrace |
 

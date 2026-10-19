@@ -147,11 +147,6 @@ spec:
             secretKeyRef:
               name: backend-secrets
               key: uptrace-dsn
-        - name: OTEL_EXPORTER_OTLP_HEADERS
-          valueFrom:
-            secretKeyRef:
-              name: backend-secrets
-              key: uptrace-headers
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:

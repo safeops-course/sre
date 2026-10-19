@@ -3,7 +3,7 @@
 # On Hetzner these come from SOPS-encrypted manifests under flux/secrets/, keyed
 # to the platform's age key. A learner does not have that key, so for the local
 # profile Terraform generates equivalent secrets once per cluster:
-#   - backend-secrets   (jwt-secret, uptrace-dsn, uptrace-headers) in each env namespace
+#   - backend-secrets   (jwt-secret, uptrace-dsn)                  in each env namespace
 #   - app-postgres-app  (CNPG owner credentials)                   in each env namespace
 #   - cnpg-backup-s3    (MinIO instead of Hetzner Object Storage) in each env namespace
 #   - minio-credentials (MinIO root user)                          in the minio namespace
@@ -60,9 +60,8 @@ resource "kubernetes_secret_v1" "local_backend_secrets" {
   type = "Opaque"
 
   data = {
-    "jwt-secret"      = random_password.jwt_secret[each.key].result
-    "uptrace-dsn"     = var.uptrace_dsn
-    "uptrace-headers" = ""
+    "jwt-secret"  = random_password.jwt_secret[each.key].result
+    "uptrace-dsn" = var.uptrace_dsn
   }
 }
 

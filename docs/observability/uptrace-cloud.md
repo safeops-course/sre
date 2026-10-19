@@ -61,9 +61,8 @@ https://<token>@api.uptrace.dev?grpc=4317
 
 ### 2. Give the DSN to the Backend and the Collectors
 
-The backend reads the DSN from the Secret `backend-secrets` in its namespace (key `uptrace-dsn`; the Deployment also
-maps key `uptrace-headers` to `OTEL_EXPORTER_OTLP_HEADERS`, which the backend ignores - it sends only the
-`uptrace-dsn` header - so it may stay empty). On a cloud cluster it is a
+The backend reads the DSN from the Secret `backend-secrets` in its namespace (key `uptrace-dsn`; the backend sends it
+as the `uptrace-dsn` header). On a cloud cluster it is a
 SOPS file per environment, `flux/secrets/<env>/backend-secrets.yaml`:
 
 ```bash
