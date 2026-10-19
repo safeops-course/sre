@@ -48,17 +48,17 @@ environment's namespace (`docs/observability/uptrace-cloud.md`, section 2; rotat
 
 | | Frontend (`flux/apps/frontend/base/deployment.yaml`) | Backend (`flux/apps/backend/base/deployment.yaml`) |
 |---|---|---|
-| Where spans go | `VITE_UPTRACE_DSN` | `UPTRACE_DSN` (the Deployment also sets `OTEL_EXPORTER_OTLP_HEADERS` from the key `uptrace-headers`; the code ignores it and sends only the `uptrace-dsn` header) |
+| Where spans go | `VITE_UPTRACE_DSN` | `UPTRACE_DSN` (the code sends it as the `uptrace-dsn` header) |
 | `service.name` | `frontend` (fixed in the code) | `SERVICE_NAME` (`backend`) |
 | `service.version` | the image's own tag | the version baked into the image (the same as `/version`) |
 | `deployment.environment.name` | `ENVIRONMENT` | `DEPLOYMENT_ENVIRONMENT` |
-| Cluster, namespace, pod | - (see below) | `OTEL_RESOURCE_ATTRIBUTES`: `k8s.cluster.name`, `k8s.namespace.name`, `k8s.pod.name` |
+| Cluster, namespace, pod | `CLUSTER_NAME` → `k8s.cluster.name` (images built after frontend#27) | `OTEL_RESOURCE_ATTRIBUTES`: `k8s.cluster.name`, `k8s.namespace.name`, `k8s.pod.name` |
 
 The frontend's container writes its runtime settings into `/tmp/config.js` when it starts; nginx serves
 that file as `/config.js`, and the browser reads them from there - so the DSN reaches every visitor. That is by design: the DSN can only send data
-into the Uptrace project, not read it. The Deployment also sets `CLUSTER_NAME`, but the image does not
-write it into the file yet, so frontend spans carry no `k8s.cluster.name` (a fix in the frontend
-repository).
+into the Uptrace project, not read it. `CLUSTER_NAME` from the Deployment becomes the browser spans'
+`k8s.cluster.name`, the same attribute the backend sends (in images built after frontend#27; older ones
+did not write it into the file).
 
 ## One Trace from the Click to the Database
 

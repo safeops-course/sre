@@ -59,6 +59,9 @@ resource "kubernetes_secret_v1" "local_backend_secrets" {
 
   type = "Opaque"
 
+  # uptrace-headers: read by nothing any more, but a backend pod template still on an older main
+  # references it - removed with the same key in flux/secrets/*/backend-secrets.yaml, once no
+  # running template does (an apply ahead of Flux would fail such a pod's start).
   data = {
     "jwt-secret"      = random_password.jwt_secret[each.key].result
     "uptrace-dsn"     = var.uptrace_dsn
