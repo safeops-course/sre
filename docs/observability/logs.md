@@ -23,7 +23,7 @@ The DaemonSet skips its own log but reads `otel-events`' - like any other pod's.
 |---|---|---|
 | Services outside pods: kubelet, containerd, and on k3s the control plane (API server, scheduler, controller manager, etcd run inside the `k3s` service) | They write to journald, not to `/var/log/pods`. Reading journald needs a collector running as root with the node's root filesystem mounted - not taken on yet | `journalctl -u k3s` / `-u kubelet` on the node |
 | The control plane of a managed cluster (GKE, EKS) | It runs at the provider, not on our nodes | The provider's logging (Cloud Logging on GKE) |
-| The API server's audit log (who changed what) | Not turned on | - |
+| The API server's audit log (who changed what) | On k3s it is written on each control plane node (`k3s_audit_log`, rules in `infra/terraform/hcloud_cluster/audit-policy.yaml`: every change, every Secret access, exec and port-forward; no request bodies), but not shipped yet. A managed cluster has the provider's own (always on for GKE, turned on per cluster for EKS) | k3s: `/var/log/k3s-audit/audit.log` on the node; a managed cluster: the provider's logging |
 
 On kind the control plane runs as static pods, so its logs are among the pod logs; on k3s it does not.
 

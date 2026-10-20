@@ -213,6 +213,14 @@ variable "auto_upgrade_os" {
   default     = false
 }
 
+# ─── Audit log ─────────────────────────────────────────────────────────────
+
+variable "k3s_audit_log" {
+  description = "Write the API server's audit log (who changed what) on the control plane nodes, with the rules in audit-policy.yaml. A change of it or of the policy restarts k3s on all control plane nodes at once: the API is down until they are back (workloads keep running). On a running cluster apply -target=module.kube_hetzner.terraform_data.audit_policy first - kube-hetzner does not place the policy file before the flag that names it."
+  type        = bool
+  default     = true
+}
+
 # ─── Kured (Kubernetes Reboot Daemon) ───────────────────────────────────────
 
 variable "kured_enabled" {

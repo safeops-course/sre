@@ -140,6 +140,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: k3s-audit-policy-test
+        name: The k3s audit policy loads in the pinned k3s and logs what it promises (Docker, network)
+        entry: tests/k3s-audit-policy.test.sh
+        language: script
+        files: ^(infra/terraform/hcloud_cluster/audit-policy\.yaml|infra/terraform/hcloud_cluster/terraform\.tfvars|tests/k3s-audit-policy\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: tool-versions-test
         name: The tests run the Kyverno and Prometheus versions the cluster runs (helm show)
         entry: tests/tool-versions.test.sh
