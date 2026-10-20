@@ -10,9 +10,10 @@ metadata:
 spec:
   # Both families or no Service at all: on a single-stack cluster this fails loudly, instead of quietly
   # leaving IPv6 out. The platform runs dual-stack where the provider has IPv6 by default; a provider
-  # without it patches PreferDualStack in its profile, as a written exception (docs/providers.md).
-  ipFamilyPolicy: RequireDualStack
-  ipFamilies: [IPv4, IPv6]
+  # without it sets cluster-config service_ip_family_policy to PreferDualStack in its Terraform, as a
+  # written exception (docs/providers.md). No ipFamilies list: RequireDualStack alone asks for both
+  # (the cluster's primary family first), and a listed IPv6 would be refused where there is none.
+  ipFamilyPolicy: ${service_ip_family_policy:=RequireDualStack}
   type: ClusterIP
   sessionAffinity: None
   ports:

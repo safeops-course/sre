@@ -38,12 +38,13 @@ versions: ## Show pinned CLI versions
 # only that saved plan and refuses one older than TF_MAX_AGE minutes.
 KIND_DIR   := infra/terraform/kind_cluster
 HCLOUD_DIR := infra/terraform/hcloud_cluster
-# The cloud modules keep their logic in their own Makefile; the gcp-*, gke-* and aws-* targets below only
+# The cloud modules keep their logic in their own Makefile; the gcp-*, gke-*, aws-* and eks-* targets below only
 # call it, so `make help` lists every provider. Their one-time targets (bootstrap, delete-default-*) stay
 # there: make -C <dir> help.
 GCP_DIR    := infra/terraform/gcp_foundation
 GKE_DIR    := infra/terraform/gke_cluster
 AWS_DIR    := infra/terraform/aws_foundation
+EKS_DIR    := infra/terraform/eks_cluster
 TF_MAX_AGE ?= 60
 GUARD_TF   := scripts/guard-terraform-plan.sh
 
@@ -60,6 +61,8 @@ tf: ## List the Terraform modules and how to run them
 	@echo "  aws     $(AWS_DIR)   AWS foundation            once, by a person: make aws-plan | aws-apply | aws-verify"
 	@echo "                                                     (cluster IAM roles, GitHub OIDC deployer, budget, account defaults;"
 	@echo "                                                      first setup: make -C $(AWS_DIR) bootstrap)"
+	@echo "  eks     $(EKS_DIR)      EKS cluster (Cloud)       per test cycle: make eks-plan | eks-apply | eks-destroy | eks-leftovers"
+	@echo "                                                     (destroy ends with leftovers: nothing billable may stay)"
 	@echo "  lab     infra/terraform/state-lab       Chapter 02 state lab      run by hand, as the lab says"
 	@echo "Check without credentials: make validate"
 
@@ -106,6 +109,15 @@ aws-apply: ## AWS foundation: apply exactly the saved plan
 	@$(MAKE) --no-print-directory -C $(AWS_DIR) apply
 aws-verify: ## AWS foundation: no drift and no default VPC
 	@$(MAKE) --no-print-directory -C $(AWS_DIR) verify
+
+eks-plan: ## EKS: plan and save it (read it before eks-apply)
+	@$(MAKE) --no-print-directory -C $(EKS_DIR) plan
+eks-apply: ## EKS: apply exactly the saved plan (costs money - destroy after)
+	@$(MAKE) --no-print-directory -C $(EKS_DIR) apply
+eks-destroy: ## EKS: destroy the cluster and its network, check nothing is left
+	@$(MAKE) --no-print-directory -C $(EKS_DIR) destroy
+eks-leftovers: ## EKS: list billable leftovers in the region (exit 1 when any)
+	@$(MAKE) --no-print-directory -C $(EKS_DIR) leftovers
 
 hcloud-drift: ## Hetzner: does the cloud match the code? (0 = yes, 2 = drift, 1 = error)
 	@$(MAKE) --no-print-directory -C $(HCLOUD_DIR) init >/dev/null

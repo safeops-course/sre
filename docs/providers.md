@@ -2,8 +2,8 @@
 
 The platform runs the same way on every provider: kind locally, Hetzner, GKE - and, by the same
 pattern, AWS, Azure or any other. A new provider is a checklist, not a new design. GKE
-(`infra/terraform/gcp_foundation`, `infra/terraform/gke_cluster`, `docs/gcp.md`) is the most recent
-full example to copy from; AWS (`infra/terraform/aws_foundation`, `docs/aws.md`) is on its way.
+(`infra/terraform/gcp_foundation`, `infra/terraform/gke_cluster`, `docs/gcp.md`) and AWS
+(`infra/terraform/aws_foundation`, `infra/terraform/eks_cluster`, `docs/aws.md`) are full examples to copy from.
 
 ## Terraform
 
@@ -44,10 +44,10 @@ full example to copy from; AWS (`infra/terraform/aws_foundation`, `docs/aws.md`)
   (C5); the module writes its pod IPv6 range to cluster-config `cluster_ipv6_range`, which
   `allow-backend-egress-https` cuts out of `::/0` (on GKE it is global, not in fc00::/7). Every app pod answers on
   both of its addresses (`make smoke-test`: an image that listens on IPv4 only fails there, not as a 502 later).
-  Without it by default (EKS gives a cluster IPv4 or IPv6, not both), the profile patches the app and Traefik
-  Services (`ipFamilyPolicy: PreferDualStack` and no `ipFamilies` - a listed IPv6 would be refused) - a written
-  exception - and the module writes `ip_stack = "ipv4"` to cluster-config (`"dual"` everywhere else) - conformance C13
-  checks the promise.
+  Without it by default (EKS gives a cluster IPv4 or IPv6, not both), the module writes `ip_stack = "ipv4"` and
+  `service_ip_family_policy = "PreferDualStack"` to cluster-config (`"dual"` and the default `RequireDualStack`
+  everywhere else): the apps' Services read the policy, the profile patches Traefik's Service the same way (no
+  `ipFamilies` - a listed IPv6 would be refused) - a written exception, and conformance C13 checks the promise.
 
 ## Proof
 

@@ -25,3 +25,8 @@ output "aws_lbc_role_arn" {
   description = "The AWS Load Balancer Controller's Pod Identity role."
   value       = module.aws_lbc_role.iam_role_arn
 }
+
+output "vpc_flow_logs_role_arn" {
+  description = "The role VPC Flow Logs write to CloudWatch Logs with (cluster module, var.flow_logs)."
+  value       = aws_iam_role.vpc_flow_logs.arn
+}
