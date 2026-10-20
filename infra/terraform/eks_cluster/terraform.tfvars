@@ -9,7 +9,8 @@ availability_zones = ["eu-central-1a", "eu-central-1b"]
 # The platform's minor (kind and Hetzner pin 1.36.4). EKS picks the patch.
 kubernetes_version = "1.36"
 
-# Overlaps neither the Hetzner (10.0.0.0/8 from kube-hetzner's 10.0.0.0/16), GKE (10.100-10.111) nor kind ranges.
+# Clear of GKE's ranges (10.100-10.111) and kind's. Inside Hetzner's 10.0.0.0/8 (kube-hetzner's network): the
+# clusters never run at the same time and are never connected - peering them would need other ranges.
 vpc_cidr = "10.112.0.0/16"
 
 # One NAT gateway ONLY because this cluster lives for a test cycle: a second one costs as much again,

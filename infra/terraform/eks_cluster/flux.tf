@@ -55,7 +55,8 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     # (docs/providers.md) - profiles/eks asks for PreferDualStack, and conformance C13 checks this promise.
     ip_stack = "ipv4"
     # The apps' Services take the one family there is instead of requiring two (flux/apps/*/base/service.yaml);
-    # Traefik's Service gets the same from profiles/eks.
+    # Traefik's Service gets the same from profiles/eks. Only with ip_stack "ipv4": conformance C13 fails a
+    # dual-stack cluster whose app Services do not require both families.
     service_ip_family_policy = "PreferDualStack"
     cluster_name             = var.cluster_name
     image_registry           = var.image_registry
@@ -170,8 +171,9 @@ resource "kubernetes_secret_v1" "postgres_app_production" {
   depends_on = [kubernetes_namespace_v1.bootstrap]
 }
 
-# The default StorageClass: gp3 (EKS creates none of its own), encrypted, created in the zone of the
-# pod that first uses it (WaitForFirstConsumer - a disk is zonal), deleted with its claim.
+# The default StorageClass: gp3, encrypted, created in the zone of the pod that first uses it
+# (WaitForFirstConsumer - a disk is zonal), deleted with its claim. EKS still creates its in-tree gp2
+# class, but no longer marks it default (since 1.30); nothing here names it.
 # https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html
 resource "kubernetes_storage_class_v1" "gp3" {
   metadata {
@@ -305,7 +307,11 @@ resource "terraform_data" "flux_pre_destroy" {
     command     = "\"${path.module}/../scripts/flux-pre-destroy.sh\" \"${self.input.kubeconfig_path}\" \"${self.input.namespaces}\""
   }
 
+  # module.vpc: the NAT gateway and the private routes stay until the hook is done - the controllers reach
+  # the AWS APIs only through them (the nodes are private; only S3 has an endpoint in the VPC).
   depends_on = [
+    module.vpc,
+    aws_vpc_endpoint.s3,
     module.eks,
     helm_release.aws_lbc,
     aws_eks_pod_identity_association.aws_lbc,

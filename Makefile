@@ -18,6 +18,7 @@ FLUX_VERSION := 2.9.6
 	kind-plan kind-apply kind-drift kind-destroy \
 	hcloud-plan hcloud-apply hcloud-drift hcloud-destroy \
 	gcp-plan gcp-apply gcp-verify gke-plan gke-apply gke-destroy gke-leftovers aws-plan aws-apply aws-verify \
+	eks-plan eks-apply eks-destroy eks-leftovers \
 	terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
 
 help: ## List available targets

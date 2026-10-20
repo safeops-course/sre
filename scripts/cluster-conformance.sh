@@ -406,6 +406,9 @@ skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scr
 # On "ipv4" a node must not have an IPv6 pod range; one without pod ranges is fine - a CNI that hands out
 # pod addresses itself (EKS's VPC CNI) leaves spec.podCIDRs empty.
 v6_nodes="$(while read -r name cidrs; do case "$cidrs" in *:*) echo "$name" ;; esac; done <<<"$node_cidrs")"
+# The apps' Services take their policy from cluster-config service_ip_family_policy (RequireDualStack unless a
+# module sets it): on a dual-stack cluster none may ask for less, or IPv6 goes missing without an error.
+weak_svcs="$(k get services -A -o json | jq -r '.items[] | select((.metadata.namespace | test("^(develop|staging|production)$")) and (.metadata.name == "frontend" or .metadata.name == "backend") and .spec.ipFamilyPolicy != "RequireDualStack") | "\(.metadata.namespace)/\(.metadata.name)"')" || weak_svcs="(could not read the Services)"
 if [ -n "$ip_stack_note" ]; then
   fail C13 "address families - $ip_stack_note"
 elif [ "$ip_stack" = ipv4 ]; then
@@ -424,6 +427,8 @@ elif [ -z "$ip_stack" ]; then
   fail C13 "cluster-config has no ip_stack - the module's Terraform writes it (a cluster from before it: terraform apply once)"
 elif [ "$ip_stack" != dual ]; then
   fail C13 "cluster-config ip_stack '${ip_stack}' is not supported - dual or ipv4"
+elif [ "$dual" = true ] && [ -n "$weak_svcs" ]; then
+  fail C13 "dual-stack, but app Services do not require both families: $(tr '\n' ' ' <<<"$weak_svcs")- cluster-config service_ip_family_policy is only for ip_stack ipv4"
 elif [ "$dual" = true ]; then
   pass C13 "dual-stack: every node has an IPv4 and an IPv6 pod range; a Service gets $svc_ips"
 elif [ -z "$node_cidrs" ]; then

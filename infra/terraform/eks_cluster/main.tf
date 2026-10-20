@@ -61,7 +61,7 @@ locals {
 # load balancer goes.
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 6.7"
+  version = "6.7.3" # exact: Checkov does not scan registry modules - a new release must be a reviewed change here
 
   name = var.cluster_name
   cidr = var.vpc_cidr
@@ -109,7 +109,7 @@ resource "aws_vpc_endpoint" "s3" {
 # ─── Cluster ──────────────────────────────────────────────────────────────────
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 21.29"
+  version = "21.29.0" # exact, as the VPC module
 
   name               = var.cluster_name
   kubernetes_version = var.kubernetes_version
@@ -147,7 +147,9 @@ module "eks" {
   cloudwatch_log_group_retention_in_days = var.log_retention_days
 
   # The VPC CNI and the Pod Identity agent before the nodes: a node that joins without a CNI never gets
-  # Ready, and the EBS CSI driver needs the agent for its credentials.
+  # Ready, and the EBS CSI driver needs the agent for its credentials. Versions: the newest build AWS
+  # publishes for the cluster's Kubernetes version (the module's most_recent), picked when a cycle creates
+  # the cluster - as GKE's release channel picks its components.
   addons = {
     vpc-cni = {
       before_compute = true

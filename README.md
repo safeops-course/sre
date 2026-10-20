@@ -47,6 +47,7 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 - `infra/terraform/gcp_foundation/` -- Google Cloud foundation (APIs, service accounts, Workload Identity), applied once
 - `infra/terraform/aws_foundation/` -- AWS foundation (cluster IAM roles, GitHub OIDC deployer, budget, account defaults), applied once
 - `infra/terraform/gke_cluster/` -- GKE cluster per test cycle (created, tested, destroyed); `docs/providers.md` lists what every provider needs
+- `infra/terraform/eks_cluster/` -- EKS cluster per test cycle, on the AWS foundation's roles (`docs/aws.md`)
 - `flux/` -- FluxCD GitOps configuration (bootstrap, infrastructure, apps, secrets)
 - `config/` -- shared configuration files
 - `tests/` -- infrastructure and system test suites

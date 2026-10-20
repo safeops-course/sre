@@ -79,6 +79,9 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 
 # Terraform asks before it destroys; AUTO_APPROVE=1 skips the question (CI, or a confirmed teardown).
 # The order mirrors gke_cluster's destroy:
+#   0. kubeconfig.yaml, if this checkout has none (it is git-ignored: a destroy from another checkout than
+#      the apply's) - the hook below reaches the cluster only through it; Terraform writes the local file
+#      alone, nothing in AWS changes;
 #   1. the pre-destroy hook alone (flux.tf: volumes, the NLB, Flux) while the cluster, the EBS CSI driver
 #      and the Load Balancer Controller run;
 #   2. the Kubernetes objects, the controller's Helm release and the Flux null_resources leave the
@@ -87,6 +90,8 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #   3. terraform destroy;
 #   4. leftovers, whatever the destroy returned; a failed destroy keeps its own exit status.
 destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROVE=1 does not), then look for leftovers
+	@for t in aws kubectl jq; do command -v $$t >/dev/null || echo "WARNING: no $$t - the pre-destroy hook cannot clean the cluster (NLB, volumes); check make leftovers" >&2; done
+	@test -f kubeconfig.yaml || $(TF) apply -target=local_file.kubeconfig -auto-approve -input=false >/dev/null || echo "WARNING: could not write kubeconfig.yaml - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2
 	@$(TF) destroy -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|helm_release\.|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \

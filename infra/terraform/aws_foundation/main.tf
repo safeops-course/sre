@@ -140,9 +140,14 @@ resource "aws_iam_role" "vpc_flow_logs" {
 }
 
 data "aws_iam_policy_document" "vpc_flow_logs" {
+  # checkov:skip=CKV_AWS_356:logs:DescribeLogGroups has no resource ARN - read-only, listed in AWS's flow-logs role
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
     resources = ["arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/vpc-flow-log/*"]
+  }
+  statement {
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
   }
 }
 
