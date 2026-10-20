@@ -1,0 +1,43 @@
+# Audit policy of the k3s API server (k3s_audit_log in variables.tf; kube-hetzner audit_policy_config).
+#
+# The API server writes one line per request that a rule below keeps: who (user, groups, source IP),
+# what (verb, resource, namespace, name) and the result (status code). It answers "who deleted this
+# Secret at 14:03" - pod logs and Events do not know who acted.
+#
+# The first matching rule wins. Levels: None = not logged, Metadata = who/what/result without the
+# request or response body. Nothing here logs a body: a body of a Secret (or of a resource that
+# embeds one) would put its value into the log.
+#
+# Written by kube-hetzner to /var/log/k3s-audit/audit.log on each control plane node (rotation:
+# 30 days, 10 files of 100 MB - the module's defaults). Not shipped to Uptrace: read it on the node.
+# https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+apiVersion: audit.k8s.io/v1
+kind: Policy
+# RequestReceived is a second line for every request, before its result is known.
+omitStages:
+  - RequestReceived
+rules:
+  # Credentials: every access, reads included - who read a Secret matters as much as who changed it.
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["secrets", "serviceaccounts/token"]
+
+  # Noise: probes and metrics scrapes, leader-election leases (renewed every few seconds), Events.
+  - level: None
+    nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/version", "/metrics"]
+  - level: None
+    resources:
+      - group: coordination.k8s.io
+        resources: ["leases"]
+      - group: ""
+        resources: ["events"]
+      - group: events.k8s.io
+        resources: ["events"]
+
+  # Reads of everything else: controllers list and watch all the time.
+  - level: None
+    verbs: ["get", "list", "watch"]
+
+  # Every change: create, update, patch, delete, plus exec/port-forward (a create on pods/exec).
+  - level: Metadata

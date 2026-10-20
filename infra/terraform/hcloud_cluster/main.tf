@@ -216,6 +216,10 @@ module "kube_hetzner" {
   # OIDC (Dex) for kubectl and Headlamp - applied in place (k3s restart, no node recreation)
   authentication_config = local.oidc_authentication_config
 
+  # API server audit log: kube-hetzner copies the policy to the control plane nodes and adds the
+  # audit-log flags; "" turns it off. See audit-policy.yaml.
+  audit_policy_config = var.k3s_audit_log ? file("${path.module}/audit-policy.yaml") : ""
+
   # Extra k3s server flags (escape hatch; OIDC goes through authentication_config above)
   control_plane_exec_args = var.k3s_exec_server_args
 }
