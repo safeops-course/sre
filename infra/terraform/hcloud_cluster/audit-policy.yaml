@@ -1,15 +1,21 @@
+---
 # Audit policy of the k3s API server (k3s_audit_log in variables.tf; kube-hetzner audit_policy_config).
 #
 # The API server writes one line per request that a rule below keeps: who (user, groups, source IP),
-# what (verb, resource, namespace, name) and the result (status code). It answers "who deleted this
-# Secret at 14:03" - pod logs and Events do not know who acted.
+# what (verb, resource, namespace, name) and the result (status code). It answers: who deleted this
+# Secret at 14:03? Pod logs and Events do not know who acted.
 #
 # The first matching rule wins. Levels: None = not logged, Metadata = who/what/result without the
 # request or response body. Nothing here logs a body: a body of a Secret (or of a resource that
 # embeds one) would put its value into the log.
 #
-# Written by kube-hetzner to /var/log/k3s-audit/audit.log on each control plane node (rotation:
-# 30 days, 10 files of 100 MB - the module's defaults). Not shipped to Uptrace: read it on the node.
+# NO double quotes, dollar signs or backticks in this file: kube-hetzner 3.2.1 pastes it unescaped into
+# a double-quoted string of a root shell script on the control plane nodes. Empty strings are written ''.
+# tests/k3s-audit-policy.test.sh checks that, and loads the policy into the k3s version the cluster runs.
+#
+# Written by kube-hetzner to /var/log/k3s-audit/audit.log on each control plane node, rotated at
+# 100 MB, at most 10 files, none older than 30 days (the module's defaults) - whichever limit comes
+# first. Not shipped to Uptrace: read it on the node.
 # https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
 apiVersion: audit.k8s.io/v1
 kind: Policy
@@ -20,24 +26,41 @@ rules:
   # Credentials: every access, reads included - who read a Secret matters as much as who changed it.
   - level: Metadata
     resources:
-      - group: ""
-        resources: ["secrets", "serviceaccounts/token"]
+      - group: ''
+        resources: [secrets]
 
-  # Noise: probes and metrics scrapes, leader-election leases (renewed every few seconds), Events.
+  # A shell or a tunnel into a pod or node. kubectl sends exec, attach and port-forward over WebSocket
+  # as a GET, so without this rule the reads rule below would drop them.
+  - level: Metadata
+    resources:
+      - group: ''
+        resources: [pods/exec, pods/attach, pods/portforward, pods/proxy, services/proxy, nodes/proxy]
+
+  # Noise: probes and metrics scrapes, leader-election leases (renewed every few seconds), Events,
+  # token and permission checks (every request of a metrics proxy or webhook asks one).
   - level: None
-    nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/version", "/metrics"]
+    nonResourceURLs: [/healthz*, /readyz*, /livez*, /version, /metrics]
   - level: None
     resources:
       - group: coordination.k8s.io
-        resources: ["leases"]
-      - group: ""
-        resources: ["events"]
+        resources: [leases]
+      - group: ''
+        resources: [events]
       - group: events.k8s.io
-        resources: ["events"]
+        resources: [events]
+      - group: authentication.k8s.io
+        resources: [tokenreviews]
+      - group: authorization.k8s.io
+        resources: [subjectaccessreviews, selfsubjectaccessreviews]
+  # The kubelets (group system:nodes): node and pod status, and a fresh token for every projected
+  # ServiceAccount token volume, every hour per pod.
+  - level: None
+    userGroups: [system:nodes]
 
   # Reads of everything else: controllers list and watch all the time.
   - level: None
-    verbs: ["get", "list", "watch"]
+    verbs: [get, list, watch]
 
-  # Every change: create, update, patch, delete, plus exec/port-forward (a create on pods/exec).
+  # Every change: create, update, patch, delete - including ServiceAccount tokens a person or a
+  # workload requests (kubectl create token).
   - level: Metadata
