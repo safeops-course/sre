@@ -10,7 +10,7 @@ resources:
 images:
   - name: frontend
     newName: ${image_registry}/frontend
-    newTag: staging-v0.0.0-c8ce1fd-1792157206 # {"$imagepolicy": "staging:frontend:tag"}
+    newTag: staging-v0.0.0-365d04a-1792401167 # {"$imagepolicy": "staging:frontend:tag"}
 patches:
   - path: patches/deployment.yaml
   - path: patches/ingress.yaml
