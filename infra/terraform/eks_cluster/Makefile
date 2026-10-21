@@ -83,7 +83,10 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #   0. kubeconfig.yaml, if this checkout has none (it is git-ignored: a destroy from another checkout than
 #      the apply's) - the hook below reaches the cluster only through it. The AWS CLI writes it (read-only
 #      calls), never `terraform apply -target=local_file.kubeconfig`: a target brings its dependencies -
-#      the cluster and the VPC - into an apply nobody planned or approved;
+#      the cluster and the VPC - into an apply nobody planned or approved. update-kubeconfig names the
+#      profile only as AWS_PROFILE in the exec env, and the R2 key this Makefile exports as AWS_ACCESS_KEY_ID
+#      would win over it; kubectl then writes the exec args of kubeconfig.yaml's own (versions.tf
+#      local.eks_exec), with --profile;
 #   1. the pre-destroy hook alone (flux.tf: volumes, the NLB, Flux) while the cluster, the EBS CSI driver
 #      and the Load Balancer Controller run;
 #   2. the Kubernetes objects, the controller's Helm release and the Flux null_resources leave the
@@ -93,7 +96,15 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #   4. leftovers, whatever the destroy returned; a failed destroy keeps its own exit status.
 destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@for t in aws kubectl jq; do command -v $$t >/dev/null || echo "WARNING: no $$t - the pre-destroy hook cannot clean the cluster (NLB, volumes); check make leftovers" >&2; done
-	@test -f kubeconfig.yaml || $(AWS) eks update-kubeconfig --name "$(CLUSTER)" --kubeconfig kubeconfig.yaml --alias "eks-$(CLUSTER)-control-plane" >/dev/null || echo "WARNING: could not write kubeconfig.yaml (no cluster $(CLUSTER)?) - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2
+	@test -f kubeconfig.yaml || { \
+	  $(AWS) eks update-kubeconfig --name "$(CLUSTER)" --kubeconfig kubeconfig.yaml \
+	    --alias "eks-$(CLUSTER)-control-plane" --user-alias "eks-$(CLUSTER)" >/dev/null && \
+	  kubectl config set-credentials "eks-$(CLUSTER)" --kubeconfig kubeconfig.yaml \
+	    --exec-api-version client.authentication.k8s.io/v1beta1 --exec-command aws \
+	    --exec-arg=eks --exec-arg=get-token --exec-arg=--cluster-name --exec-arg="$(CLUSTER)" \
+	    --exec-arg=--region --exec-arg="$(AWS_REGION)" --exec-arg=--profile --exec-arg="$(TF_VAR_aws_profile)" \
+	    --exec-arg=--output --exec-arg=json >/dev/null; \
+	} || echo "WARNING: could not write kubeconfig.yaml (no cluster $(CLUSTER)?) - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2
 	@$(TF) destroy -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|helm_release\.|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
