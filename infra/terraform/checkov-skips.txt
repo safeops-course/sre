@@ -4,6 +4,16 @@
 # next to it). This list is the one place that shows them all, and it makes a new skip a deliberate
 # second change a reviewer sees. scripts/check-checkov-skips.sh fails when the code and this list
 # differ in either direction.
+aks_cluster CKV_AZURE_115
+aks_cluster CKV_AZURE_116
+aks_cluster CKV_AZURE_117
+aks_cluster CKV_AZURE_170
+aks_cluster CKV_AZURE_172
+aks_cluster CKV_AZURE_226
+aks_cluster CKV_AZURE_227
+aks_cluster CKV_AZURE_232
+aks_cluster CKV_AZURE_4
+aks_cluster CKV_AZURE_6
 aws_foundation CKV_AWS_356
 gcp_foundation CKV_GCP_125
 gke_cluster CKV2_GCP_18
