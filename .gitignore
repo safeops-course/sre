@@ -2,6 +2,7 @@
 .env.local
 .env.gcp
 .env.aws
+.env.azure
 /bin/
 /node_modules/
 /.venv/
