@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs (or upgrades) the Flux Operator from its release manifest - one place for every cluster
-# module (null_resource.flux_operator_install in gke_cluster, eks_cluster, hcloud_cluster and kind_cluster).
+# module (null_resource.flux_operator_install in gke_cluster, eks_cluster, aks_cluster, hcloud_cluster and kind_cluster).
 #
 # Server-side apply, not `kubectl apply`: on GKE and Hetzner Terraform creates flux-system before this
 # runs (for the Secrets Flux reads), and a client-side apply then warns that the namespace lacks the

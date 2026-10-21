@@ -72,10 +72,18 @@ infra/terraform/
                      # access entries, managed node groups "platform" + "apps", VPC CNI NetworkPolicy, Pod Identity, AWS Load
                      # Balancer Controller (Helm) for Traefik's NLB; `make plan|apply|destroy|leftovers`, kubeconfig.yaml context
                      # eks-sre-control-plane (`aws eks get-token`); flux.tf: the same Flux bootstrap, profile flux/bootstrap/profiles/eks
+  azure_foundation/  # Azure: resource provider registrations, the cluster's resource group sre-aks (the person's AKS RBAC
+                     # Cluster Admin there), GitHub deployer (user-assigned identity + federated credential, Contributor on
+                     # sre-aks only), budget - applied once by a person, nothing billed (docs/azure.md; settings in .env.azure,
+                     # the Azure CLI signed in from AZURE_CONFIG_DIR)
+  aks_cluster/       # AKS, per test cycle, in sre-aks (Sweden Central): Azure CNI Overlay + Cilium, dual-stack, Entra ID +
+                     # Azure RBAC, no local accounts; pools "platform" (system) + "apps"; `make plan|apply|destroy|leftovers`,
+                     # kubeconfig.yaml context aks-sre-control-plane (Azure kubelogin, AZURE_KUBELOGIN - not Homebrew's
+                     # int128 kubelogin); flux.tf: the same Flux bootstrap, profile flux/bootstrap/profiles/aks
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap: a profile per cluster on the provider-neutral base flux-system/.
-                     # profiles/hetzner, profiles/gke and profiles/eks = base + all components (components/: platform-secrets, public-edge,
+                     # profiles/hetzner, profiles/gke, profiles/eks and profiles/aks = base + all components (components/: platform-secrets, public-edge,
                      # image-automation, alerting, opentelemetry) (+ the Hetzner load balancer patch on Hetzner);
                      # profiles/local (kind) = base + minio, lab, local secrets + kind patches, and only the opentelemetry
                      # component (its collectors send to their own log there - docs/observability/logs.md).
@@ -98,10 +106,11 @@ scripts/             # Pre-commit hooks, automation scripts
 - **Secrets**: SOPS with AGE encryption
 - **DNS/TLS**: external-dns (Cloudflare, proxied records) + cert-manager with Cloudflare Origin CA (origin-ca-issuer); zone SSL mode Full (strict)
 - **Network**: dual-stack (IPv4 + IPv6 for every node, pod and Service) where the provider has IPv6 by default - never
-  switched off, never forced (today kind, Hetzner and GKE; docs/providers.md) - and Cilium as the CNI and
+  switched off, never forced (today kind, Hetzner, GKE and AKS; docs/providers.md) - and Cilium as the CNI and
   NetworkPolicy engine - kind (`helm_release.cilium`, kindnet off; pods fd00:10:244::/56), Hetzner (kube-hetzner
   `cni_plugin = "cilium"`, pinned `cilium_version` = kind's (1.20.3); pods fdf9:a717:c7cc::/56, Services fdf9:a717:c7cc:100::/112,
-  a random ULA), GKE (Dataplane V2 is Cilium; `stack_type = "IPV4_IPV6"`, EXTERNAL = global pod IPv6). Each Terraform
+  a random ULA), GKE (Dataplane V2 is Cilium; `stack_type = "IPV4_IPV6"`, EXTERNAL = global pod IPv6), AKS (Azure CNI
+  Overlay powered by Cilium, managed by AKS; `ip_versions = ["IPv4", "IPv6"]`, pods fd12:3456:789a::/64). Each Terraform
   writes its pod IPv6 range to cluster-config `cluster_ipv6_range`; `allow-backend-egress-https` cuts it out of `::/0`
   (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
   (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly; a provider
@@ -125,7 +134,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - State is remote in R2 — never delete state files manually without understanding implications
 - Use `make destroy` (not bare `terraform destroy`) — it handles Flux/k8s resource cleanup first
 - Sensitive variables come as `TF_VAR_*` from git-ignored env files - `.env.local` through `load-env.sh` (Hetzner),
-  `.env.gcp` / `.env.aws` read by the module Makefiles (templates `.env.*.example`) - never from a committed file
+  `.env.gcp` / `.env.aws` / `.env.azure` read by the module Makefiles (templates `.env.*.example`) - never from a committed file
 - A cloud module's `terraform.tfvars` is committed and holds only public choices (region, sizes, GitHub ids);
   kind keeps a git-ignored `terraform.tfvars` from `terraform.tfvars.example`
 
@@ -198,7 +207,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - `make install-hooks` — install all pre-commit hooks
 - `make pre-commit` — run all hooks manually
 - `make fmt` — terraform fmt recursive
-- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, eks, state-lab), no backend, no credentials
+- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, eks, azure_foundation, aks, state-lab), no backend, no credentials
 - `make tf` — list the Terraform modules and their targets
 - `make kind-plan` / `kind-apply` / `kind-drift` / `kind-destroy` — local cluster; plan is saved with
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)

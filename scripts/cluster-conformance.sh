@@ -397,7 +397,7 @@ else
 fi
 
 # C12 - nothing billed is left after a destroy: a check after the cluster is gone, not on it.
-skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers, EKS: make -C infra/terraform/eks_cluster leftovers; kind: nothing billed)"
+skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers, EKS: make -C infra/terraform/eks_cluster leftovers, AKS: make -C infra/terraform/aks_cluster leftovers; kind: nothing billed)"
 
 # C13 - the address families the provider promises: cluster-config ip_stack, written by the module's
 # Terraform. "dual": IPv4 and IPv6 for every node's pods and for Services (decided before C2) - a provider

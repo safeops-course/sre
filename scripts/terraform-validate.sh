@@ -68,7 +68,7 @@ release_lock() {
 data_dir=""
 # On every exit: the current module's data dir (init or validate may fail) and the lock.
 trap 'if [ -n "${data_dir}" ]; then rm -rf "${data_dir}"; fi; release_lock' EXIT
-for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation infra/terraform/gke_cluster infra/terraform/aws_foundation infra/terraform/eks_cluster infra/terraform/state-lab; do
+for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation infra/terraform/gke_cluster infra/terraform/aws_foundation infra/terraform/eks_cluster infra/terraform/azure_foundation infra/terraform/aks_cluster infra/terraform/state-lab; do
   echo "terraform validate: ${dir}"
   data_dir="$(mktemp -d)"
   TF_DATA_DIR="${data_dir}" terraform -chdir="${dir}" init -input=false -backend=false >/dev/null

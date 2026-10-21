@@ -1,5 +1,5 @@
 # The Flux controllers' resource requests - one file for every cluster module: the FluxInstance in
-# kind_cluster, hcloud_cluster, gke_cluster, eks_cluster (and every new provider) puts this block under its spec,
+# kind_cluster, hcloud_cluster, gke_cluster, eks_cluster, aks_cluster (and every new provider) puts this block under its spec,
 # and a change here re-applies it (trigger controllers_resources).
 #
 # Flux's own defaults request 100m CPU per controller, 560m for the six of them, and they use 1-6m at
