@@ -56,8 +56,19 @@ spec:
       registryClient:
         credentialHelpers:
           - default
+    # Requests: the chart's 100m CPU per controller (500m for the five pods) against 3-5m used at rest
+    # (kind 2026-10-21). 20-25m is the scheduling floor; there is no CPU limit, so a background scan
+    # still takes what it needs (it took 6.6 cores once - sre#131). Memory: what each uses plus room; the
+    # reports controller used 84Mi of the chart's 128Mi limit.
     admissionController:
       replicas: 2
+      container:
+        resources:
+          requests:
+            cpu: 25m
+            memory: 128Mi
+          limits:
+            memory: 384Mi
       # One admission controller always answers through a node drain. The chart creates this budget
       # by itself whenever replicas > 1; written out here so it does not hang on that rule.
       podDisruptionBudget:
@@ -88,10 +99,28 @@ spec:
             - pod-template-hash
     backgroundController:
       enabled: true
+      resources:
+        requests:
+          cpu: 20m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
     cleanupController:
       enabled: true
+      resources:
+        requests:
+          cpu: 20m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
     reportsController:
       enabled: true
+      resources:
+        requests:
+          cpu: 20m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
       # The admission guardrails (Chapter 16) also match pods/ephemeralcontainers - kubectl debug
       # writes there - and Kyverno marks a policy "not ready for reporting" until this controller may
       # read every resource the policy matches (RBACPermissionsGranted=False, seen on kind with

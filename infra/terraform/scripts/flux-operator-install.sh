@@ -12,6 +12,10 @@
 # The manifest is downloaded with retries first: a GitHub hiccup must not stop a billed cluster's apply.
 # Then its SHA-256 must be the one pinned in Git (flux-operator.sha256 next to this script, checked against
 # the release's build provenance): a changed or replaced release asset is never applied with cluster-admin rights.
+# Then the operator's memory request: the manifest asks for 64Mi, the operator used 147Mi at rest on kind
+# (2026-10-21) - a pod using more memory than it requested is among the first the kubelet evicts when the
+# node runs short. Every run sets it again after the apply (which takes the field back). The Flux controllers' requests are in
+# flux-controllers-resources.yaml.
 # Last it waits until the FluxInstance CRD is served - Terraform applies a FluxInstance right after.
 #
 # Usage: flux-operator-install.sh <kubeconfig> <version without "v", e.g. 0.61.0> <install.yaml SHA-256>
@@ -51,5 +55,7 @@ fi
 
 kubectl --kubeconfig="${kubeconfig}" apply --server-side --field-manager=flux-operator-install \
   --force-conflicts -f "${manifest}"
+kubectl --kubeconfig="${kubeconfig}" -n flux-system set resources deployment/flux-operator \
+  --requests=memory=192Mi
 kubectl --kubeconfig="${kubeconfig}" wait --for=condition=Established --timeout=120s \
   crd/fluxinstances.fluxcd.controlplane.io

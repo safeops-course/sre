@@ -18,12 +18,12 @@ services_cidr = "10.108.0.0/20"
 # spot = true ONLY because this cluster lives for a test cycle and is destroyed after it: a reclaim
 # costs a few minutes, Spot saves 60-91 %. Not a recommendation - a cluster that matters sets false.
 platform_pool = {
-  # 4 vCPU, 16 GB. Measured on GKE 2026-10-16, CPU requests on the platform node: our platform 1.18
-  # cores, GKE's per-node DaemonSets 0.5, and GKE's own Deployments the scheduler put there (kube-dns x2,
-  # metrics-server, ...) 0.35 - 2.03 cores against the 1.93 an e2-standard-2 allocates: the OTel agent
-  # stayed Pending. e2-standard-4 leaves about 1.9 cores to grow. (kind 2026-10-15: the platform 1.33
-  # cores and 1.7 GiB, the three app environments 0.54 cores and 1.2 GiB.)
-  machine_type = "e2-standard-4"
+  # 2 vCPU, 8 GB. GKE 2026-10-16, CPU requests on the platform node: our platform 1.18 cores, GKE's
+  # per-node DaemonSets 0.5 and GKE's own Deployments (kube-dns x2, metrics-server, ...) 0.35 - 2.03 cores
+  # against the 1.93 an e2-standard-2 allocates, so it was e2-standard-4. The platform's requests were
+  # then cut to what it uses (2026-10-21: Flux and Kyverno asked 100m per controller and used 1-6m) -
+  # about 0.85 core less, which leaves ~1.2 cores requested on this node.
+  machine_type = "e2-standard-2"
   node_count   = 1
   disk_size_gb = 50
   spot         = true
