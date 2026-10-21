@@ -1,7 +1,7 @@
 # The course's AKS cluster: created for a test cycle, then destroyed. Not here (public repository):
 # subscription_id, tenant_id, expected_principal_object_id - TF_VAR_* from .env.azure.
 
-location     = "swedencentral" # the foundation's location
+# The region is the foundation's: the cluster is built in its resource group <cluster_name>-aks.
 cluster_name = "sre"
 
 # The platform's minor (kind and Hetzner pin 1.36.4). AKS picks the patch.

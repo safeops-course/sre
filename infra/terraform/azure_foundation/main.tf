@@ -1,6 +1,6 @@
 # The Azure foundation: what stays while AKS clusters come and go. Applied once, by a person, from a
 # workstation (it creates the very identity CI deploys with). Nothing here costs money on its own:
-# resource provider registrations, an empty resource group, a managed identity with a federated credential,
+# resource provider registrations, empty resource groups, a managed identity with a federated credential,
 # role assignments and a budget are free; cost starts with what infra/terraform/aks_cluster creates.
 #
 #   identity check        only var.expected_principal_object_id may plan or apply
@@ -8,7 +8,8 @@
 #   cluster group         <cluster_name>-aks: the one resource group a cluster is built in - the deployer's
 #                         rights and the person's Kubernetes admin role are scoped to it
 #   GitHub deployer       GitHub Actions of one repository on one ref get short-lived tokens of a
-#                         user-assigned managed identity; no client secret exists anywhere
+#                         user-assigned managed identity in <cluster_name>-ci, a group it has no rights
+#                         on; no client secret exists anywhere
 #   budget                warns at 50/90/100 % of spend and at 100 % of the forecast
 # Azure creates no default network in a subscription (unlike AWS's default VPC and Google's "default"
 # network), so there is nothing to delete here.
@@ -58,10 +59,20 @@ resource "azurerm_role_assignment" "person_cluster_admin" {
 # approval `environment:` gets the subject repo:OWNER/REPO:environment:NAME instead and needs a credential
 # of its own.
 # https://learn.microsoft.com/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity
+# The identity lives in a group of its own, where it has no rights: in the cluster's group its Contributor
+# role would let a workflow run add a federated credential to itself (another subject, another issuer) -
+# a door for anyone, for good - or delete itself.
+resource "azurerm_resource_group" "ci" {
+  name     = "${var.cluster_name}-ci"
+  location = var.location
+
+  depends_on = [data.azurerm_client_config.me]
+}
+
 resource "azurerm_user_assigned_identity" "deployer" {
   name                = "terraform-aks"
   location            = var.location
-  resource_group_name = azurerm_resource_group.aks.name
+  resource_group_name = azurerm_resource_group.ci.name
 }
 
 resource "azurerm_federated_identity_credential" "github" {
@@ -74,8 +85,10 @@ resource "azurerm_federated_identity_credential" "github" {
 
 # What the AKS workflow runs as: Contributor on the cluster's group - the cluster, its node pools and
 # its Log Analytics workspace - and Kubernetes admin there for the Flux bootstrap. Contributor cannot
-# assign roles (Microsoft.Authorization writes are excluded), so a workflow run cannot grant itself more
-# than this file does; it holds no rights anywhere else in the subscription.
+# assign roles (Microsoft.Authorization writes are excluded), and the identity itself is in another group
+# (above), so a workflow run cannot grant itself more than this file does; it holds no rights anywhere else
+# in the subscription. It can delete the cluster's group, with the person's role in it - a later apply of
+# this module puts both back.
 resource "azurerm_role_assignment" "deployer" {
   for_each = toset([
     "Contributor",

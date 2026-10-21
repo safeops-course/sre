@@ -144,14 +144,23 @@ families_of() { local v4=no v6=no x; for x in $1; do case "$x" in *:*) v6=yes ;;
 nodes_not() { local name cidrs; while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "$1" ] || echo "$name"; done <<<"$node_cidrs"; }
 node_cidrs="$(k get nodes -o json | jq -r '.items[] | "\(.metadata.name) \((.spec.podCIDRs // []) | join(" "))"')" || node_cidrs=""
 # A CNI that hands out pod addresses itself leaves spec.podCIDRs empty (EKS's VPC CNI; Azure CNI Overlay
-# with Cilium on AKS): for such a node the families are those of its pods' own addresses (hostNetwork pods
-# have the node's, so they are left out). A node with neither stays empty - and counts as single-stack.
-pod_ips="$(k get pods -A -o json | jq -r '.items[] | select(.spec.hostNetwork != true and .spec.nodeName != null) | "\(.spec.nodeName) \([.status.podIPs[]?.ip] | join(" "))"')" || pod_ips=""
-node_cidrs="$(while read -r name cidrs; do
-  [ -z "$name" ] && continue
-  [ -z "$cidrs" ] && cidrs="$(awk -v n="$name" '$1 == n { $1 = ""; print }' <<<"$pod_ips" | tr '\n' ' ')"
-  echo "$name $cidrs"
-done <<<"$node_cidrs")"
+# with Cilium on AKS). For such a node the families come from its pods' own addresses, pod by pod: one pod
+# without both families makes the node single-stack (its addresses stand for the node), otherwise any pod's
+# do. hostNetwork pods have the node's addresses and are left out; a node with no other pod (a fresh one,
+# or one running only DaemonSets on the host network) proves nothing and is left out too. Listed only when
+# some node needs it - on the other clusters every node has its ranges.
+if grep -qE '^[^ ]+ *$' <<<"$node_cidrs"; then
+  pod_ips="$(k get pods -A -o json | jq -r '
+    [.items[] | select(.spec.hostNetwork != true and .spec.nodeName != null and ((.status.podIPs // []) | length) > 0)
+     | {node: .spec.nodeName, ips: [.status.podIPs[].ip]}
+     | .both = ((.ips | any(test(":"))) and (.ips | any(test(":") | not)))]
+    | group_by(.node)[] | (map(select(.both | not)) + map(select(.both)))[0] | "\(.node) \(.ips | join(" "))"')" || pod_ips=""
+  node_cidrs="$(while read -r name cidrs; do
+    [ -z "$name" ] && continue
+    [ -z "$cidrs" ] && { cidrs="$(awk -v n="$name" '$1 == n { $1 = ""; print }' <<<"$pod_ips")"; [ -z "${cidrs// /}" ] && continue; }
+    echo "$name $cidrs"
+  done <<<"$node_cidrs")"
+fi
 single_nodes="$(nodes_not "yes yes")"
 svc_ips="$(k -n "$NS" get service server -o jsonpath='{.spec.clusterIPs[*]}' 2>/dev/null)" || svc_ips=""
 dual=false

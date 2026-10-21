@@ -17,8 +17,8 @@ This page covers the foundation (what it creates, why, and the one-command setup
 | Resource providers | Only what the clusters use: ContainerService, Compute, Network, Storage, ManagedIdentity, OperationalInsights, Insights, Consumption | A subscription can create a resource type only after its provider is registered. azurerm 5 registers none by itself; registering is free. |
 | Resource group `sre-aks` | Empty between cycles; the cluster module builds in it | Every role below is scoped to this one group, so they reach nothing else in the subscription. |
 | Kubernetes admin for the person | `Azure Kubernetes Service RBAC Cluster Admin` on the group | The cluster has no local accounts and uses Azure RBAC for Kubernetes: owning the subscription gives no access to the Kubernetes API. Assigned before any cluster exists, so the Flux bootstrap never waits for it to propagate. |
-| GitHub deployer `terraform-aks` | A user-assigned managed identity with a federated credential for `repo:safeops-course/sre:ref:refs/heads/main` | GitHub signs a short-lived token per run, and Microsoft Entra exchanges it for a token of the identity. No client secret is stored anywhere. Pull request code never matches. |
-| Deployer rights | `Contributor` and `Azure Kubernetes Service RBAC Cluster Admin`, both on `sre-aks` only | Enough to build and delete a cluster in that group and bootstrap Flux. Contributor cannot assign roles, so a workflow run cannot give itself more rights than this module does. |
+| GitHub deployer `terraform-aks` | A user-assigned managed identity in a group of its own, `sre-ci`, with a federated credential for `repo:safeops-course/sre:ref:refs/heads/main` | GitHub signs a short-lived token per run, and Microsoft Entra exchanges it for a token of the identity. No client secret is stored anywhere. Pull request code never matches. |
+| Deployer rights | `Contributor` and `Azure Kubernetes Service RBAC Cluster Admin`, both on `sre-aks` only | Enough to build and delete a cluster in that group and bootstrap Flux. Contributor cannot assign roles, and the identity is in `sre-ci`, where it has no rights - in `sre-aks` its Contributor role could add a federated credential to itself. So a workflow run cannot give itself more rights than this module does. It can delete `sre-aks`; applying the module again puts it back. |
 | Monthly budget | 10 USD; e-mail at 50, 90 and 100 % of spend and at 100 % of the forecast | A budget only warns, it never stops spending. A test cycle costs about a dollar; a cluster left running costs about 6 a day. |
 
 These are free. Cost starts with the cluster: nodes, their disks, the load balancer and its addresses.
@@ -89,7 +89,7 @@ make -C infra/terraform/azure_foundation apply     # ... then apply exactly that
 az provider list --query "[?registrationState=='Registered'].namespace" -o tsv
 az group show --name sre-aks --query '{name:name, location:location}'
 az role assignment list --resource-group sre-aks --query '[].{role:roleDefinitionName, who:principalName}' -o table
-az identity federated-credential list --identity-name terraform-aks --resource-group sre-aks --query '[].subject'
+az identity federated-credential list --identity-name terraform-aks --resource-group sre-ci --query '[].subject'
 az consumption budget list --query '[].{name:name, amount:amount}'
 ```
 
@@ -99,7 +99,7 @@ az consumption budget list --query '[].{name:name, amount:amount}'
 |---|---|---|
 | `Resource postcondition failed ... Terraform authenticates as object id X, expected Y` | The CLI is signed in as someone else | `az login` as the right user with `AZURE_CONFIG_DIR` set, or fix `TF_VAR_expected_principal_object_id`. |
 | `not signed in to subscription ...` from preflight | `AZURE_CONFIG_DIR` points at a directory without this sign-in, or the session ended | `az login --tenant ...` with that directory exported (step 2). |
-| `RequestDisallowedByAzure ... The selected region is currently not accepting new customers` | Azure turns new subscriptions away from regions short of capacity (West Europe, 2026-10) | Another region (`location` in both modules' `terraform.tfvars`); check the size and the quota there first (below). |
+| `RequestDisallowedByAzure ... The selected region is currently not accepting new customers` | Azure turns new subscriptions away from regions short of capacity (West Europe, 2026-10) | Another region (`location` in `azure_foundation/terraform.tfvars` - the cluster is built in the foundation's group, so it follows); check the size and the quota there first (below). |
 | A size is refused, or `az vm list-usage` shows 0 for its family | New subscriptions get quota for some families only (2026-10: none for the v5 sizes, 10 vCPU for v6/v7) | `az vm list-usage -l LOCATION -o table`, pick a family with quota, or request more (Quotas in the portal). |
 | A resource type fails with `MissingSubscriptionRegistration` | Its resource provider is not registered | Add it to `resource_providers_to_register` (azure_foundation/versions.tf), spelled as `az provider list` shows it - azurerm matches the name exactly and skips a different spelling silently (`microsoft.insights`). |
 | The budget fails on a new subscription | Budgets become available up to 48 hours after the subscription | Apply again later; the rest of the foundation is already there. |
@@ -145,4 +145,4 @@ A cycle that tests a branch (pushed first) plans with `TF_VAR_flux_git_repositor
 - **kubectl, Terraform's kubernetes provider and the azurerm provider** all sign in through the Azure CLI in `AZURE_CONFIG_DIR`, so the plan's identity check covers them all.
 - **Destroy:** the Makefile first writes `kubeconfig.yaml` again from the live cluster (with Azure kubelogin by its full path). Before the pools go, `flux-pre-destroy.sh` suspends Flux and deletes the workload namespaces with their volumes, and the `traefik` namespace with its LoadBalancer Service, while the CSI driver and the cloud controller still run, and external-dns deletes the DNS records. A disk or an address left behind keeps costing; `make leftovers` names it.
 
-`make leftovers` lists what can outlive a cluster in the subscription: AKS clusters, anything in `sre-aks` but the deployer identity, the node resource group, disks and snapshots, public IPs, load balancers, virtual networks and Log Analytics workspaces. It exits 1 when anything is left. Delete what it names, then run it again.
+`make leftovers` lists what can outlive a cluster in the subscription: AKS clusters, anything in `sre-aks` (empty between cycles), the node resource group, disks and snapshots, public IPs, load balancers, virtual networks and Log Analytics workspaces. It exits 1 when anything is left. Delete what it names, then run it again.

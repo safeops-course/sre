@@ -148,12 +148,15 @@ resource "azurerm_kubernetes_cluster" "this" {
   default_node_pool {
     name                        = "platform"
     temporary_name_for_rotation = "platformtmp"
-    vm_size                     = var.platform_pool.vm_size
-    node_count                  = var.platform_pool.node_count
-    os_disk_size_gb             = var.platform_pool.disk_size_gb
-    os_disk_type                = "Managed"
-    max_pods                    = 250 # Azure CNI Overlay's own default, written out: pods do not use node network addresses
-    node_labels                 = { pool = "platform" }
+    # The nodes' version as well: azurerm sets a pool's version only when it creates the pool, so without
+    # it a new kubernetes_version would upgrade the control plane alone.
+    orchestrator_version = var.kubernetes_version
+    vm_size              = var.platform_pool.vm_size
+    node_count           = var.platform_pool.node_count
+    os_disk_size_gb      = var.platform_pool.disk_size_gb
+    os_disk_type         = "Managed"
+    max_pods             = 250 # Azure CNI Overlay's own default, written out: pods do not use node network addresses
+    node_labels          = { pool = "platform" }
 
     # An upgrade adds one node before it drains an old one.
     upgrade_settings {
@@ -173,6 +176,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "apps" {
   temporary_name_for_rotation = "appstmp"
   kubernetes_cluster_id       = azurerm_kubernetes_cluster.this.id
   mode                        = "User"
+  orchestrator_version        = var.kubernetes_version
   vm_size                     = var.apps_pool.vm_size
   node_count                  = var.apps_pool.node_count
   os_disk_size_gb             = var.apps_pool.disk_size_gb

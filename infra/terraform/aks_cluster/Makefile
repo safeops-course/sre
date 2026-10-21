@@ -42,7 +42,7 @@ NODES_RG := $(CLUSTER)-aks-nodes
 # The subscription goes after the command: `az --subscription X aks list` is refused (seen 2026-10-21).
 AZ_SUB   := --subscription "$(TF_VAR_subscription_id)"
 
-.PHONY: help settings keycheck preflight init plan apply destroy leftovers
+.PHONY: help settings keycheck access preflight init plan apply destroy leftovers
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -70,8 +70,10 @@ keycheck: settings ## The age key is a recipient of every platform rule in .sops
 # Terraform (versions.tf) and kubectl (kubeconfig.yaml) sign in through the same Azure CLI sign-in, so one
 # identity check - the plan's postcondition - covers both. Here only what is local: the tools, the CLI's
 # subscription and tenant (its local cache), and that AZURE_KUBELOGIN is Azure's kubelogin - int128's
-# tool of the same name has no `get-token --server-id` and would fail every kubectl call.
-preflight: keycheck ## The settings and age key, the tools, the Azure CLI sign-in and Azure kubelogin (no cloud calls)
+# tool of the same name has no `get-token --server-id` and would fail every kubectl call. destroy needs
+# the same before its pre-destroy hook: with the wrong kubelogin the hook reaches nothing, and the DNS
+# records stay behind.
+access: settings ## The tools, the Azure CLI sign-in and Azure kubelogin (no cloud calls)
 	@for t in az kubectl jq; do command -v $$t >/dev/null || { echo "missing: $$t (docs/azure.md, prerequisites)" >&2; exit 2; }; done
 	@account="$$(az account show --subscription "$$TF_VAR_subscription_id" --output json 2>/dev/null)" \
 	  || { echo "the Azure CLI (AZURE_CONFIG_DIR=$$AZURE_CONFIG_DIR) is not signed in to subscription $$TF_VAR_subscription_id - az login --tenant $$TF_VAR_tenant_id (docs/azure.md, step 2)" >&2; exit 2; }; \
@@ -79,6 +81,8 @@ preflight: keycheck ## The settings and age key, the tools, the Azure CLI sign-i
 	[ "$$tenant" = "$$TF_VAR_tenant_id" ] || { echo "subscription $$TF_VAR_subscription_id is in tenant $$tenant, expected $$TF_VAR_tenant_id" >&2; exit 2; }
 	@help="$$("$(AZURE_KUBELOGIN)" get-token --help 2>&1)" || { echo "AZURE_KUBELOGIN=$(AZURE_KUBELOGIN) does not run get-token - install Azure kubelogin (docs/azure.md, prerequisites)" >&2; exit 2; }; \
 	grep -q -- '--server-id' <<<"$$help" || { echo "AZURE_KUBELOGIN=$(AZURE_KUBELOGIN) is not Azure kubelogin (no get-token --server-id) - Homebrew's kubelogin is int128's; set a full path (docs/azure.md, prerequisites)" >&2; exit 2; }
+
+preflight: keycheck access ## The settings and age key, the tools, the Azure CLI sign-in and Azure kubelogin (no cloud calls)
 
 init: ## Terraform init (state in R2)
 	@$(TF) init -input=false >/dev/null
@@ -103,10 +107,11 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      cluster and its CSI driver run;
 #   2. the Kubernetes objects and the Flux null_resources leave the state - the cluster goes anyway, and
 #      an unreachable API must not stop the destroy of what is billed (nodes, load balancer, addresses);
-#   3. terraform destroy;
+#   3. terraform destroy; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it
+#      and the destroy left it, pointing at a cluster that is gone;
 #   4. leftovers, whatever the destroy returned; a failed destroy keeps its own exit status.
-destroy: settings init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), then look for leftovers
-	@for t in az kubectl jq; do command -v $$t >/dev/null || echo "WARNING: no $$t - the pre-destroy hook cannot clean the cluster (volumes, DNS records); check make leftovers" >&2; done
+# `access` first: no destroy starts without the tools, the sign-in and Azure kubelogin the hook needs.
+destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@{ \
 	  az aks get-credentials $(AZ_SUB) --resource-group "$(RG)" --name "$(CLUSTER)" --file kubeconfig.yaml.new \
 	    --context "aks-$(CLUSTER)-control-plane" --overwrite-existing >/dev/null && \
@@ -120,11 +125,12 @@ destroy: settings init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), t
 	@$(TF) destroy -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
+	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; fi; \
 	$(MAKE) --no-print-directory leftovers; check=$$?; \
 	if [ $$rc -ne 0 ]; then exit $$rc; fi; exit $$check
 
 # What can outlive a cluster and keep costing, in the whole subscription: the cluster itself, anything in
-# its group but the foundation's deployer identity (the log workspace), the node resource group (nodes,
+# its group (the log workspace; the group is empty between cycles), the node resource group (nodes,
 # load balancer, addresses), and - wherever they are - disks and snapshots (a PersistentVolume's disk),
 # public IPs, load balancers, virtual networks and Log Analytics workspaces. The subscription holds
 # nothing else billable, so whatever these list is a leftover. Disks and snapshots through `az resource list`:
@@ -138,7 +144,7 @@ leftovers: ## List billable leftovers in the subscription (exit 1 when any, 2 wh
 	  if [ -n "$$out" ]; then left=1; echo "LEFT $$what: $$(tr '\t\n' '  ' <<<"$$out")"; fi; \
 	}; \
 	check "AKS clusters"            aks list --query '[].name'; \
-	check "resources in $(RG)"      resource list --resource-group "$(RG)" --query "[?type!='Microsoft.ManagedIdentity/userAssignedIdentities'].name"; \
+	check "resources in $(RG)"      resource list --resource-group "$(RG)" --query '[].name'; \
 	check "node resource group"     group list --query "[?name=='$(NODES_RG)'].name"; \
 	check "disks"                   resource list --resource-type Microsoft.Compute/disks --query '[].name'; \
 	check "snapshots"               resource list --resource-type Microsoft.Compute/snapshots --query '[].name'; \

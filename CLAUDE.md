@@ -73,7 +73,7 @@ infra/terraform/
                      # Balancer Controller (Helm) for Traefik's NLB; `make plan|apply|destroy|leftovers`, kubeconfig.yaml context
                      # eks-sre-control-plane (`aws eks get-token`); flux.tf: the same Flux bootstrap, profile flux/bootstrap/profiles/eks
   azure_foundation/  # Azure: resource provider registrations, the cluster's resource group sre-aks (the person's AKS RBAC
-                     # Cluster Admin there), GitHub deployer (user-assigned identity + federated credential, Contributor on
+                     # Cluster Admin there), GitHub deployer (user-assigned identity in its own group sre-ci + federated credential, Contributor on
                      # sre-aks only), budget - applied once by a person, nothing billed (docs/azure.md; settings in .env.azure,
                      # the Azure CLI signed in from AZURE_CONFIG_DIR)
   aks_cluster/       # AKS, per test cycle, in sre-aks (Sweden Central): Azure CNI Overlay + Cilium, dual-stack, Entra ID +

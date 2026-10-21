@@ -2,11 +2,6 @@
 # terraform.tfvars, not baked into the module. Values that identify a person, a tenant or a subscription
 # have no default and are not in terraform.tfvars (the repository is public): TF_VAR_* from .env.azure.
 
-variable "location" {
-  description = "The Azure region of the cluster - the foundation's location (its resource group is there)."
-  type        = string
-}
-
 variable "subscription_id" {
   description = "The Azure subscription of the platform (a GUID). Every call goes to it. Set TF_VAR_subscription_id."
   type        = string
@@ -30,6 +25,11 @@ variable "tenant_id" {
 variable "expected_principal_object_id" {
   description = "Object id of the identity that may run this module - the person the foundation made Kubernetes admin. Any other identity fails the plan. Set TF_VAR_expected_principal_object_id."
   type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.expected_principal_object_id))
+    error_message = "expected_principal_object_id must be an object id GUID (az ad signed-in-user show --query id -o tsv)."
+  }
 }
 
 variable "cluster_name" {
@@ -86,6 +86,15 @@ variable "maintenance_window" {
     day_of_week    = "Sunday"
     start_time     = "02:00"
     duration_hours = 4
+  }
+
+  validation {
+    condition = (
+      contains(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], var.maintenance_window.day_of_week)
+      && can(regex("^([01][0-9]|2[0-3]):[0-5][0-9]$", var.maintenance_window.start_time))
+      && var.maintenance_window.duration_hours >= 4 && var.maintenance_window.duration_hours <= 24
+    )
+    error_message = "maintenance_window: day_of_week a weekday name (Sunday), start_time HH:MM, duration_hours 4 to 24."
   }
 }
 
