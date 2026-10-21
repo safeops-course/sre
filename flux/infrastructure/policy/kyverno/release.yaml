@@ -56,16 +56,18 @@ spec:
       registryClient:
         credentialHelpers:
           - default
-    # Requests: the chart's 100m CPU per controller (500m for the five pods) against 3-5m used at rest
-    # (kind 2026-10-21). 20-25m is the scheduling floor; there is no CPU limit, so a background scan
-    # still takes what it needs (it took 6.6 cores once - sre#131). Memory: what each uses plus room; the
-    # reports controller used 84Mi of the chart's 128Mi limit.
+    # Requests: the chart asks 100m CPU per controller and they use 3-5m at rest (kind 2026-10-21). The
+    # admission controller keeps 100m: its webhooks fail closed and a signature check already takes
+    # 13-15 s of its 30 s timeout - under CPU contention a request is also the container's share. The
+    # three others drop to 20m; there is no CPU limit, so a background scan still takes what it needs
+    # (it took 6.6 cores once - sre#131). Memory: what each uses plus room; the reports controller used
+    # 84Mi of the chart's 128Mi limit.
     admissionController:
       replicas: 2
       container:
         resources:
           requests:
-            cpu: 25m
+            cpu: 100m
             memory: 128Mi
           limits:
             memory: 384Mi

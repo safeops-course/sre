@@ -35,10 +35,11 @@ spec:
         retention: 7d
         retentionSize: "10GB"
         # Memory: it used 401Mi at rest on kind (2026-10-21) - 80 % of the old 512Mi limit, with more
-        # targets on a cloud cluster. CPU: 11m at rest; the limit covers rule evaluation and compaction.
+        # targets on a cloud cluster. CPU stays 100m (11m at rest): it evaluates the alert rules, which
+        # already ran short of CPU once (sre#132).
         resources:
           requests:
-            cpu: 50m
+            cpu: 100m
             memory: 512Mi
           limits:
             cpu: 500m

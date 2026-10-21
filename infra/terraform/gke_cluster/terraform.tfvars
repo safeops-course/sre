@@ -22,7 +22,9 @@ platform_pool = {
   # per-node DaemonSets 0.5 and GKE's own Deployments (kube-dns x2, metrics-server, ...) 0.35 - 2.03 cores
   # against the 1.93 an e2-standard-2 allocates, so it was e2-standard-4. The platform's requests were
   # then cut to what it uses (2026-10-21: Flux and Kyverno asked 100m per controller and used 1-6m) -
-  # about 0.85 core less, which leaves ~1.2 cores requested on this node.
+  # about 0.65 core less, which leaves ~1.4 cores requested on this node. Memory: the platform requests
+  # ~3.3Gi on kind (2026-10-21, after the change) against ~5.7Gi an e2-standard-2 allocates; the cloud
+  # adds external-dns, Dex and the OTel gateway. Both are estimates until the next GKE cycle measures them.
   machine_type = "e2-standard-2"
   node_count   = 1
   disk_size_gb = 50

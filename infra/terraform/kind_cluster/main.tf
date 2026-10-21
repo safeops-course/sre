@@ -350,8 +350,8 @@ resource "null_resource" "flux_operator_install" {
     operator_version = var.flux_operator_version
     # a re-pinned manifest (same version) is installed and checked again
     manifest_sha256 = local.flux_operator_manifest_sha256
-    # the install script changed (for example the operator's requests): run it again
-    install_script = filesha256("${path.module}/../scripts/flux-operator-install.sh")
+    # the operator's memory request, set by the install script: run it again when it changes
+    operator_memory = regex("memory\\) = \"([0-9]+Mi)\"", file("${path.module}/../scripts/flux-operator-install.sh"))[0]
   }
 
   provisioner "local-exec" {
@@ -392,8 +392,8 @@ resource "null_resource" "flux_instance" {
     pull_secret = local.flux_pull_secret_yaml
     # re-apply the FluxInstance when the pinned Flux version changes
     flux_version = var.flux_version
-    # re-apply the FluxInstance when the controllers' requests change
-    controllers_resources = filesha256("${path.module}/../scripts/flux-controllers-resources.yaml")
+    # re-apply the FluxInstance when the controllers' requests change (the parsed YAML: not its comments)
+    controllers_resources = sha256(jsonencode(yamldecode(file("${path.module}/../scripts/flux-controllers-resources.yaml"))))
   }
 
   provisioner "local-exec" {
