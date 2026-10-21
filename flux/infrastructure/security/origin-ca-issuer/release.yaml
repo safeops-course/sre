@@ -39,3 +39,12 @@ spec:
     controller:
       # ClusterOriginIssuer tokens are read from this namespace (flux/secrets/cloudflare).
       clusterResourceNamespace: cert-manager
+      # The chart requests a whole core and 512Mi (requests = limits); it used 1m and 15Mi on EKS
+      # (2026-10-21) - and its 1000m filled a 2 vCPU node, leaving the OTel agent DaemonSet Pending.
+      # What it uses plus room; the memory limit catches a leak.
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
