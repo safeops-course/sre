@@ -131,7 +131,7 @@ aws budgets describe-budgets $P --account-id ACCOUNT_ID --query 'Budgets[].[Budg
 
 ### Run a cycle
 
-The cluster costs money from the first minute: the control plane, the nodes, their disks, the NAT gateway and the load balancer - roughly $0.40 an hour with Spot nodes in Frankfurt (list prices, 2026-10). Check the account's vCPU quota for Spot instances first (Service Quotas, `L-34B43A08`): a new account's can be lower than the two node groups need, and the node groups then fail to create.
+The cluster costs money from the first minute: the control plane, the nodes, their disks, the NAT gateway and the load balancer - roughly $0.40 an hour with Spot nodes in Frankfurt (list prices, 2026-10). Check the account's vCPU quota for Spot instances first (Service Quotas, `L-34B43A08`): a new account gets 5, and a node group that needs more fails to create. The course's `terraform.tfvars` stays at 4 vCPU (two 2 vCPU nodes) for that reason.
 
 ```bash
 aws login --profile platform                        # browser: password + passkey

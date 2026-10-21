@@ -19,11 +19,14 @@ single_nat_gateway = true
 
 # spot = true ONLY because this cluster lives for a test cycle and is destroyed after it: a reclaim
 # costs a few minutes, Spot saves 60-90 %. Not a recommendation - a cluster that matters sets false.
-# x86, 4 vCPU / 16 GiB for the platform - GKE measured 2026-10-16: the platform's requests (2.03 cores
-# with the provider's own pods) do not fit a 2 vCPU node. Four families of the same size: Spot picks
-# whichever pool has capacity.
+# x86, 2 vCPU each: 4 vCPU in all, under a new account's 5 vCPU quota for Spot (Service Quotas
+# L-34B43A08). Memory, not CPU, is what the platform runs short of: 16 GiB (r-family) for the platform,
+# 8 GiB for the apps. No pod is pinned to a group, so CPU requests spread over both nodes: kind measured
+# 2026-10-15 the platform 1.33 cores, the apps 0.54, against about 3.9 allocatable. An in-place node
+# upgrade starts new nodes first and needs quota above the 4 vCPU - a cycle never upgrades. Four families
+# of the same size each: Spot picks whichever pool has capacity.
 platform_pool = {
-  instance_types = ["m7i.xlarge", "m6i.xlarge", "m6a.xlarge", "m5.xlarge"]
+  instance_types = ["r7i.large", "r6i.large", "r6a.large", "r5.large"]
   node_count     = 1
   disk_size_gb   = 50
   spot           = true
