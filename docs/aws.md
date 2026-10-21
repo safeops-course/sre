@@ -141,6 +141,8 @@ kubectl --kubeconfig infra/terraform/eks_cluster/kubeconfig.yaml get nodes
 make -C infra/terraform/eks_cluster destroy         # asks first, then runs make leftovers
 ```
 
+A cycle that tests a branch (pushed first) plans with `TF_VAR_flux_git_repository_branch=<branch>`: Flux then follows that branch from the first reconcile. Without it Flux follows `main`, where a new profile does not exist yet.
+
 **Flux.** As on GKE (`docs/gcp.md`, "Run a cycle"): Terraform writes the namespaces, `cluster-config`, `cluster-secrets`, `backup-s3`, the age key `sops-age` and the production database password (`flux.tf`), then Flux follows the platform repository and reconciles `flux/bootstrap/profiles/eks`. The same settings, in `.env.aws`: `SOPS_AGE_KEY_FILE`, `TF_VAR_uptrace_dsn` and the backup bucket's `TF_VAR_backup_s3_*`.
 
 - **kubectl, Terraform's kubernetes and helm providers and the AWS provider** all sign in with `TF_VAR_aws_profile`, so the plan's identity check covers them all. Each names the profile itself: the R2 key the Makefile exports as `AWS_ACCESS_KEY_ID` never signs an AWS call.
