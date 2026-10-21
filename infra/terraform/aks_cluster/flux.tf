@@ -3,7 +3,8 @@
 # Hetzner, GKE and EKS (infra/terraform/eks_cluster/flux.tf), so every cluster runs the same platform:
 #   1. namespaces, ConfigMaps,   cluster-config, cluster-secrets, backup-s3, cnpg-backup-s3, sops-age
 #      Secrets                   and the production database password. No StorageClass: AKS's own
-#                                managed-csi (Azure Disk, Standard SSD) is the default
+#                                "default" (Azure Disk CSI, Standard SSD, WaitForFirstConsumer,
+#                                expandable - as managed-csi) is the default
 #   2. flux_operator_install,    Flux, reconciling var.flux_kustomization_path (profiles/aks)
 #      flux_instance
 #   3. flux_pre_destroy          on destroy only: removes what Flux created - volumes and the load

@@ -39,7 +39,8 @@ CLUSTER := $(shell sed -n 's/^cluster_name *= *"\([^"]*\)".*/\1/p' terraform.tfv
 # The foundation's resource group, and the one AKS keeps the nodes in (main.tf local.node_resource_group).
 RG       := $(CLUSTER)-aks
 NODES_RG := $(CLUSTER)-aks-nodes
-AZ       := az --subscription "$(TF_VAR_subscription_id)" --output tsv
+# The subscription goes after the command: `az --subscription X aks list` is refused (seen 2026-10-21).
+AZ_SUB   := --subscription "$(TF_VAR_subscription_id)"
 
 .PHONY: help settings keycheck preflight init plan apply destroy leftovers
 
@@ -107,7 +108,7 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 destroy: settings init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@for t in az kubectl jq; do command -v $$t >/dev/null || echo "WARNING: no $$t - the pre-destroy hook cannot clean the cluster (volumes, DNS records); check make leftovers" >&2; done
 	@{ \
-	  $(AZ) aks get-credentials --resource-group "$(RG)" --name "$(CLUSTER)" --file kubeconfig.yaml.new \
+	  az aks get-credentials $(AZ_SUB) --resource-group "$(RG)" --name "$(CLUSTER)" --file kubeconfig.yaml.new \
 	    --context "aks-$(CLUSTER)-control-plane" --overwrite-existing >/dev/null && \
 	  user="$$(kubectl config view --kubeconfig kubeconfig.yaml.new -o jsonpath='{.contexts[0].context.user}')" && [ -n "$$user" ] && \
 	  kubectl config set-credentials "$$user" --kubeconfig kubeconfig.yaml.new \
@@ -126,20 +127,21 @@ destroy: settings init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), t
 # its group but the foundation's deployer identity (the log workspace), the node resource group (nodes,
 # load balancer, addresses), and - wherever they are - disks and snapshots (a PersistentVolume's disk),
 # public IPs, load balancers, virtual networks and Log Analytics workspaces. The subscription holds
-# nothing else billable, so whatever these list is a leftover. Exit 1 when anything is left, 2 when a
+# nothing else billable, so whatever these list is a leftover. Disks and snapshots through `az resource list`:
+# `az disk list` without a resource group is refused (az 2.91). Exit 1 when anything is left, 2 when a
 # query failed: an error never reads as "nothing left".
 leftovers: ## List billable leftovers in the subscription (exit 1 when any, 2 when a query failed)
 	@left=0; failed=0; \
 	check() { \
 	  local what="$$1" out; shift; \
-	  if ! out="$$($(AZ) "$$@")"; then failed=1; echo "FAIL could not list $$what (az error above)" >&2; return; fi; \
+	  if ! out="$$(az "$$@" $(AZ_SUB) --output tsv)"; then failed=1; echo "FAIL could not list $$what (az error above)" >&2; return; fi; \
 	  if [ -n "$$out" ]; then left=1; echo "LEFT $$what: $$(tr '\t\n' '  ' <<<"$$out")"; fi; \
 	}; \
 	check "AKS clusters"            aks list --query '[].name'; \
 	check "resources in $(RG)"      resource list --resource-group "$(RG)" --query "[?type!='Microsoft.ManagedIdentity/userAssignedIdentities'].name"; \
 	check "node resource group"     group list --query "[?name=='$(NODES_RG)'].name"; \
-	check "disks"                   disk list --query '[].name'; \
-	check "snapshots"               snapshot list --query '[].name'; \
+	check "disks"                   resource list --resource-type Microsoft.Compute/disks --query '[].name'; \
+	check "snapshots"               resource list --resource-type Microsoft.Compute/snapshots --query '[].name'; \
 	check "public IPs"              network public-ip list --query '[].name'; \
 	check "load balancers"          network lb list --query '[].name'; \
 	check "virtual networks"        network vnet list --query '[].name'; \

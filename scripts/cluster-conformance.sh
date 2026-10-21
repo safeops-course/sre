@@ -136,12 +136,22 @@ EOF
 server_ready=true
 k -n "$NS" wait --for=condition=Ready pod/server --timeout=120s >/dev/null 2>&1 || server_ready=false
 
-# Dual-stack (C13, printed last): every node has a pod range of each family, and the test Service got
-# an address of each. Decided here, with the provider's promise below, because C2 and C5 depend on it.
+# Dual-stack (C13, printed last): every node has a pod range of each family (or its pods have addresses of
+# each - below), and the test Service got an address of each. Decided here, with the provider's promise
+# below, because C2 and C5 depend on it.
 families_of() { local v4=no v6=no x; for x in $1; do case "$x" in *:*) v6=yes ;; *.*) v4=yes ;; esac; done; echo "$v4 $v6"; }
 # nodes_not FAMILIES - the nodes whose pod ranges are not FAMILIES (a families_of answer, e.g. "yes yes").
 nodes_not() { local name cidrs; while read -r name cidrs; do [ -z "$name" ] && continue; [ "$(families_of "$cidrs")" = "$1" ] || echo "$name"; done <<<"$node_cidrs"; }
 node_cidrs="$(k get nodes -o json | jq -r '.items[] | "\(.metadata.name) \((.spec.podCIDRs // []) | join(" "))"')" || node_cidrs=""
+# A CNI that hands out pod addresses itself leaves spec.podCIDRs empty (EKS's VPC CNI; Azure CNI Overlay
+# with Cilium on AKS): for such a node the families are those of its pods' own addresses (hostNetwork pods
+# have the node's, so they are left out). A node with neither stays empty - and counts as single-stack.
+pod_ips="$(k get pods -A -o json | jq -r '.items[] | select(.spec.hostNetwork != true and .spec.nodeName != null) | "\(.spec.nodeName) \([.status.podIPs[]?.ip] | join(" "))"')" || pod_ips=""
+node_cidrs="$(while read -r name cidrs; do
+  [ -z "$name" ] && continue
+  [ -z "$cidrs" ] && cidrs="$(awk -v n="$name" '$1 == n { $1 = ""; print }' <<<"$pod_ips" | tr '\n' ' ')"
+  echo "$name $cidrs"
+done <<<"$node_cidrs")"
 single_nodes="$(nodes_not "yes yes")"
 svc_ips="$(k -n "$NS" get service server -o jsonpath='{.spec.clusterIPs[*]}' 2>/dev/null)" || svc_ips=""
 dual=false
@@ -269,13 +279,14 @@ EOF
       elif ! k -n "$NS" patch pvc disk --type merge -p "{\"spec\":{\"resources\":{\"requests\":{\"storage\":\"$bigger\"}}}}" >/dev/null; then
         fail C4 "expansion - the resize to $bigger was refused"
       else
+        # Up to 4 minutes: Azure Disk took 156 s on AKS (2026-10-21) - the disk itself first, then the file system.
         grown=""
-        for _ in $(seq 1 24); do
+        for _ in $(seq 1 48); do
           grown="$(k -n "$NS" get pvc disk -o jsonpath='{.status.capacity.storage}')" || grown=""
           [ "$grown" = "$bigger" ] && break
           sleep 5
         done
-        if [ "$grown" = "$bigger" ]; then pass C4 "disk expanded online to $bigger"; else fail C4 "disk not expanded to $bigger within 2 min (capacity $grown)"; fi
+        if [ "$grown" = "$bigger" ]; then pass C4 "disk expanded online to $bigger"; else fail C4 "disk not expanded to $bigger within 4 min (capacity $grown)"; fi
       fi
     else
       skip C4 "expansion - StorageClass ${sc% *} does not allow it (the platform never resizes a disk)"
@@ -434,7 +445,7 @@ elif [ "$dual" = true ] && [ "$svcs_read" = false ]; then
 elif [ "$dual" = true ] && [ -n "$weak_svcs" ]; then
   fail C13 "dual-stack, but these Services do not require both families: $(tr '\n' ' ' <<<"$weak_svcs")- cluster-config service_ip_family_policy is only for ip_stack ipv4"
 elif [ "$dual" = true ]; then
-  pass C13 "dual-stack: every node has an IPv4 and an IPv6 pod range; a Service gets $svc_ips"
+  pass C13 "dual-stack: every node has IPv4 and IPv6 pod addresses; a Service gets $svc_ips"
 elif [ -z "$node_cidrs" ]; then
   fail C13 "dual-stack - could not read the nodes' pod ranges"
 elif [ -n "$single_nodes" ]; then

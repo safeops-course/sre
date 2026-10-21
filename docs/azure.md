@@ -118,7 +118,7 @@ az consumption budget list --query '[].{name:name, amount:amount}'
 | Control plane | Public endpoint; Microsoft Entra ID tokens only, authorized by Azure RBAC; no local accounts | The way in for a laptop and a GitHub runner alike, as on GKE and EKS. Without local accounts no admin certificate exists that a leaked kubeconfig could carry, and `az aks get-credentials --admin` is refused. |
 | Upgrades | By default: Kubernetes patches (`patch` channel - the minor stays `kubernetes_version`'s) and a new node image every week, inside a weekly window | Security fixes without a person. The course's tfvars turns both off: an upgrade must not start in the middle of a check. |
 | Node pools | `platform` (the system pool: AKS's own pods and the platform's) and `apps` (a user pool), on-demand, fixed size, managed OS disk | Split by role. Spot is possible only for a user pool, and AKS taints Spot nodes, so every app pod would need a toleration. AKS adds no nodes unless the cluster autoscaler is on: a pool grows by its `node_count`. |
-| Storage | AKS's own `managed-csi` (Azure Disk, Standard SSD) is the default StorageClass | Nothing to add. |
+| Storage | AKS's own StorageClass `default` (Azure Disk CSI, Standard SSD, `WaitForFirstConsumer`, expandable - the same as `managed-csi`) is the default | Nothing to add. An online expansion took about 2.5 minutes (2026-10-21). |
 | Load balancer | AKS's cloud controller gives Traefik's Service frontends on the cluster's Standard load balancer, IPv4 and IPv6 | The base Service requires both families. Deleted with the Service. |
 | Logs | Control-plane logs (kube-apiserver, kube-audit-admin, guard) to a Log Analytics workspace, 90 days, by default | kube-audit-admin is the record of who changed what on AKS. Billed per GiB; the course's test cycles turn them off in `terraform.tfvars`. A cluster that matters keeps them. |
 | kubeconfig | `kubeconfig.yaml`, context `aks-sre-control-plane` | The endpoint and Azure kubelogin (`get-token --login azurecli`): a short-lived Entra token of whoever is signed in to the CLI. No credentials in the file. |
@@ -135,6 +135,8 @@ make -C infra/terraform/aks_cluster apply           # the cluster, the pools, th
 kubectl --kubeconfig infra/terraform/aks_cluster/kubeconfig.yaml get nodes
 make -C infra/terraform/aks_cluster destroy         # asks first, then runs make leftovers
 ```
+
+The first cycle (2026-10-21) took about 8 minutes to apply (cluster 5.5, apps pool 1.5) and 7 more until every Flux Kustomization was Ready; the destroy took about 10 minutes, and `make leftovers` found nothing. Conformance: 12 PASS, C8, C10 and C12 SKIP. Measured then: the nodes' requests 1.5 and 1.1 of 1.9 allocatable cores (AKS's own pods ask for a lot; about 0.15 cores used per node), memory used 75 and 84 % of 5.7 GiB - memory, not CPU, is what a bigger cluster would need first. The Free tier's API server dropped a few connections under load: a retry worked.
 
 A cycle that tests a branch (pushed first) plans with `TF_VAR_flux_git_repository_branch=<branch>`: Flux then follows that branch from the first reconcile. Without it Flux follows `main`, where a new profile does not exist yet.
 
