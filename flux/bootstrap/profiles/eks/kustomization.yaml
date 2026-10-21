@@ -7,8 +7,8 @@
 #   components   every one, as on Hetzner and GKE
 #   patches      Traefik's LoadBalancer Service gets a Network Load Balancer from the AWS Load Balancer
 #                Controller (installed by Terraform, which also deletes the NLB with the Service on
-#                destroy: infra/terraform/eks_cluster/flux.tf), IPv4 only - the written exception of
-#                docs/providers.md (the apps' Services take it from cluster-config service_ip_family_policy)
+#                destroy: infra/terraform/eks_cluster/flux.tf). IPv4 only - the written exception of
+#                docs/providers.md - comes from cluster-config service_ip_family_policy, not from here
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -27,14 +27,13 @@ patches:
         path: /spec/path
         value: ./flux/bootstrap/profiles/eks
 
-  # --- Traefik: a Network Load Balancer, IPv4 --------------------------------
+  # --- Traefik: a Network Load Balancer ---------------------------------------
   # loadBalancerClass hands the Service to the Load Balancer Controller (the legacy in-tree controller
   # would make a Classic Load Balancer). IP targets: the NLB sends to the Traefik pods directly, not
-  # through a node port. preserve_client_ip: the packets keep the client's address, so Traefik's
-  # access log and the apps see the real client - no PROXY protocol. The class and the annotations are
-  # read when the Service is created (every cycle creates it).
-  # An EKS cluster has no dual-stack pods or Services (docs/providers.md): PreferDualStack takes the one
-  # family there is, and ipFamilies goes - a listed IPv6 would be refused.
+  # through a node port. preserve_client_ip: the packets keep the source address of whoever connects -
+  # no PROXY protocol. The public names are Cloudflare-proxied (cluster-config cloudflare_proxied), so
+  # that source is a Cloudflare edge; the visitor's own address is in its CF-Connecting-IP header. The
+  # class and the annotations are read when the Service is created (every cycle creates it).
   # https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/service/annotations/
   - target: { kind: Kustomization, name: traefik }
     patch: |-
@@ -43,11 +42,6 @@ patches:
         value:
           - target: { kind: HelmRelease, name: traefik }
             patch: |-
-              - op: replace
-                path: /spec/values/service/spec/ipFamilyPolicy
-                value: PreferDualStack
-              - op: remove
-                path: /spec/values/service/spec/ipFamilies
               - op: add
                 path: /spec/values/service/spec/loadBalancerClass
                 value: service.k8s.aws/nlb

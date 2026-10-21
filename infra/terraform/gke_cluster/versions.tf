@@ -1,4 +1,5 @@
-# Terraform and provider versions; the exact versions are pinned in .terraform.lock.hcl.
+# Terraform and provider versions: the ranges below; .terraform.lock.hcl (git-ignored, as in every module
+# here) pins the exact build per checkout - another checkout can resolve a newer one within the range.
 #   google  Google Cloud - VPC, Cloud NAT, firewall, GKE, alert policies
 #   local       writes kubeconfig.yaml next to the module (no credentials in it)
 #   kubernetes  what Terraform puts inside the cluster before Flux takes over (flux.tf)

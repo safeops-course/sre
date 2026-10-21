@@ -12,6 +12,9 @@
 # through `aws eks get-token` of var.aws_profile (make preflight checks that it is var.expected_principal_arn).
 
 locals {
+  # A fact about the provider, never read from a setting: an EKS cluster is IPv4 or IPv6, not both
+  # (docs/providers.md). cluster-config carries it, and the Services' family policy derived from it.
+  ip_stack        = "ipv4"
   kubeconfig_path = local_file.kubeconfig.filename
   # What tells this cluster from a re-created one: every new cluster has a new certificate authority.
   # The ARN stays the same when a cluster of the same name is re-created.
@@ -51,13 +54,12 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cloudflare_proxied = "enabled"
     # Names the provider in the external-dns owner ID (k8s-external-dns-<cluster_name>-<cloud_provider>).
     cloud_provider = "eks"
-    # A fact about the provider, never read from a setting: an EKS cluster is IPv4 or IPv6, not both
-    # (docs/providers.md) - profiles/eks asks for PreferDualStack, and conformance C13 checks this promise.
-    ip_stack = "ipv4"
-    # The apps' Services take the one family there is instead of requiring two (flux/apps/*/base/service.yaml);
-    # Traefik's Service gets the same from profiles/eks. Only with ip_stack "ipv4": conformance C13 fails a
-    # dual-stack cluster whose app Services do not require both families.
-    service_ip_family_policy = "PreferDualStack"
+    # IPv4 only (local.ip_stack) - conformance C13 checks this promise.
+    ip_stack = local.ip_stack
+    # The apps' and Traefik's Services take the one family there is instead of requiring two
+    # (flux/apps/*/base/service.yaml, flux/infrastructure/ingress/traefik) - derived from ip_stack, so the
+    # two never disagree; conformance C13 fails a dual-stack cluster whose Services ask for less.
+    service_ip_family_policy = local.ip_stack == "dual" ? "RequireDualStack" : "PreferDualStack"
     cluster_name             = var.cluster_name
     image_registry           = var.image_registry
     git_owner                = var.git_owner

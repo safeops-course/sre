@@ -106,7 +106,7 @@ scripts/             # Pre-commit hooks, automation scripts
   (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
   (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly; a provider
   without IPv6 by default (EKS) writes cluster-config `ip_stack = "ipv4"` and `service_ip_family_policy = "PreferDualStack"`
-  (the app Services read it) and patches Traefik's Service in its profile
+  (the app and Traefik Services read it)
 - **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
   `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
 - **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)

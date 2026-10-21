@@ -258,7 +258,6 @@ data "aws_iam_policy_document" "deployer" {
       "autoscaling:Describe*",          # node group instances
       "elasticloadbalancing:Describe*", # the pre-destroy wait for the NLB and `make leftovers`
       "logs:DescribeLogGroups",         # `make leftovers`
-      "tag:GetResources",               # `make leftovers`: anything tagged with the cluster
     ]
     resources = ["*"]
     condition {
@@ -275,10 +274,24 @@ data "aws_iam_policy_document" "deployer" {
     resources = ["arn:aws:ssm:${var.region}::parameter/aws/service/eks/*"]
   }
 
-  # The cluster's log groups: created, tagged, given a retention and deleted with the cluster.
+  # The cluster's log groups: created, tagged, given a retention and deleted with the cluster - what
+  # Terraform does to a log group, nothing more. No reading or writing of the events, no subscription
+  # filters (they would stream the audit log elsewhere), no deleting a stream: the audit log is the record
+  # of who did what, and the identity it records must not edit it. (Deleting the whole group goes with
+  # destroying the cluster.)
   statement {
-    sid     = "ClusterLogGroups"
-    actions = ["logs:*"]
+    sid = "ClusterLogGroups"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:DeleteLogGroup",
+      "logs:PutRetentionPolicy",
+      "logs:DeleteRetentionPolicy",
+      "logs:TagResource",
+      "logs:UntagResource",
+      "logs:ListTagsForResource",
+      "logs:TagLogGroup",
+      "logs:ListTagsLogGroup",
+    ]
     resources = [
       "arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/eks/${var.cluster_name}/*",
       "arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/vpc-flow-log/*",

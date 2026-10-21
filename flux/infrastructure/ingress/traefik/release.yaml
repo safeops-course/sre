@@ -61,11 +61,13 @@ spec:
         memory: 150Mi
     # service.spec.type stays the chart's default, LoadBalancer; its annotations come from the profile.
     # Both families, or the Service fails loudly: the load balancer gets an IPv6 address too, and
-    # external-dns publishes its AAAA record next to the A record.
+    # external-dns publishes its AAAA record next to the A record. The policy comes from cluster-config
+    # service_ip_family_policy (postBuild), as for the apps' Services: RequireDualStack unless a module
+    # without IPv6 (EKS) writes PreferDualStack. No ipFamilies: RequireDualStack gets both anyway, and a
+    # listed IPv6 would be refused on a single-stack cluster.
     service:
       spec:
-        ipFamilyPolicy: RequireDualStack
-        ipFamilies: [IPv4, IPv6]
+        ipFamilyPolicy: ${service_ip_family_policy:=RequireDualStack}
     ports:
       web:
         http:

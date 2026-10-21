@@ -46,7 +46,7 @@ pattern, AWS, Azure or any other. A new provider is a checklist, not a new desig
   both of its addresses (`make smoke-test`: an image that listens on IPv4 only fails there, not as a 502 later).
   Without it by default (EKS gives a cluster IPv4 or IPv6, not both), the module writes `ip_stack = "ipv4"` and
   `service_ip_family_policy = "PreferDualStack"` to cluster-config (`"dual"` and the default `RequireDualStack`
-  everywhere else): the apps' Services read the policy, the profile patches Traefik's Service the same way (no
+  everywhere else): the apps' and Traefik's Services read the policy (no
   `ipFamilies` - a listed IPv6 would be refused) - a written exception, and conformance C13 checks the promise.
 
 ## Proof

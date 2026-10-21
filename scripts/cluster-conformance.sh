@@ -397,7 +397,7 @@ else
 fi
 
 # C12 - nothing billed is left after a destroy: a check after the cluster is gone, not on it.
-skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers; kind: nothing billed)"
+skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers, EKS: make -C infra/terraform/eks_cluster leftovers; kind: nothing billed)"
 
 # C13 - the address families the provider promises: cluster-config ip_stack, written by the module's
 # Terraform. "dual": IPv4 and IPv6 for every node's pods and for Services (decided before C2) - a provider
@@ -406,9 +406,11 @@ skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scr
 # On "ipv4" a node must not have an IPv6 pod range; one without pod ranges is fine - a CNI that hands out
 # pod addresses itself (EKS's VPC CNI) leaves spec.podCIDRs empty.
 v6_nodes="$(while read -r name cidrs; do case "$cidrs" in *:*) echo "$name" ;; esac; done <<<"$node_cidrs")"
-# The apps' Services take their policy from cluster-config service_ip_family_policy (RequireDualStack unless a
-# module sets it): on a dual-stack cluster none may ask for less, or IPv6 goes missing without an error.
-weak_svcs="$(k get services -A -o json | jq -r '.items[] | select((.metadata.namespace | test("^(develop|staging|production)$")) and (.metadata.name == "frontend" or .metadata.name == "backend") and .spec.ipFamilyPolicy != "RequireDualStack") | "\(.metadata.namespace)/\(.metadata.name)"')" || weak_svcs="(could not read the Services)"
+# The apps' and Traefik's Services take their policy from cluster-config service_ip_family_policy
+# (RequireDualStack unless a module sets it): on a dual-stack cluster none may ask for less, or IPv6 goes
+# missing without an error.
+svcs_read=true
+weak_svcs="$(k get services -A -o json | jq -r '.items[] | select(((.metadata.namespace | test("^(develop|staging|production)$")) and (.metadata.name == "frontend" or .metadata.name == "backend")) or (.metadata.namespace == "traefik" and .metadata.name == "traefik")) | select(.spec.ipFamilyPolicy != "RequireDualStack") | "\(.metadata.namespace)/\(.metadata.name)"')" || svcs_read=false
 if [ -n "$ip_stack_note" ]; then
   fail C13 "address families - $ip_stack_note"
 elif [ "$ip_stack" = ipv4 ]; then
@@ -427,8 +429,10 @@ elif [ -z "$ip_stack" ]; then
   fail C13 "cluster-config has no ip_stack - the module's Terraform writes it (a cluster from before it: terraform apply once)"
 elif [ "$ip_stack" != dual ]; then
   fail C13 "cluster-config ip_stack '${ip_stack}' is not supported - dual or ipv4"
+elif [ "$dual" = true ] && [ "$svcs_read" = false ]; then
+  fail C13 "dual-stack - could not read the Services to check their family policy"
 elif [ "$dual" = true ] && [ -n "$weak_svcs" ]; then
-  fail C13 "dual-stack, but app Services do not require both families: $(tr '\n' ' ' <<<"$weak_svcs")- cluster-config service_ip_family_policy is only for ip_stack ipv4"
+  fail C13 "dual-stack, but these Services do not require both families: $(tr '\n' ' ' <<<"$weak_svcs")- cluster-config service_ip_family_policy is only for ip_stack ipv4"
 elif [ "$dual" = true ]; then
   pass C13 "dual-stack: every node has an IPv4 and an IPv6 pod range; a Service gets $svc_ips"
 elif [ -z "$node_cidrs" ]; then

@@ -1,4 +1,5 @@
-# Terraform and provider versions; the exact versions are pinned in .terraform.lock.hcl.
+# Terraform and provider versions: the ranges below; .terraform.lock.hcl (git-ignored, as in every module
+# here) pins the exact build per checkout - another checkout can resolve a newer one within the range.
 #   aws         AWS - VPC, NAT gateway, EKS, node groups, add-ons, Pod Identity associations
 #   kubernetes  what Terraform puts inside the cluster before Flux takes over (flux.tf)
 #   helm        the AWS Load Balancer Controller (main.tf) - before Flux, so Traefik's Service finds it
