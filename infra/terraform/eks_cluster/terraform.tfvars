@@ -21,8 +21,9 @@ single_nat_gateway = true
 # costs a few minutes, Spot saves 60-90 %. Not a recommendation - a cluster that matters sets false.
 # x86, 2 vCPU each: 4 vCPU in all, under a new account's 5 vCPU quota for Spot (Service Quotas
 # L-34B43A08). Memory, not CPU, is what the platform runs short of: 16 GiB (r-family) for the platform,
-# 8 GiB for the apps. No pod is pinned to a group, so CPU requests spread over both nodes: kind measured
-# 2026-10-15 the platform 1.33 cores, the apps 0.54, against about 3.9 allocatable. An in-place node
+# 8 GiB for the apps. No pod is pinned to a group, so CPU requests spread over both nodes: on kind
+# (2026-10-21, after sre#233) the platform requests 0.56 cores and 3.3Gi, the apps 0.54 cores and 1.2Gi,
+# against about 3.9 cores allocatable; EKS adds its own pods (CoreDNS, the CSI driver, the controller). An in-place node
 # upgrade starts new nodes first and needs quota above the 4 vCPU - a cycle never upgrades. Four families
 # of the same size each: Spot picks whichever pool has capacity.
 platform_pool = {
