@@ -34,13 +34,16 @@ spec:
       prometheusSpec:
         retention: 7d
         retentionSize: "10GB"
+        # Memory: it used 401Mi at rest on kind (2026-10-21) - 80 % of the old 512Mi limit, with more
+        # targets on a cloud cluster. CPU stays 100m (11m at rest): it evaluates the alert rules, which
+        # already ran short of CPU once (sre#132).
         resources:
           requests:
             cpu: 100m
-            memory: 256Mi
+            memory: 512Mi
           limits:
             cpu: 500m
-            memory: 512Mi
+            memory: 1Gi
         storageSpec:
           volumeClaimTemplate:
             spec:
@@ -86,14 +89,22 @@ spec:
           maxUnavailable: 1
       # Grafana 13 registers its API groups and runs storage migrations at start: at a 100m limit it took
       # over the liveness probe's 160 s and was restarted in a loop, and it uses ~230Mi once up (measured
-      # on kind). The CPU limit is for the start; at rest it uses little.
+      # on kind; 218Mi on 2026-10-21). The CPU limit is for the start; at rest it uses little.
       resources:
         requests:
           cpu: 50m
-          memory: 192Mi
+          memory: 256Mi
         limits:
           cpu: "1"
           memory: 512Mi
+      # The two sidecars that load dashboards and datasources requested nothing; they use ~80Mi each.
+      sidecar:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 96Mi
+          limits:
+            memory: 192Mi
       # Default dashboards
       defaultDashboardsEnabled: true
       defaultDashboardsTimezone: UTC

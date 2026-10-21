@@ -25,3 +25,27 @@ spec:
   values:
     crds:
       enabled: true
+    # The chart requests nothing: the pods are BestEffort, so any memory they use is over their request,
+    # and such pods are the first the kubelet evicts when a node runs short. Requests are what they use
+    # at rest (kind 2026-10-21: controller 33Mi, cainjector 62Mi, webhook 12Mi) plus room; the memory
+    # limits catch a leak.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    cainjector:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 96Mi
+        limits:
+          memory: 256Mi
+    webhook:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi

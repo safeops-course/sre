@@ -193,6 +193,8 @@ resource "null_resource" "flux_operator_install" {
     operator_version = var.flux_operator_version
     # a re-pinned manifest (same version) is installed and checked again
     manifest_sha256 = local.flux_operator_manifest_sha256
+    # the operator's memory request, set by the install script: run it again when it changes
+    operator_memory = regex("memory\\) = \"([0-9]+Mi)\"", file("${path.module}/../scripts/flux-operator-install.sh"))[0]
   }
 
   provisioner "local-exec" {
@@ -221,6 +223,8 @@ resource "null_resource" "flux_instance" {
     repo_branch     = var.flux_git_repository_branch
     repo_path       = var.flux_kustomization_path
     flux_version    = var.flux_version
+    # re-apply the FluxInstance when the controllers' requests change (the parsed YAML: not its comments)
+    controllers_resources = sha256(jsonencode(yamldecode(file("${path.module}/../scripts/flux-controllers-resources.yaml"))))
   }
 
   provisioner "local-exec" {
@@ -245,6 +249,7 @@ resource "null_resource" "flux_instance" {
           - image-automation-controller
         cluster:
           type: kubernetes
+        ${indent(2, chomp(file("${path.module}/../scripts/flux-controllers-resources.yaml")))}
         sync:
           kind: GitRepository
           url: "${var.flux_git_repository_url}"

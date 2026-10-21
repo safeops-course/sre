@@ -29,3 +29,13 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  values:
+    # The chart requests nothing: the pod is BestEffort, so any memory it uses is over its request, and
+    # such pods are the first the kubelet evicts when a node runs short. The request is what it uses at
+    # rest plus room (kind 2026-10-21: 18Mi); the memory limit catches a leak.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi

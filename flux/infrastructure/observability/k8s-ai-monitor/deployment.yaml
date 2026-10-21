@@ -132,13 +132,14 @@ spec:
               port: http
             initialDelaySeconds: 20
             periodSeconds: 20
+          # Memory: it used 188Mi at rest on kind (2026-10-21), 73 % of the old 256Mi limit.
           resources:
             requests:
               cpu: 10m
-              memory: 64Mi
+              memory: 192Mi
             limits:
               cpu: 100m
-              memory: 256Mi
+              memory: 384Mi
       volumes:
         - name: data
           persistentVolumeClaim:
