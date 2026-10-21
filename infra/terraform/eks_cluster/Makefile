@@ -80,9 +80,11 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 
 # Terraform asks before it destroys; AUTO_APPROVE=1 skips the question (CI, or a confirmed teardown).
 # The order mirrors gke_cluster's destroy:
-#   0. kubeconfig.yaml, if this checkout has none (it is git-ignored: a destroy from another checkout than
-#      the apply's) - the hook below reaches the cluster only through it. The AWS CLI writes it (read-only
-#      calls), never `terraform apply -target=local_file.kubeconfig`: a target brings its dependencies -
+#   0. kubeconfig.yaml, written again from the live cluster - the hook below reaches the cluster only
+#      through it, and a file this checkout lacks (it is git-ignored) or kept from an earlier cluster of
+#      the same name (another endpoint and CA) would leave the NLB and the volumes behind. The AWS CLI
+#      writes it (read-only calls; on a failure the file is left as it was), never
+#      `terraform apply -target=local_file.kubeconfig`: a target brings its dependencies -
 #      the cluster and the VPC - into an apply nobody planned or approved. update-kubeconfig names the
 #      profile only as AWS_PROFILE in the exec env, and the R2 key this Makefile exports as AWS_ACCESS_KEY_ID
 #      would win over it; kubectl then writes the exec args of kubeconfig.yaml's own (versions.tf
@@ -96,7 +98,7 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #   4. leftovers, whatever the destroy returned; a failed destroy keeps its own exit status.
 destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@for t in aws kubectl jq; do command -v $$t >/dev/null || echo "WARNING: no $$t - the pre-destroy hook cannot clean the cluster (NLB, volumes); check make leftovers" >&2; done
-	@test -f kubeconfig.yaml || { \
+	@{ \
 	  $(AWS) eks update-kubeconfig --name "$(CLUSTER)" --kubeconfig kubeconfig.yaml \
 	    --alias "eks-$(CLUSTER)-control-plane" --user-alias "eks-$(CLUSTER)" >/dev/null && \
 	  kubectl config set-credentials "eks-$(CLUSTER)" --kubeconfig kubeconfig.yaml \
