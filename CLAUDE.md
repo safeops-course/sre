@@ -64,14 +64,18 @@ infra/terraform/
                      # Cloud NAT, DNS endpoint only, pools "platform" + "apps"; `make plan|apply|destroy|leftovers`,
                      # kubeconfig.yaml context gke-sre-control-plane (no credentials; gke-gcloud-auth-plugin);
                      # flux.tf: the same Flux bootstrap as Hetzner, profile flux/bootstrap/profiles/gke
-  aws_foundation/    # AWS: the cluster's IAM roles (EKS, nodes, EBS CSI, Load Balancer Controller), GitHub OIDC +
+  aws_foundation/    # AWS: the cluster's IAM roles (EKS, nodes, EBS CSI, Load Balancer Controller, VPC Flow Logs), GitHub OIDC +
                      # deployer role (passes those roles, creates none), budget, account defaults (S3 public access
                      # blocked, EBS encryption, IMDSv2) - applied once by a person, nothing billed (docs/aws.md;
                      # `make -C infra/terraform/aws_foundation bootstrap`, settings in .env.aws, `aws login` profile)
+  eks_cluster/       # EKS Standard, per test cycle: own VPC (2 zones, private nodes + NAT gateway), public endpoint + IAM
+                     # access entries, managed node groups "platform" + "apps", VPC CNI NetworkPolicy, Pod Identity, AWS Load
+                     # Balancer Controller (Helm) for Traefik's NLB; `make plan|apply|destroy|leftovers`, kubeconfig.yaml context
+                     # eks-sre-control-plane (`aws eks get-token`); flux.tf: the same Flux bootstrap, profile flux/bootstrap/profiles/eks
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap: a profile per cluster on the provider-neutral base flux-system/.
-                     # profiles/hetzner and profiles/gke = base + all components (components/: platform-secrets, public-edge,
+                     # profiles/hetzner, profiles/gke and profiles/eks = base + all components (components/: platform-secrets, public-edge,
                      # image-automation, alerting, opentelemetry) (+ the Hetzner load balancer patch on Hetzner);
                      # profiles/local (kind) = base + minio, lab, local secrets + kind patches, and only the opentelemetry
                      # component (its collectors send to their own log there - docs/observability/logs.md).
@@ -101,7 +105,8 @@ scripts/             # Pre-commit hooks, automation scripts
   writes its pod IPv6 range to cluster-config `cluster_ipv6_range`; `allow-backend-egress-https` cuts it out of `::/0`
   (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
   (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly; a provider
-  without IPv6 by default patches `PreferDualStack` in its profile and writes cluster-config `ip_stack = "ipv4"`
+  without IPv6 by default (EKS) writes cluster-config `ip_stack = "ipv4"` and `service_ip_family_policy = "PreferDualStack"`
+  (the app and Traefik Services read it)
 - **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
   `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
 - **Observability**: kube-prometheus-stack (Prometheus, Grafana) + k8s-ai-monitor (AI-assisted alert routing)
@@ -193,7 +198,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - `make install-hooks` — install all pre-commit hooks
 - `make pre-commit` — run all hooks manually
 - `make fmt` — terraform fmt recursive
-- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, state-lab), no backend, no credentials
+- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, eks, state-lab), no backend, no credentials
 - `make tf` — list the Terraform modules and their targets
 - `make kind-plan` / `kind-apply` / `kind-drift` / `kind-destroy` — local cluster; plan is saved with
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)

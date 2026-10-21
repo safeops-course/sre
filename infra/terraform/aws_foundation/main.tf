@@ -4,8 +4,8 @@
 # with what infra/terraform/eks_cluster creates.
 #
 #   identity check        only var.expected_principal_arn may plan or apply
-#   cluster IAM roles     the EKS cluster, its nodes, the EBS CSI driver and the Load Balancer Controller -
-#                         made here, so the deployer never creates or changes an IAM role or policy
+#   cluster IAM roles     the EKS cluster, its nodes, the EBS CSI driver, the Load Balancer Controller and the
+#                         VPC Flow Logs - made here, so the deployer never creates or changes an IAM role or policy
 #   GitHub OIDC + deployer GitHub Actions of one repository on one ref get short-lived credentials of the
 #                         deployer role; no access key exists anywhere
 #   budget                warns at 50/90/100 % of spend and at 100 % of the forecast
@@ -115,13 +115,57 @@ module "aws_lbc_role" {
   attach_aws_lb_controller_policy = true
 }
 
+# VPC Flow Logs of the cluster's VPC (eks_cluster var.flow_logs) write to CloudWatch Logs through this
+# role: only into the flow-log groups, and only for VPCs of this account.
+# https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam-role.html
+data "aws_iam_policy_document" "vpc_flow_logs_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
+    }
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_logs" {
+  name               = "${var.cluster_name}-vpc-flow-logs"
+  description        = "VPC Flow Logs of ${var.cluster_name} to CloudWatch Logs."
+  assume_role_policy = data.aws_iam_policy_document.vpc_flow_logs_assume.json
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs" {
+  # checkov:skip=CKV_AWS_356:logs:DescribeLogGroups has no resource ARN - read-only, listed in AWS's flow-logs role
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+    resources = ["arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/vpc-flow-log/*"]
+  }
+  statement {
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  name   = "write-flow-logs"
+  role   = aws_iam_role.vpc_flow_logs.id
+  policy = data.aws_iam_policy_document.vpc_flow_logs.json
+}
+
 locals {
-  # The roles the deployer may hand to EKS (cluster, node groups, Pod Identity associations).
+  # The roles the deployer may hand on: to EKS (cluster, node groups, Pod Identity associations) and to
+  # VPC Flow Logs.
   cluster_role_arns = [
     aws_iam_role.eks_cluster.arn,
     aws_iam_role.eks_nodes.arn,
     module.ebs_csi_role.iam_role_arn,
     module.aws_lbc_role.iam_role_arn,
+    aws_iam_role.vpc_flow_logs.arn,
   ]
 }
 
@@ -187,9 +231,9 @@ resource "aws_iam_role" "deployer" {
 # var.region: EKS node groups need launch templates, instances, security groups, the VPC with its NAT,
 # and listing the actions one by one would break on every module update. What ec2:* would also allow -
 # undoing this module's account defaults - is denied explicitly (GuardAccountDefaults).
-# Not here, on purpose: CloudWatch Logs writes, KMS keys and an IRSA OIDC provider - the cluster module
-# turns them off (control-plane logs off with a comment, AWS-owned secrets encryption, Pod Identity);
-# turning one on means adding its rights here first.
+# CloudWatch Logs only for the cluster's own log groups (control-plane logs, VPC Flow Logs). Not here, on
+# purpose: KMS keys and an IRSA OIDC provider - the cluster module uses neither (AWS-owned secrets
+# encryption, Pod Identity); turning one on means adding its rights here first.
 data "aws_iam_policy_document" "deployer" {
   # checkov:skip=CKV_AWS_356:"*" only where AWS has no resource ARN (eks list/describe-addon-versions, service-linked roles by service name), with the region condition (ec2), or in the Deny
   statement {
@@ -214,7 +258,6 @@ data "aws_iam_policy_document" "deployer" {
       "autoscaling:Describe*",          # node group instances
       "elasticloadbalancing:Describe*", # the pre-destroy wait for the NLB and `make leftovers`
       "logs:DescribeLogGroups",         # `make leftovers`
-      "tag:GetResources",               # `make leftovers`: anything tagged with the cluster
     ]
     resources = ["*"]
     condition {
@@ -231,6 +274,30 @@ data "aws_iam_policy_document" "deployer" {
     resources = ["arn:aws:ssm:${var.region}::parameter/aws/service/eks/*"]
   }
 
+  # The cluster's log groups: created, tagged, given a retention and deleted with the cluster - what
+  # Terraform does to a log group, nothing more. No reading or writing of the events, no subscription
+  # filters (they would stream the audit log elsewhere), no deleting a stream: the audit log is the record
+  # of who did what, and the identity it records must not edit it. (Deleting the whole group goes with
+  # destroying the cluster.)
+  statement {
+    sid = "ClusterLogGroups"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:DeleteLogGroup",
+      "logs:PutRetentionPolicy",
+      "logs:DeleteRetentionPolicy",
+      "logs:TagResource",
+      "logs:UntagResource",
+      "logs:ListTagsForResource",
+      "logs:TagLogGroup",
+      "logs:ListTagsLogGroup",
+    ]
+    resources = [
+      "arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/eks/${var.cluster_name}/*",
+      "arn:aws:logs:${var.region}:${local.account_id}:log-group:/aws/vpc-flow-log/*",
+    ]
+  }
+
   statement {
     sid       = "PassClusterRoles"
     actions   = ["iam:PassRole"]
@@ -238,7 +305,7 @@ data "aws_iam_policy_document" "deployer" {
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
-      values   = ["eks.amazonaws.com", "ec2.amazonaws.com", "pods.eks.amazonaws.com"]
+      values   = ["eks.amazonaws.com", "ec2.amazonaws.com", "pods.eks.amazonaws.com", "vpc-flow-logs.amazonaws.com"]
     }
   }
 
