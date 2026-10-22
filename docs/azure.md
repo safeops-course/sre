@@ -56,7 +56,7 @@ The Azure CLI keeps its sign-in and token cache in `AZURE_CONFIG_DIR`. A directo
 cp .env.azure.example .env.azure     # git-ignored
 ```
 
-Fill in the CLI directory, the subscription and tenant ids, your object id (`az ad signed-in-user show --query id -o tsv`), the alert e-mail and the R2 key. The non-personal settings (location, budget, cluster name, GitHub repository) are in `infra/terraform/azure_foundation/terraform.tfvars`, so change them there for your own subscription.
+Fill in the CLI directory, the subscription and tenant ids, your object id (`az ad signed-in-user show --query id -o tsv`), the alert e-mail and the R2 key. The non-personal settings (location, budget, cluster name, GitHub repository) are in `infra/terraform/azure_foundation/terraform.tfvars`, so change them there for your own subscription. `cluster_name` is in `aks_cluster/terraform.tfvars` too, and the two must be the same: the cluster is built in the foundation's group `<cluster_name>-aks`, and with another name its plan fails with "not found".
 
 The Makefile exports the R2 key as `AWS_ACCESS_KEY_ID`, because the S3 state backend reads that name; nothing on Azure reads it. It also removes any `ARM_*` credentials from Terraform's environment: they would win over the CLI sign-in.
 
