@@ -92,6 +92,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: aks-leftovers-test
+        name: AKS leftovers tests (stub az, no Azure)
+        entry: tests/aks-leftovers.test.sh
+        language: script
+        files: ^(scripts/aks-leftovers\.sh|tests/aks-leftovers\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-policy-exceptions-test
         name: policy-exception check tests (throw-away copy, no cluster)
         entry: tests/check-policy-exceptions.test.sh

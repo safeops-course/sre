@@ -41,6 +41,7 @@ RG       := $(CLUSTER)-aks
 NODES_RG := $(CLUSTER)-aks-nodes
 # The subscription goes after the command: `az --subscription X aks list` is refused (seen 2026-10-21).
 AZ_SUB   := --subscription "$(TF_VAR_subscription_id)"
+LEFTOVERS := ../../../scripts/aks-leftovers.sh
 
 .PHONY: help settings keycheck access preflight init plan apply destroy leftovers
 
@@ -111,7 +112,9 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      an unreachable API must not stop the destroy of what is billed (nodes, load balancer, addresses);
 #   3. terraform destroy; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it
 #      and the destroy left it, pointing at a cluster that is gone;
-#   4. leftovers, whatever the destroy returned; a failed destroy keeps its own exit status.
+#   4. leftovers, whatever the destroy returned - the script itself, not `make leftovers`, so its own exit
+#      status counts; after a successful destroy with --settle, which waits out Azure listing what was just
+#      deleted; a failed destroy keeps its own exit status.
 # `access` first: no destroy starts without the tools, the sign-in and Azure kubelogin the hook needs.
 destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@{ \
@@ -127,32 +130,11 @@ destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), the
 	@$(TF) destroy -refresh=false -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
-	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; fi; \
-	$(MAKE) --no-print-directory leftovers; check=$$?; \
+	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; settle=--settle; else settle=; fi; \
+	$(LEFTOVERS) $$settle "$(CLUSTER)"; check=$$?; \
 	if [ $$rc -ne 0 ]; then exit $$rc; fi; exit $$check
 
-# What can outlive a cluster and keep costing, in the whole subscription: the cluster itself, anything in
-# its group (the log workspace; the group is empty between cycles), the node resource group (nodes,
-# load balancer, addresses), and - wherever they are - disks and snapshots (a PersistentVolume's disk),
-# public IPs, load balancers, virtual networks and Log Analytics workspaces. The subscription holds
-# nothing else billable, so whatever these list is a leftover. Disks and snapshots through `az resource list`:
-# `az disk list` without a resource group is refused (az 2.91). Exit 1 when anything is left, 2 when a
-# query failed: an error never reads as "nothing left".
-leftovers: ## List billable leftovers in the subscription (exit 1 when any, 2 when a query failed)
-	@left=0; failed=0; \
-	check() { \
-	  local what="$$1" out; shift; \
-	  if ! out="$$(az "$$@" $(AZ_SUB) --output tsv)"; then failed=1; echo "FAIL could not list $$what (az error above)" >&2; return; fi; \
-	  if [ -n "$$out" ]; then left=1; echo "LEFT $$what: $$(tr '\t\n' '  ' <<<"$$out")"; fi; \
-	}; \
-	check "AKS clusters"            aks list --query '[].name'; \
-	check "resources in $(RG)"      resource list --resource-group "$(RG)" --query '[].name'; \
-	check "node resource group"     group list --query "[?name=='$(NODES_RG)'].name"; \
-	check "disks"                   resource list --resource-type Microsoft.Compute/disks --query '[].name'; \
-	check "snapshots"               resource list --resource-type Microsoft.Compute/snapshots --query '[].name'; \
-	check "public IPs"              network public-ip list --query '[].name'; \
-	check "load balancers"          network lb list --query '[].name'; \
-	check "virtual networks"        network vnet list --query '[].name'; \
-	check "Log Analytics workspaces" monitor log-analytics workspace list --query '[].name'; \
-	if [ $$failed = 1 ]; then exit 2; fi; \
-	if [ $$left = 0 ]; then echo "OK   nothing left in subscription $$TF_VAR_subscription_id"; else exit 1; fi
+# What can outlive a cluster and keep costing, in the whole subscription - scripts/aks-leftovers.sh lists
+# it (exit 1 when anything is left, 2 when a query failed; make itself then exits 2 either way).
+leftovers: ## List billable leftovers in the subscription (fails when any is left or a query failed)
+	@$(LEFTOVERS) "$(CLUSTER)"

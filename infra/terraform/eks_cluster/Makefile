@@ -121,9 +121,10 @@ destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROV
 # and snapshots (a PersistentVolume's disk), load balancers and their target groups (the NLB of a
 # LoadBalancer Service), NAT gateways and Elastic IPs, network interfaces left by a controller (they
 # also block deleting the VPC), the VPC with its security groups, and log groups. The account holds
-# nothing else, so whatever these list is a leftover. Exit 1 when anything is left, 2 when a query
-# failed: an error never reads as "nothing left".
-leftovers: ## List billable leftovers in the region (exit 1 when any, 2 when a query failed)
+# nothing else, so whatever these list is a leftover. The recipe exits 1 when anything is left, 2 when a
+# query failed - an error never reads as "nothing left"; make itself exits 2 for both, the LEFT or FAIL
+# lines say which.
+leftovers: ## List billable leftovers in the region (fails when any is left or a query failed)
 	@left=0; failed=0; \
 	check() { \
 	  local what="$$1" out; shift; \
