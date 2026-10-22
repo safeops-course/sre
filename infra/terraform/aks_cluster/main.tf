@@ -36,7 +36,7 @@ data "azurerm_resource_group" "aks" {
 locals {
   # AKS puts the nodes, their disks, the load balancer and its addresses in a group of its own and deletes
   # it with the cluster. A fixed name instead of AKS's MC_<group>_<cluster>_<location>: leftovers can name it.
-  node_resource_group = "${data.azurerm_resource_group.aks.name}-nodes"
+  node_resource_group = "${data.azurerm_resource_group.aks.name}-nodes" # also in scripts/aks-leftovers.sh
   # AKS's maintenance windows are UTC and weekly here; both channels share one.
   maintenance_window = {
     frequency   = "Weekly"

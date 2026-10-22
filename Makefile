@@ -109,7 +109,7 @@ gke-apply: ## GKE: apply exactly the saved plan (costs money - destroy after)
 	@$(MAKE) --no-print-directory -C $(GKE_DIR) apply
 gke-destroy: ## GKE: destroy the cluster and its network, check nothing is left
 	@$(MAKE) --no-print-directory -C $(GKE_DIR) destroy
-gke-leftovers: ## GKE: list billable leftovers in the project (exit 1 when any)
+gke-leftovers: ## GKE: list billable leftovers in the project (fails when any)
 	@$(MAKE) --no-print-directory -C $(GKE_DIR) leftovers
 
 aws-plan: ## AWS foundation: plan and save it (read it before aws-apply)
@@ -125,7 +125,7 @@ eks-apply: ## EKS: apply exactly the saved plan (costs money - destroy after)
 	@$(MAKE) --no-print-directory -C $(EKS_DIR) apply
 eks-destroy: ## EKS: destroy the cluster and its network, check nothing is left
 	@$(MAKE) --no-print-directory -C $(EKS_DIR) destroy
-eks-leftovers: ## EKS: list billable leftovers in the region (exit 1 when any)
+eks-leftovers: ## EKS: list billable leftovers in the region (fails when any)
 	@$(MAKE) --no-print-directory -C $(EKS_DIR) leftovers
 
 azure-plan: ## Azure foundation: plan and save it (read it before azure-apply)
@@ -141,7 +141,7 @@ aks-apply: ## AKS: apply exactly the saved plan (costs money - destroy after)
 	@$(MAKE) --no-print-directory -C $(AKS_DIR) apply
 aks-destroy: ## AKS: destroy the cluster, check nothing is left
 	@$(MAKE) --no-print-directory -C $(AKS_DIR) destroy
-aks-leftovers: ## AKS: list billable leftovers in the subscription (exit 1 when any)
+aks-leftovers: ## AKS: list billable leftovers in the subscription (fails when any)
 	@$(MAKE) --no-print-directory -C $(AKS_DIR) leftovers
 
 hcloud-drift: ## Hetzner: does the cloud match the code? (0 = yes, 2 = drift, 1 = error)

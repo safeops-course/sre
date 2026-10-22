@@ -101,9 +101,9 @@ destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROV
 
 # What can outlive a cluster and keep costing: disks of PersistentVolumes (GKE keeps them), load
 # balancer forwarding rules and addresses of LoadBalancer Services, NEGs, and firewall rules GKE or a
-# controller created. Exit 1 when anything is left, 2 when a query failed: an error never reads as
-# "nothing left".
-leftovers: ## List billable leftovers in the project (exit 1 when any, 2 when a query failed)
+# controller created. The recipe exits 1 when anything is left, 2 when a query failed - an error never reads
+# as "nothing left"; make itself exits 2 for both, the LEFT or FAIL lines say which.
+leftovers: ## List billable leftovers in the project (fails when any is left or a query failed)
 	@left=0; failed=0; \
 	for kind in "compute disks" "compute forwarding-rules" "compute target-pools" "compute addresses" \
 	            "compute network-endpoint-groups" "compute firewall-rules" "compute routers" "compute networks" \
