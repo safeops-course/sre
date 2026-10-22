@@ -10,10 +10,14 @@
 #      delete the Ingresses external-dns publishes and wait until it deleted their DNS records: each
 #      provider has its own owner ID, so a record left behind is skipped by the next cluster for ever;
 #      delete every LoadBalancer Service and wait for it: the cloud's load balancer goes only with it;
-#   2. delete the target namespaces except flux-system - with them go the workloads, CNPG clusters
-#      and their PVCs, so no controller recreates a PVC; then stop their pods at once (grace period
-#      0): CloudNativePG gives Postgres up to 30 minutes to shut down, and a running pod keeps its
-#      disk attached; a terminating namespace takes no new pod; then every other PVC in the cluster;
+#   2. stop the CloudNativePG operator and its plugins (cnpg-system) - a running operator recreates
+#      what a terminating namespace is deleting under its Cluster (ServiceAccount, RoleBinding), is
+#      refused and logs an ERROR many times a second: alerts from a teardown; it keeps no finalizer on
+#      its objects, so nothing waits for it. Then delete the target namespaces except flux-system -
+#      with them go the workloads, CNPG clusters and their PVCs, so no controller recreates a PVC;
+#      then stop their pods at once (grace period 0): CloudNativePG gives Postgres up to 30 minutes
+#      to shut down, and a running pod keeps its disk attached; a terminating namespace takes no new
+#      pod; then every other PVC in the cluster;
 #   3. wait until the PersistentVolumes are gone - volumes with reclaimPolicy Delete (hcloud-volumes)
 #      are removed by the CSI driver only while it runs; after the nodes are gone they stay, billed;
 #   4. wait for those namespaces; only for what is still stuck, clear the finalizers on the objects
@@ -30,7 +34,7 @@
 #   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and {gke,eks,aks}_cluster/flux.tf - not meant to be run by hand.
 # Needs kubectl and jq (the published Ingresses, the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
-# Changes the cluster: it suspends Flux, stops Kyverno, deletes the webhooks, every PodDisruptionBudget
+# Changes the cluster: it suspends Flux, stops Kyverno and CloudNativePG, deletes the webhooks, every PodDisruptionBudget
 # outside kube-system, the Ingresses external-dns publishes (and so their DNS records), the given namespaces (their pods at once), every PVC, and the ResourceSets and
 # input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT / PRE_DESTROY_DNS_TIMEOUT
 # (seconds, default 300 / 180 / 180).
@@ -238,6 +242,24 @@ delete_dns_records() {
   warn "external-dns did not confirm deleting the records of${left:- every host (no clean pass after the deletes)} within ${DNS_TIMEOUT}s - delete them in Cloudflare (A, AAAA and their TXT owner records), or the next cluster skips them"
 }
 
+# stop_database_operator - scale every Deployment in cnpg-system (the CloudNativePG operator, the
+# barman-cloud plugin) to 0 and wait until their pods are gone, before the app namespaces are deleted.
+# Seen on every cloud cycle (2026-10-21/22, Uptrace: "Unable to create the ServiceAccount", "Reconciler
+# error" on production/app-postgres) and reproduced on kind: with the operator running, deleting the
+# namespace gave dozens of ERRORs in 5 s; deleting the Cluster first still gave one (a status patch racing
+# the delete); with the operator stopped, none. CNPG puts no finalizer on a Cluster, its pods or PVCs -
+# they go by owner references, so a stopped operator holds nothing up.
+stop_database_operator() {
+  if ! kc get namespace cnpg-system >/dev/null 2>&1; then
+    return 0
+  fi
+  log "stopping CloudNativePG (operator and plugins), so it does not recreate what the namespaces delete"
+  kc -n cnpg-system scale deployment --all --replicas=0 >/dev/null 2>&1 || true
+  if ! kc -n cnpg-system wait --for=delete pod --all --timeout=60s >/dev/null 2>&1; then
+    warn "CloudNativePG pods still running after 60 s - expect operator errors while the namespaces go"
+  fi
+}
+
 # stop_pods NS... - delete every pod in these (already terminating) namespaces with grace period 0.
 # Their data goes with the cluster; waiting for a graceful stop only keeps disks attached - Postgres
 # (CloudNativePG) may take 30 minutes - while the PVs wait and the nodes are billed.
@@ -367,7 +389,7 @@ for ns in ${namespaces[@]+"${namespaces[@]}"}; do
   if [[ "${ns}" == flux-system ]]; then flux_namespace=true; else app_namespaces+=("${ns}"); fi
 done
 
-# The order is the point (see the header): stop Flux and the webhooks, delete the app namespaces and
+# The order is the point (see the header): stop Flux and the webhooks, stop CloudNativePG, delete the app namespaces and
 # volumes while the cluster can still clean up, and remove Flux last.
 suspend_flux
 remove_admission_webhooks
@@ -375,6 +397,7 @@ remove_disruption_budgets
 delete_dns_records
 delete_load_balancers
 if (( ${#app_namespaces[@]} > 0 )); then
+  stop_database_operator
   delete_namespaces "${app_namespaces[@]}"
   stop_pods "${app_namespaces[@]}"
 fi
