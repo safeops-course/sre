@@ -10,10 +10,14 @@
 #      delete the Ingresses external-dns publishes and wait until it deleted their DNS records: each
 #      provider has its own owner ID, so a record left behind is skipped by the next cluster for ever;
 #      delete every LoadBalancer Service and wait for it: the cloud's load balancer goes only with it;
-#   2. delete the target namespaces except flux-system - with them go the workloads, CNPG clusters
-#      and their PVCs, so no controller recreates a PVC; then stop their pods at once (grace period
-#      0): CloudNativePG gives Postgres up to 30 minutes to shut down, and a running pod keeps its
-#      disk attached; a terminating namespace takes no new pod; then every other PVC in the cluster;
+#   2. stop the CloudNativePG operator and its plugins (cnpg-system) - a running operator recreates
+#      what a terminating namespace is deleting under its Cluster (ServiceAccount, RoleBinding), is
+#      refused and logs an ERROR many times a second: alerts from a teardown; the kinds this repository
+#      uses carry no finalizer, so nothing waits for it. Then delete the target namespaces except flux-system -
+#      with them go the workloads, CNPG clusters and their PVCs, so no controller recreates a PVC;
+#      then stop their pods at once (grace period 0): CloudNativePG gives Postgres up to 30 minutes
+#      to shut down, and a running pod keeps its disk attached; a terminating namespace takes no new
+#      pod; then every other PVC in the cluster;
 #   3. wait until the PersistentVolumes are gone - volumes with reclaimPolicy Delete (hcloud-volumes)
 #      are removed by the CSI driver only while it runs; after the nodes are gone they stay, billed;
 #   4. wait for those namespaces; only for what is still stuck, clear the finalizers on the objects
@@ -30,10 +34,11 @@
 #   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and {gke,eks,aks}_cluster/flux.tf - not meant to be run by hand.
 # Needs kubectl and jq (the published Ingresses, the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
-# Changes the cluster: it suspends Flux, stops Kyverno, deletes the webhooks, every PodDisruptionBudget
+# Changes the cluster: it suspends Flux, stops Kyverno and CloudNativePG, deletes the webhooks, every PodDisruptionBudget
 # outside kube-system, the Ingresses external-dns publishes (and so their DNS records), the given namespaces (their pods at once), every PVC, and the ResourceSets and
-# input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_NS_TIMEOUT / PRE_DESTROY_DNS_TIMEOUT
-# (seconds, default 300 / 180 / 180).
+# input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_LB_TIMEOUT / PRE_DESTROY_NS_TIMEOUT /
+# PRE_DESTROY_DNS_TIMEOUT / PRE_DESTROY_OPERATOR_TIMEOUT (seconds, default 300 / 300 / 180 / 180 / 60; a value
+# that is no whole number of seconds is warned about and the default used).
 # Without kubectl, the kubeconfig or a reachable cluster it warns and exits 0 - nothing to clean.
 
 set -o errexit
@@ -42,10 +47,6 @@ set -o pipefail
 
 KUBECONFIG_PATH="${1:-}"
 TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability,traefik}"
-PV_TIMEOUT="${PRE_DESTROY_PV_TIMEOUT:-300}"
-LB_TIMEOUT="${PRE_DESTROY_LB_TIMEOUT:-300}"
-NS_TIMEOUT="${PRE_DESTROY_NS_TIMEOUT:-180}"
-DNS_TIMEOUT="${PRE_DESTROY_DNS_TIMEOUT:-180}"
 
 # log MESSAGE / warn MESSAGE - progress on stdout, problems on stderr, both prefixed.
 log() {
@@ -55,6 +56,28 @@ log() {
 warn() {
   echo "[flux-pre-destroy] WARNING: $*" >&2
 }
+
+# timeout_seconds VARIABLE DEFAULT - the value of the env variable VARIABLE as whole seconds (1-6 digits,
+# read as decimal: 08 is 8, not a bad octal number), or DEFAULT when it is unset. Any other value is
+# warned about and replaced by DEFAULT - never fatal: a bad timeout must not stop the teardown halfway
+# (under errexit a failing $(( )) would) and leave billed volumes behind.
+timeout_seconds() {
+  local value="${!1:-}"
+  if [[ -z "${value}" ]]; then
+    echo "$2"
+  elif [[ "${value}" =~ ^[0-9]{1,6}$ ]]; then
+    echo $((10#${value}))
+  else
+    warn "$1='${value}' is not a whole number of seconds (at most 6 digits) - using $2"
+    echo "$2"
+  fi
+}
+
+PV_TIMEOUT="$(timeout_seconds PRE_DESTROY_PV_TIMEOUT 300)"
+LB_TIMEOUT="$(timeout_seconds PRE_DESTROY_LB_TIMEOUT 300)"
+NS_TIMEOUT="$(timeout_seconds PRE_DESTROY_NS_TIMEOUT 180)"
+DNS_TIMEOUT="$(timeout_seconds PRE_DESTROY_DNS_TIMEOUT 180)"
+OPERATOR_TIMEOUT="$(timeout_seconds PRE_DESTROY_OPERATOR_TIMEOUT 60)"
 
 # kc ARGS... - kubectl against the cluster being destroyed, with a timeout so a dying API cannot hang it.
 kc() {
@@ -139,11 +162,8 @@ remove_flux() {
 # remove_admission_webhooks - stop Kyverno and delete every admission webhook, so no webhook whose
 # backend is already gone can block the deletes that follow.
 remove_admission_webhooks() {
-  # Kyverno re-registers its webhooks while it runs - stop it first.
-  if kc get namespace kyverno >/dev/null 2>&1; then
-    log "stopping Kyverno"
-    kc -n kyverno scale deployment --all --replicas=0 >/dev/null 2>&1 || true
-  fi
+  # Kyverno re-registers its webhooks while it runs - stop it, and wait for it, first.
+  stop_deployments kyverno Kyverno
   log "removing admission webhooks"
   kc delete validatingwebhookconfigurations,mutatingwebhookconfigurations --all >/dev/null 2>&1 || true
 }
@@ -238,6 +258,47 @@ delete_dns_records() {
   warn "external-dns did not confirm deleting the records of${left:- every host (no clean pass after the deletes)} within ${DNS_TIMEOUT}s - delete them in Cloudflare (A, AAAA and their TXT owner records), or the next cluster skips them"
 }
 
+# stop_deployments NAMESPACE NAME - scale every Deployment in NAMESPACE to 0 and wait (OPERATOR_TIMEOUT)
+# until no pod of theirs (owned by a ReplicaSet) is left: a pod still shutting down can still act - Kyverno
+# re-registering its webhooks, the CloudNativePG operator recreating objects. Other pods (a finished Helm hook)
+# are not waited for. Warns - never fails - when the namespace cannot be checked, the scale is refused or
+# the pods do not go.
+stop_deployments() {
+  local ns="$1" name="$2" deadline pods
+  case "$(namespace_state "${ns}")" in
+    absent) return 0 ;;
+    unknown) warn "could not check namespace ${ns} - ${name} not stopped"; return 0 ;;
+  esac
+  log "stopping ${name}"
+  if ! kc -n "${ns}" scale deployment --all --replicas=0 >/dev/null; then
+    warn "could not scale the Deployments in ${ns} to 0 - ${name} keeps running"
+    return 0
+  fi
+  deadline=$((SECONDS + OPERATOR_TIMEOUT))
+  while (( SECONDS < deadline )); do
+    if pods="$(kc -n "${ns}" get pods -o json 2>/dev/null \
+      | jq -r '.items[] | select(any(.metadata.ownerReferences[]?; .kind == "ReplicaSet")) | .metadata.name')" \
+      && [[ -z "${pods}" ]]; then
+      return 0
+    fi
+    sleep 5
+  done
+  warn "${name} still has pods in ${ns} after ${OPERATOR_TIMEOUT}s:${pods:+ $(tr '\n' ' ' <<<"${pods}")}"
+}
+
+# stop_database_operator - stop CloudNativePG (operator and barman-cloud plugin, cnpg-system) before any
+# Postgres namespace or PVC is deleted. With it running, a terminating namespace takes the Cluster's
+# ServiceAccount and RoleBinding first; the operator recreates them, is refused and logs ERRORs many
+# times a second (every cloud cycle 2026-10-21/22 raised Uptrace alerts for production/app-postgres;
+# reproduced on kind: dozens in 5 s; deleting the Cluster first still left one, a status patch racing the
+# delete; with the operator stopped, none). The kinds this repository uses - Cluster, its pods and PVCs,
+# ObjectStore, ScheduledBackup, Backup - carry no finalizer (checked on kind): they go by owner references,
+# and a stopped operator holds nothing up. A declarative Database, Publication or Subscription would carry
+# one - delete those before this step if they are ever added.
+stop_database_operator() {
+  stop_deployments cnpg-system "CloudNativePG (operator and plugins)"
+}
+
 # stop_pods NS... - delete every pod in these (already terminating) namespaces with grace period 0.
 # Their data goes with the cluster; waiting for a graceful stop only keeps disks attached - Postgres
 # (CloudNativePG) may take 30 minutes - while the PVs wait and the nodes are billed.
@@ -323,7 +384,7 @@ unblock_namespace() {
 # --- main ---
 # Without kubectl, a kubeconfig or a reachable API there is nothing this script can clean: warn and
 # let Terraform go on (exit 0), as the provisioner continues on failure anyway.
-SKIPPED="skipped: suspend Flux, stop Kyverno, remove admission webhooks and PodDisruptionBudgets, delete the namespaces, their pods and PVCs, wait for the PersistentVolumes, clear stuck finalizers, remove Flux"
+SKIPPED="skipped: suspend Flux, stop Kyverno, remove admission webhooks and PodDisruptionBudgets, delete the published DNS records and the LoadBalancer Services, stop CloudNativePG, delete the namespaces, their pods and PVCs, wait for the PersistentVolumes, clear stuck finalizers, remove Flux"
 if ! command -v kubectl >/dev/null 2>&1; then
   warn "kubectl not found - no cluster-side cleanup (${SKIPPED}); volumes created by the cluster may be left behind"
   exit 0
@@ -367,13 +428,14 @@ for ns in ${namespaces[@]+"${namespaces[@]}"}; do
   if [[ "${ns}" == flux-system ]]; then flux_namespace=true; else app_namespaces+=("${ns}"); fi
 done
 
-# The order is the point (see the header): stop Flux and the webhooks, delete the app namespaces and
+# The order is the point (see the header): stop Flux and the webhooks, stop CloudNativePG, delete the app namespaces and
 # volumes while the cluster can still clean up, and remove Flux last.
 suspend_flux
 remove_admission_webhooks
 remove_disruption_budgets
 delete_dns_records
 delete_load_balancers
+stop_database_operator
 if (( ${#app_namespaces[@]} > 0 )); then
   delete_namespaces "${app_namespaces[@]}"
   stop_pods "${app_namespaces[@]}"
