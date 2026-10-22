@@ -85,12 +85,17 @@ make -C infra/terraform/azure_foundation apply     # ... then apply exactly that
 
 ## Check it by hand
 
+Every command names the subscription: the CLI's default one may be another, when `az login` holds several.
+Only the two values come from `.env.azure` (the repository root), not its keys.
+
 ```bash
-az provider list --query "[?registrationState=='Registered'].namespace" -o tsv
-az group show --name sre-aks --query '{name:name, location:location}'
-az role assignment list --resource-group sre-aks --query '[].{role:roleDefinitionName, who:principalName}' -o table
-az identity federated-credential list --identity-name terraform-aks --resource-group sre-ci --query '[].subject'
-az consumption budget list --query '[].{name:name, amount:amount}'
+export AZURE_CONFIG_DIR="$(sed -n 's/^AZURE_CONFIG_DIR=//p' .env.azure)"
+sub="$(sed -n 's/^TF_VAR_subscription_id=//p' .env.azure)"
+az provider list --subscription "$sub" --query "[?registrationState=='Registered'].namespace" -o tsv
+az group show --subscription "$sub" --name sre-aks --query '{name:name, location:location}'
+az role assignment list --subscription "$sub" --resource-group sre-aks --query '[].{role:roleDefinitionName, who:principalName}' -o table
+az identity federated-credential list --subscription "$sub" --identity-name terraform-aks --resource-group sre-ci --query '[].subject'
+az consumption budget list --subscription "$sub" --query '[].{name:name, amount:amount}'
 ```
 
 ## Troubleshooting

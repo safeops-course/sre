@@ -105,6 +105,8 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      a target brings the cluster into an apply nobody planned or approved;
 #   1. the pre-destroy hook alone (flux.tf: volumes, Traefik's load balancer Service, Flux) while the
 #      cluster and its CSI driver run;
+#      -refresh=false: a refresh would read the Kubernetes objects it depends on, and an unreachable API
+#      would stop the whole teardown here (the hook itself never fails it - on_failure = continue);
 #   2. the Kubernetes objects and the Flux null_resources leave the state - the cluster goes anyway, and
 #      an unreachable API must not stop the destroy of what is billed (nodes, load balancer, addresses);
 #   3. terraform destroy; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it
@@ -122,7 +124,7 @@ destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), the
 	    --exec-arg=--server-id --exec-arg=6dae42f8-4368-4678-94ff-3960e28e3630 >/dev/null && \
 	  chmod 600 kubeconfig.yaml.new && mv kubeconfig.yaml.new kubeconfig.yaml; \
 	} || { rm -f kubeconfig.yaml.new; echo "WARNING: could not write kubeconfig.yaml (no cluster $(CLUSTER)?) - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2; }
-	@$(TF) destroy -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
+	@$(TF) destroy -refresh=false -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
 	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; fi; \
