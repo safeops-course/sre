@@ -3,6 +3,7 @@
 .env.gcp
 .env.aws
 .env.azure
+.env.doks
 /bin/
 /node_modules/
 /.venv/
