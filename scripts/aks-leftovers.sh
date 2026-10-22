@@ -10,9 +10,10 @@
 # Usage: scripts/aks-leftovers.sh [--settle] <cluster_name>
 #   --settle  after a successful destroy: Azure lists a deleted resource for a while after its delete
 #             returned (2026-10-22: `az resource list` still named the cluster right after the destroy,
-#             a minute later it did not), so "left" is checked again, LEFTOVERS_ATTEMPTS times (default 4)
-#             LEFTOVERS_WAIT seconds apart (default 30); the last answer counts. A failed query is not
-#             retried - it is no lag.
+#             a minute later it did not), so everything is checked up to LEFTOVERS_ATTEMPTS times in all
+#             (default 5: the first check and 4 more), LEFTOVERS_WAIT seconds apart (default 30, so up to
+#             2 minutes of waiting); the last answer counts. Until then a listed resource is printed as
+#             "still listed", not LEFT. A failed query is not retried - it is no lag.
 #
 # Runs at the end of the aks_cluster Makefile's destroy (with --settle when the destroy succeeded) and as
 # its `make leftovers`. Needs: az, signed in from AZURE_CONFIG_DIR; TF_VAR_subscription_id. Changes
@@ -21,35 +22,51 @@
 
 set -Eeuo pipefail
 
-settle=0
-if [[ "${1:-}" == "--settle" ]]; then settle=1; shift; fi
-cluster="${1:-}"
-sub="${TF_VAR_subscription_id:-}"
-attempts="${LEFTOVERS_ATTEMPTS:-4}"
-wait_s="${LEFTOVERS_WAIT:-30}"
-
-if [[ -z "${cluster}" || -z "${sub}" ]]; then
+usage() {
   echo "usage: TF_VAR_subscription_id=... $0 [--settle] <cluster_name>" >&2
   exit 2
-fi
-# 0 attempts would check nothing and read as "nothing left".
-if [[ ! "${attempts}" =~ ^[1-9][0-9]*$ ]]; then
-  echo "aks-leftovers: LEFTOVERS_ATTEMPTS must be a positive integer, got '${attempts}'" >&2
-  exit 2
-fi
-if [[ ! "${wait_s}" =~ ^[0-9]+$ ]]; then
-  echo "aks-leftovers: LEFTOVERS_WAIT must be a whole number of seconds, got '${wait_s}'" >&2
-  exit 2
+}
+
+# Arguments: --settle and one cluster name, in any order; anything else is refused - a flag that is
+# silently dropped would turn the settled check into a single one.
+settle=0
+cluster=""
+for arg in "$@"; do
+  case "${arg}" in
+    --settle) settle=1 ;;
+    -*) usage ;;
+    *) [[ -z "${cluster}" ]] || usage; cluster="${arg}" ;;
+  esac
+done
+sub="${TF_VAR_subscription_id:-}"
+if [[ -z "${cluster}" || -z "${sub}" ]]; then usage; fi
+
+attempts=1
+wait_s=0
+if (( settle )); then
+  attempts="${LEFTOVERS_ATTEMPTS:-5}"
+  wait_s="${LEFTOVERS_WAIT:-30}"
+  # 0 attempts would check nothing and read as "nothing left".
+  if [[ ! "${attempts}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "aks-leftovers: LEFTOVERS_ATTEMPTS must be a positive integer, got '${attempts}'" >&2
+    exit 2
+  fi
+  if [[ ! "${wait_s}" =~ ^[0-9]+$ ]]; then
+    echo "aks-leftovers: LEFTOVERS_WAIT must be a whole number of seconds, got '${wait_s}'" >&2
+    exit 2
+  fi
 fi
 
 rg="${cluster}-aks"
-nodes_rg="${cluster}-aks-nodes"
+nodes_rg="${cluster}-aks-nodes" # aks_cluster/main.tf local.node_resource_group
 
-# check_once - list every kind once; prints LEFT/FAIL lines. Returns 0 empty, 1 left, 2 a query failed.
+# check_once LABEL - list every kind once; prints a line per kind that lists something, starting with LABEL
+# (LEFT, or "still listed" before the last settle attempt), and FAIL lines. Returns 0 empty, 1 left,
+# 2 a query failed.
 # The subscription goes after the command: `az --subscription X aks list` is refused (seen 2026-10-21).
 # Disks and snapshots through `az resource list`: `az disk list` without a resource group is refused (az 2.91).
 check_once() {
-  local left=0 failed=0
+  local label="$1" left=0 failed=0
   # check <what> <az args...> - one listing; names found make it "left", an az error makes it "failed".
   check() {
     local what="$1" out
@@ -61,7 +78,7 @@ check_once() {
     fi
     if [[ -n "${out}" ]]; then
       left=1
-      echo "LEFT ${what}: $(tr '\t\n' '  ' <<<"${out}")"
+      echo "${label} ${what}: $(tr '\t\n' '  ' <<<"${out}")"
     fi
   }
   check "AKS clusters"             aks list --query '[].name'
@@ -79,10 +96,11 @@ check_once() {
   return 0
 }
 
-(( settle )) || attempts=1
 for (( attempt = 1; ; attempt++ )); do
+  label="LEFT"
+  if (( attempt < attempts )); then label="     still listed"; fi
   rc=0
-  check_once || rc=$?
+  check_once "${label}" || rc=$?
   if (( rc != 1 || attempt >= attempts )); then exit "${rc}"; fi
   echo "     Azure may still list what was just deleted - checking again in ${wait_s} s (${attempt}/${attempts})"
   sleep "${wait_s}"

@@ -36,9 +36,9 @@ unexport AWS_SESSION_TOKEN
 unexport ARM_CLIENT_ID ARM_CLIENT_SECRET ARM_CLIENT_CERTIFICATE_PATH ARM_USE_OIDC ARM_USE_MSI ARM_OIDC_TOKEN ARM_SUBSCRIPTION_ID ARM_TENANT_ID
 
 CLUSTER := $(shell sed -n 's/^cluster_name *= *"\([^"]*\)".*/\1/p' terraform.tfvars)
-# The foundation's resource group, and the one AKS keeps the nodes in (main.tf local.node_resource_group).
+# The foundation's resource group. The group AKS keeps the nodes in, <RG>-nodes (main.tf
+# local.node_resource_group), is named again only in scripts/aks-leftovers.sh - change the three together.
 RG       := $(CLUSTER)-aks
-NODES_RG := $(CLUSTER)-aks-nodes
 # The subscription goes after the command: `az --subscription X aks list` is refused (seen 2026-10-21).
 AZ_SUB   := --subscription "$(TF_VAR_subscription_id)"
 LEFTOVERS := ../../../scripts/aks-leftovers.sh
