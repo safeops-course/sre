@@ -91,10 +91,13 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      local.eks_exec), with --profile;
 #   1. the pre-destroy hook alone (flux.tf: volumes, the NLB, Flux) while the cluster, the EBS CSI driver
 #      and the Load Balancer Controller run;
+#      -refresh=false: a refresh would read the Kubernetes objects it depends on, and an unreachable API
+#      would stop the whole teardown here (the hook itself never fails it - on_failure = continue);
 #   2. the Kubernetes objects, the controller's Helm release and the Flux null_resources leave the
 #      state - the cluster goes anyway, and an unreachable API must not stop the destroy of what is
 #      billed (nodes, NAT gateway, VPC);
-#   3. terraform destroy;
+#   3. terraform destroy; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it
+#      and the destroy left it, pointing at a cluster that is gone;
 #   4. leftovers, whatever the destroy returned; a failed destroy keeps its own exit status.
 destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@for t in aws kubectl jq; do command -v $$t >/dev/null || echo "WARNING: no $$t - the pre-destroy hook cannot clean the cluster (NLB, volumes); check make leftovers" >&2; done
@@ -107,9 +110,10 @@ destroy: settings init ## Destroy the cluster and its network (asks; AUTO_APPROV
 	    --exec-arg=--region --exec-arg="$(AWS_REGION)" --exec-arg=--profile --exec-arg="$(TF_VAR_aws_profile)" \
 	    --exec-arg=--output --exec-arg=json >/dev/null; \
 	} || echo "WARNING: could not write kubeconfig.yaml (no cluster $(CLUSTER)?) - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2
-	@$(TF) destroy -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
+	@$(TF) destroy -refresh=false -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|helm_release\.|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
+	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; fi; \
 	$(MAKE) --no-print-directory leftovers; check=$$?; \
 	if [ $$rc -ne 0 ]; then exit $$rc; fi; exit $$check
 

@@ -1,0 +1,28 @@
+# AKS profile: the full platform on the AKS cluster (infra/terraform/aks_cluster) - the same as on
+# Hetzner, GKE and EKS. Clusters of different providers never run at the same time: they share the DNS
+# names (each provider has its own external-dns owner ID, from cluster-config cloud_provider, so the first
+# one keeps them) and image automation writes to the same branch.
+#
+#   base         flux/bootstrap/flux-system - what every cluster runs
+#   components   every one, as on the other clouds
+#   patches      none for the platform: AKS's cloud controller gives Traefik's LoadBalancer Service the
+#                cluster's Standard load balancer, with an IPv4 and an IPv6 frontend (the base Service
+#                requires both families), and deletes them with the Service (the destroy removes the
+#                Service first: infra/terraform/aks_cluster/flux.tf)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../flux-system
+components:
+  - ../../components/platform-secrets
+  - ../../components/public-edge
+  - ../../components/image-automation
+  - ../../components/alerting
+  - ../../components/opentelemetry
+patches:
+  # Point the self-managing Kustomization at this profile.
+  - target: { kind: Kustomization, name: flux-system }
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./flux/bootstrap/profiles/aks

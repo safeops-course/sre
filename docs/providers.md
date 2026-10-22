@@ -1,9 +1,10 @@
 # Adding a cloud provider
 
-The platform runs the same way on every provider: kind locally, Hetzner, GKE - and, by the same
-pattern, AWS, Azure or any other. A new provider is a checklist, not a new design. GKE
-(`infra/terraform/gcp_foundation`, `infra/terraform/gke_cluster`, `docs/gcp.md`) and AWS
-(`infra/terraform/aws_foundation`, `infra/terraform/eks_cluster`, `docs/aws.md`) are full examples to copy from.
+The platform runs the same way on every provider: kind locally, Hetzner, GKE, AWS, Azure - and, by the
+same pattern, any other. A new provider is a checklist, not a new design. GKE
+(`infra/terraform/gcp_foundation`, `infra/terraform/gke_cluster`, `docs/gcp.md`), AWS
+(`infra/terraform/aws_foundation`, `infra/terraform/eks_cluster`, `docs/aws.md`) and Azure
+(`infra/terraform/azure_foundation`, `infra/terraform/aks_cluster`, `docs/azure.md`) are full examples to copy from.
 
 ## Terraform
 

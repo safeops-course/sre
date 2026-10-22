@@ -18,7 +18,8 @@ FLUX_VERSION := 2.9.6
 	kind-plan kind-apply kind-drift kind-destroy \
 	hcloud-plan hcloud-apply hcloud-drift hcloud-destroy \
 	gcp-plan gcp-apply gcp-verify gke-plan gke-apply gke-destroy gke-leftovers aws-plan aws-apply aws-verify \
-	eks-plan eks-apply eks-destroy eks-leftovers \
+	eks-plan eks-apply eks-destroy eks-leftovers azure-plan azure-apply azure-verify \
+	aks-plan aks-apply aks-destroy aks-leftovers \
 	terraform-hcloud-init terraform-hcloud-plan terraform-hcloud-apply terraform-hcloud-destroy
 
 help: ## List available targets
@@ -39,13 +40,15 @@ versions: ## Show pinned CLI versions
 # only that saved plan and refuses one older than TF_MAX_AGE minutes.
 KIND_DIR   := infra/terraform/kind_cluster
 HCLOUD_DIR := infra/terraform/hcloud_cluster
-# The cloud modules keep their logic in their own Makefile; the gcp-*, gke-*, aws-* and eks-* targets below only
+# The cloud modules keep their logic in their own Makefile; the gcp-*, gke-*, aws-*, eks-*, azure-* and aks-* targets below only
 # call it, so `make help` lists every provider. Their one-time targets (bootstrap, delete-default-*) stay
 # there: make -C <dir> help.
 GCP_DIR    := infra/terraform/gcp_foundation
 GKE_DIR    := infra/terraform/gke_cluster
 AWS_DIR    := infra/terraform/aws_foundation
 EKS_DIR    := infra/terraform/eks_cluster
+AZURE_DIR  := infra/terraform/azure_foundation
+AKS_DIR    := infra/terraform/aks_cluster
 TF_MAX_AGE ?= 60
 GUARD_TF   := scripts/guard-terraform-plan.sh
 
@@ -63,6 +66,11 @@ tf: ## List the Terraform modules and how to run them
 	@echo "                                                     (cluster IAM roles, GitHub OIDC deployer, budget, account defaults;"
 	@echo "                                                      first setup: make -C $(AWS_DIR) bootstrap)"
 	@echo "  eks     $(EKS_DIR)      EKS cluster (Cloud)       per test cycle: make eks-plan | eks-apply | eks-destroy | eks-leftovers"
+	@echo "                                                     (destroy ends with leftovers: nothing billable may stay)"
+	@echo "  azure   $(AZURE_DIR) Azure foundation          once, by a person: make azure-plan | azure-apply | azure-verify"
+	@echo "                                                     (resource providers, the cluster's resource group, GitHub deployer, budget;"
+	@echo "                                                      first setup: make -C $(AZURE_DIR) bootstrap)"
+	@echo "  aks     $(AKS_DIR)      AKS cluster (Cloud)       per test cycle: make aks-plan | aks-apply | aks-destroy | aks-leftovers"
 	@echo "                                                     (destroy ends with leftovers: nothing billable may stay)"
 	@echo "  lab     infra/terraform/state-lab       Chapter 02 state lab      run by hand, as the lab says"
 	@echo "Check without credentials: make validate"
@@ -119,6 +127,22 @@ eks-destroy: ## EKS: destroy the cluster and its network, check nothing is left
 	@$(MAKE) --no-print-directory -C $(EKS_DIR) destroy
 eks-leftovers: ## EKS: list billable leftovers in the region (exit 1 when any)
 	@$(MAKE) --no-print-directory -C $(EKS_DIR) leftovers
+
+azure-plan: ## Azure foundation: plan and save it (read it before azure-apply)
+	@$(MAKE) --no-print-directory -C $(AZURE_DIR) plan
+azure-apply: ## Azure foundation: apply exactly the saved plan
+	@$(MAKE) --no-print-directory -C $(AZURE_DIR) apply
+azure-verify: ## Azure foundation: no drift
+	@$(MAKE) --no-print-directory -C $(AZURE_DIR) verify
+
+aks-plan: ## AKS: plan and save it (read it before aks-apply)
+	@$(MAKE) --no-print-directory -C $(AKS_DIR) plan
+aks-apply: ## AKS: apply exactly the saved plan (costs money - destroy after)
+	@$(MAKE) --no-print-directory -C $(AKS_DIR) apply
+aks-destroy: ## AKS: destroy the cluster, check nothing is left
+	@$(MAKE) --no-print-directory -C $(AKS_DIR) destroy
+aks-leftovers: ## AKS: list billable leftovers in the subscription (exit 1 when any)
+	@$(MAKE) --no-print-directory -C $(AKS_DIR) leftovers
 
 hcloud-drift: ## Hetzner: does the cloud match the code? (0 = yes, 2 = drift, 1 = error)
 	@$(MAKE) --no-print-directory -C $(HCLOUD_DIR) init >/dev/null
