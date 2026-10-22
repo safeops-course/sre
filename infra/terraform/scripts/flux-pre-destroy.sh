@@ -37,7 +37,8 @@
 # Changes the cluster: it suspends Flux, stops Kyverno and CloudNativePG, deletes the webhooks, every PodDisruptionBudget
 # outside kube-system, the Ingresses external-dns publishes (and so their DNS records), the given namespaces (their pods at once), every PVC, and the ResourceSets and
 # input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_LB_TIMEOUT / PRE_DESTROY_NS_TIMEOUT /
-# PRE_DESTROY_DNS_TIMEOUT / PRE_DESTROY_OPERATOR_TIMEOUT (seconds, default 300 / 300 / 180 / 180 / 60).
+# PRE_DESTROY_DNS_TIMEOUT / PRE_DESTROY_OPERATOR_TIMEOUT (seconds, default 300 / 300 / 180 / 180 / 60; a value
+# that is no whole number of seconds is warned about and the default used).
 # Without kubectl, the kubeconfig or a reachable cluster it warns and exits 0 - nothing to clean.
 
 set -o errexit
@@ -46,11 +47,6 @@ set -o pipefail
 
 KUBECONFIG_PATH="${1:-}"
 TARGET_NAMESPACES_CSV="${2:-flux-system,develop,staging,production,observability,traefik}"
-PV_TIMEOUT="${PRE_DESTROY_PV_TIMEOUT:-300}"
-LB_TIMEOUT="${PRE_DESTROY_LB_TIMEOUT:-300}"
-NS_TIMEOUT="${PRE_DESTROY_NS_TIMEOUT:-180}"
-DNS_TIMEOUT="${PRE_DESTROY_DNS_TIMEOUT:-180}"
-OPERATOR_TIMEOUT="${PRE_DESTROY_OPERATOR_TIMEOUT:-60}"
 
 # log MESSAGE / warn MESSAGE - progress on stdout, problems on stderr, both prefixed.
 log() {
@@ -60,6 +56,28 @@ log() {
 warn() {
   echo "[flux-pre-destroy] WARNING: $*" >&2
 }
+
+# timeout_seconds VARIABLE DEFAULT - the value of the env variable VARIABLE as whole seconds (1-6 digits,
+# read as decimal: 08 is 8, not a bad octal number), or DEFAULT when it is unset. Any other value is
+# warned about and replaced by DEFAULT - never fatal: a bad timeout must not stop the teardown halfway
+# (under errexit a failing $(( )) would) and leave billed volumes behind.
+timeout_seconds() {
+  local value="${!1:-}"
+  if [[ -z "${value}" ]]; then
+    echo "$2"
+  elif [[ "${value}" =~ ^[0-9]{1,6}$ ]]; then
+    echo $((10#${value}))
+  else
+    warn "$1='${value}' is not a whole number of seconds (at most 6 digits) - using $2"
+    echo "$2"
+  fi
+}
+
+PV_TIMEOUT="$(timeout_seconds PRE_DESTROY_PV_TIMEOUT 300)"
+LB_TIMEOUT="$(timeout_seconds PRE_DESTROY_LB_TIMEOUT 300)"
+NS_TIMEOUT="$(timeout_seconds PRE_DESTROY_NS_TIMEOUT 180)"
+DNS_TIMEOUT="$(timeout_seconds PRE_DESTROY_DNS_TIMEOUT 180)"
+OPERATOR_TIMEOUT="$(timeout_seconds PRE_DESTROY_OPERATOR_TIMEOUT 60)"
 
 # kc ARGS... - kubectl against the cluster being destroyed, with a timeout so a dying API cannot hang it.
 kc() {
