@@ -228,10 +228,14 @@ fi
 # label: some CNIs never apply policies to the API server (on kind it lives in the node's host
 # network - NetworkPolicy leaves that undefined), and then the rule is not exercised at all - SKIP,
 # not a pass. Where the control is blocked, the labelled probe must get through: the rule allows TCP
-# 6443 (kind, k3s) and 443 (managed clouds); a provider whose API server listens elsewhere fails here.
+# 6443 (kind, k3s), 443 (managed clouds) and cluster-config api_server_port (SKS: a port of Exoscale's own,
+# read by the module's Terraform); a provider whose API server listens elsewhere fails here.
+# The rule is applied as Flux applies it: ${api_server_port:=443} substituted from cluster-config, 443
+# where the key is missing (Flux's default).
 # busybox's nslookup ignores search domains for a dotted name - hence the full name.
 api=kubernetes.default.svc.cluster.local
-k -n "$NS" apply -f "$np/allow-postgres-egress-apiserver.yaml" >/dev/null
+api_server_port="$(jq -r '.data.api_server_port // "443"' <<<"$cluster_config" 2>/dev/null)" || api_server_port=443
+sed "s/\${api_server_port:=443}/${api_server_port}/" "$np/allow-postgres-egress-apiserver.yaml" | k -n "$NS" apply -f - >/dev/null
 control="$(probe blocked -l app=control "$api" 443)"
 if [ "$control" = open ]; then
   skip C3 "API server egress - this CNI does not apply policies to the API server (open under default-deny); the rule is not exercised here"
