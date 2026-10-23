@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Runs before `terraform destroy` removes the nodes (terraform_data.flux_pre_destroy, hcloud, gke, eks, aks and kind).
+# Runs before `terraform destroy` removes the nodes (terraform_data.flux_pre_destroy, hcloud, gke, eks, aks, doks and kind).
 # While the cluster is still alive, let it clean up what Terraform does not know about:
 #   1. suspend Flux, so it does not recreate what we delete - but keep its controllers running: they
 #      remove their own finalizers (HelmRelease, ImagePolicy, ...) when those objects are deleted;
+#      stop shipping logs (the OpenTelemetry collectors in observability): from here on every component
+#      logs errors because it is being torn down, and the collectors cannot tell that from a real
+#      failure - a teardown raised Uptrace alerts (2026-10-23, DOKS: six groups, Postgres stopping);
+#      whether the teardown worked is this log and the provider's leftovers check, not the alerts;
 #      stop Kyverno and remove all admission webhooks - teardown needs none, and a webhook without a
 #      running backend (failurePolicy Fail) blocks every delete in the namespaces;
 #      remove every PodDisruptionBudget outside kube-system - in a teardown it only makes a drain or an
@@ -31,10 +35,10 @@
 #
 # Usage: flux-pre-destroy.sh <kubeconfig> [namespaces, comma-separated]
 #   Called by the destroy-time provisioner of terraform_data.flux_pre_destroy in
-#   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and {gke,eks,aks}_cluster/flux.tf - not meant to be run by hand.
+#   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and {gke,eks,aks,doks}_cluster/flux.tf - not meant to be run by hand.
 # Needs kubectl and jq (the published Ingresses, the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
-# Changes the cluster: it suspends Flux, stops Kyverno and CloudNativePG, deletes the webhooks, every PodDisruptionBudget
+# Changes the cluster: it suspends Flux, deletes the OpenTelemetry collectors, stops Kyverno and CloudNativePG, deletes the webhooks, every PodDisruptionBudget
 # outside kube-system, the Ingresses external-dns publishes (and so their DNS records), the given namespaces (their pods at once), every PVC, and the ResourceSets and
 # input providers in flux-system. Env: PRE_DESTROY_PV_TIMEOUT / PRE_DESTROY_LB_TIMEOUT / PRE_DESTROY_NS_TIMEOUT /
 # PRE_DESTROY_DNS_TIMEOUT / PRE_DESTROY_OPERATOR_TIMEOUT (seconds, default 300 / 300 / 180 / 180 / 60; a value
@@ -276,14 +280,43 @@ stop_deployments() {
   fi
   deadline=$((SECONDS + OPERATOR_TIMEOUT))
   while (( SECONDS < deadline )); do
+    # A failed listing must not leave an earlier list for the warning below.
     if pods="$(kc -n "${ns}" get pods -o json 2>/dev/null \
-      | jq -r '.items[] | select(any(.metadata.ownerReferences[]?; .kind == "ReplicaSet")) | .metadata.name')" \
-      && [[ -z "${pods}" ]]; then
-      return 0
+      | jq -r '.items[] | select(any(.metadata.ownerReferences[]?; .kind == "ReplicaSet")) | .metadata.name')"; then
+      [[ -z "${pods}" ]] && return 0
+    else
+      pods="(the pods could not be listed)"
     fi
     sleep 5
   done
   warn "${name} still has pods in ${ns} after ${OPERATOR_TIMEOUT}s:${pods:+ $(tr '\n' ' ' <<<"${pods}")}"
+}
+
+# stop_log_shipping - delete the OpenTelemetry collectors (the log DaemonSet and the events Deployment in
+# observability, label app.kubernetes.io/name=opentelemetry-collector) and wait (OPERATOR_TIMEOUT) until
+# their pods are gone, so the errors of the teardown never reach Uptrace. Deleted, not scaled: a DaemonSet
+# has no replicas; with Flux suspended nothing recreates them. Warns - never fails.
+stop_log_shipping() {
+  local ns=observability selector=app.kubernetes.io/name=opentelemetry-collector deadline pods
+  case "$(namespace_state "${ns}")" in
+    absent) return 0 ;;
+    unknown) warn "could not check namespace ${ns} - log shipping not stopped"; return 0 ;;
+  esac
+  log "stopping log shipping (OpenTelemetry collectors in ${ns})"
+  if ! kc -n "${ns}" delete daemonset,deployment -l "${selector}" --wait=false >/dev/null; then
+    warn "could not delete the OpenTelemetry collectors in ${ns} - the teardown's errors may raise alerts"
+    return 0
+  fi
+  deadline=$((SECONDS + OPERATOR_TIMEOUT))
+  while (( SECONDS < deadline )); do
+    if pods="$(kc -n "${ns}" get pods -l "${selector}" -o name 2>/dev/null)"; then
+      [[ -z "${pods}" ]] && return 0
+    else
+      pods="(the pods could not be listed)"
+    fi
+    sleep 5
+  done
+  warn "OpenTelemetry collector pods still in ${ns} after ${OPERATOR_TIMEOUT}s:${pods:+ $(tr '\n' ' ' <<<"${pods}")}"
 }
 
 # stop_database_operator - stop CloudNativePG (operator and barman-cloud plugin, cnpg-system) before any
@@ -384,7 +417,7 @@ unblock_namespace() {
 # --- main ---
 # Without kubectl, a kubeconfig or a reachable API there is nothing this script can clean: warn and
 # let Terraform go on (exit 0), as the provisioner continues on failure anyway.
-SKIPPED="skipped: suspend Flux, stop Kyverno, remove admission webhooks and PodDisruptionBudgets, delete the published DNS records and the LoadBalancer Services, stop CloudNativePG, delete the namespaces, their pods and PVCs, wait for the PersistentVolumes, clear stuck finalizers, remove Flux"
+SKIPPED="skipped: suspend Flux, stop shipping logs, stop Kyverno, remove admission webhooks and PodDisruptionBudgets, delete the published DNS records and the LoadBalancer Services, stop CloudNativePG, delete the namespaces, their pods and PVCs, wait for the PersistentVolumes, clear stuck finalizers, remove Flux"
 if ! command -v kubectl >/dev/null 2>&1; then
   warn "kubectl not found - no cluster-side cleanup (${SKIPPED}); volumes created by the cluster may be left behind"
   exit 0
@@ -428,9 +461,10 @@ for ns in ${namespaces[@]+"${namespaces[@]}"}; do
   if [[ "${ns}" == flux-system ]]; then flux_namespace=true; else app_namespaces+=("${ns}"); fi
 done
 
-# The order is the point (see the header): stop Flux and the webhooks, stop CloudNativePG, delete the app namespaces and
-# volumes while the cluster can still clean up, and remove Flux last.
+# The order is the point (see the header): stop Flux, the log shipping and the webhooks, stop CloudNativePG, delete the
+# app namespaces and volumes while the cluster can still clean up, and remove Flux last.
 suspend_flux
+stop_log_shipping
 remove_admission_webhooks
 remove_disruption_budgets
 delete_dns_records

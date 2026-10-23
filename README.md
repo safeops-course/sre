@@ -50,6 +50,7 @@ Topics are listed in course order. Chapter numbers live only in the course, so t
 - `infra/terraform/eks_cluster/` -- EKS cluster per test cycle, on the AWS foundation's roles (`docs/aws.md`)
 - `infra/terraform/azure_foundation/` -- Azure foundation (resource providers, the cluster's resource group, GitHub deployer, budget), applied once
 - `infra/terraform/aks_cluster/` -- AKS cluster per test cycle, dual-stack with Cilium (`docs/azure.md`)
+- `infra/terraform/doks_cluster/` -- DigitalOcean (DOKS) cluster per test cycle, no foundation module (`docs/digitalocean.md`)
 - `flux/` -- FluxCD GitOps configuration (bootstrap, infrastructure, apps, secrets)
 - `config/` -- shared configuration files
 - `tests/` -- infrastructure and system test suites

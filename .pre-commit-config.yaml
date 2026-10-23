@@ -100,6 +100,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: doks-leftovers-test
+        name: DOKS leftovers tests (stub doctl, no DigitalOcean)
+        entry: tests/doks-leftovers.test.sh
+        language: script
+        files: ^(scripts/doks-leftovers\.sh|tests/doks-leftovers\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-policy-exceptions-test
         name: policy-exception check tests (throw-away copy, no cluster)
         entry: tests/check-policy-exceptions.test.sh
