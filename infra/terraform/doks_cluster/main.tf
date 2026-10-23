@@ -21,9 +21,17 @@ data "digitalocean_account" "me" {
 }
 
 # The newest DOKS release of the platform's minor (1.36 -> 1.36.5-do.1): DigitalOcean picks the patch, as
-# AKS and EKS do. Its slug is what the cluster runs; with auto_upgrade the next plan follows the upgrade.
+# AKS and EKS do. Only the cluster's creation reads it (ignore_changes below). A minor DOKS does not offer
+# (not yet, or no longer) fails here, not as an unclear API error at create.
 data "digitalocean_kubernetes_versions" "minor" {
   version_prefix = "${var.kubernetes_version}."
+
+  lifecycle {
+    postcondition {
+      condition     = self.latest_version != null && self.latest_version != ""
+      error_message = "DOKS offers no release of kubernetes_version ${var.kubernetes_version} (doctl kubernetes options versions)."
+    }
+  }
 }
 
 # ─── Network ──────────────────────────────────────────────────────────────────
@@ -68,6 +76,18 @@ resource "digitalocean_kubernetes_cluster" "this" {
   }
 
   destroy_all_associated_resources = var.destroy_all_associated_resources
+
+  # The version is chosen at creation only. Read again on every plan, a newly published patch would upgrade
+  # the cluster at the next apply of anything - mid-cycle, or outside the maintenance window that
+  # auto_upgrade keeps to. A minor upgrade is a deliberate step (doctl kubernetes cluster upgrade, one minor
+  # at a time); until it is done, the postcondition fails every plan loudly instead of drifting silently.
+  lifecycle {
+    ignore_changes = [version]
+    postcondition {
+      condition     = startswith(self.version, "${var.kubernetes_version}.")
+      error_message = "The cluster runs ${self.version}, kubernetes_version is ${var.kubernetes_version}: upgrade it with doctl kubernetes cluster upgrade (one minor at a time), or set kubernetes_version back."
+    }
+  }
 
   # The default pool. It cannot be removed while the cluster exists; the platform runs here.
   node_pool {

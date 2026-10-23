@@ -60,6 +60,7 @@ file and the Uptrace DSN. The non-personal settings (region, sizes, ranges) are 
 | Network | A VPC of its own (`<cluster_name>-doks`); a VPC-native cluster: pods and Services get ranges routable in the VPC | Cilium with eBPF in place of kube-proxy; set at creation, the ranges cannot grow later. |
 | IP families | **IPv4 only** for nodes, pods and Services; Traefik's load balancer has IPv4 and IPv6 | DOKS gives a cluster no IPv6 - only its load balancers. The written exception of `docs/providers.md`, as on EKS: cluster-config `ip_stack = "ipv4"`, `service_ip_family_policy = "PreferDualStack"`. |
 | Control plane | Public endpoint; by default HA ($40 a month) and patch upgrades in a weekly window; the course's tfvars turns both off | HA is DigitalOcean's default from 1.36 and cannot be turned off once on - so the module always sets it. |
+| Version | The newest release of `kubernetes_version`'s minor, chosen at creation only | Read again on every plan, a newly published patch would upgrade the cluster at the next apply of anything. A minor upgrade is `doctl kubernetes cluster upgrade`, one minor at a time; until then every plan fails and says so. |
 | Node pools | `platform` (the cluster's default pool) and `apps`, fixed size | Split by role, as on the other clouds. |
 | Storage | DOKS's own StorageClass `do-block-storage` (expandable) is the default | Nothing to add. |
 | metrics-server | Helm chart, as on kind | DOKS has none; `kubectl top` and the HPA need it. |
@@ -81,7 +82,7 @@ Two s-4vcpu-8gb nodes, the regional load balancer and the volumes cost roughly $
 make -C infra/terraform/doks_cluster plan            # read it
 make -C infra/terraform/doks_cluster apply           # the VPC, the cluster, the pools, metrics-server, Flux
 kubectl --kubeconfig infra/terraform/doks_cluster/kubeconfig.yaml get nodes
-make cluster-conformance                             # KUBE_CONTEXT=doks-sre-control-plane
+KUBECONFIG=infra/terraform/doks_cluster/kubeconfig.yaml make cluster-conformance KUBE_CONTEXT=doks-sre-control-plane
 make -C infra/terraform/doks_cluster destroy         # asks first, then lists leftovers
 ```
 
@@ -89,7 +90,9 @@ A cycle that tests a branch (pushed first) plans with `TF_VAR_flux_git_repositor
 
 `make leftovers` (`scripts/doks-leftovers.sh`) lists Kubernetes clusters, droplets, load balancers,
 volumes, volume snapshots and the cycle's VPC in the team. It fails when anything is left, or when a query
-fails - never "nothing left" on an error. Delete what it names, then run it again.
+fails - never "nothing left" on an error. Delete what it names, then run it again. After a successful
+destroy it checks again for up to 2 minutes (`--settle`): DigitalOcean deletes the load balancers and
+volumes in the background, so they can be listed for a while after the destroy returned.
 
 ### CI
 

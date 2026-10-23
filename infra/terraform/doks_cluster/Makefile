@@ -109,8 +109,9 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #   2. the Kubernetes objects, the Flux null_resources and metrics-server's Helm release leave the state -
 #      the cluster goes anyway, and an unreachable API must not stop the destroy of what is billed;
 #   3. terraform destroy; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it;
-#   4. leftovers, whatever the destroy returned - the script itself, so its own exit status counts; a
-#      failed destroy keeps its own exit status.
+#   4. leftovers, whatever the destroy returned - the script itself, so its own exit status counts; after a
+#      successful destroy with --settle (DigitalOcean deletes the load balancers and volumes in the
+#      background); a failed destroy keeps its own exit status.
 # `access` first: no destroy starts without the tools and the token the hook needs.
 destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), then look for leftovers
 	@{ \
@@ -128,8 +129,8 @@ destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), the
 	@$(TF) destroy -refresh=false -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|null_resource\.flux_|helm_release\.)'); do $(TF) state rm "$$r" >/dev/null; done
 	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
-	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; fi; \
-	$(LEFTOVERS) "$(CLUSTER)"; check=$$?; \
+	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; settle=--settle; else settle=; fi; \
+	$(LEFTOVERS) $$settle "$(CLUSTER)"; check=$$?; \
 	if [ $$rc -ne 0 ]; then exit $$rc; fi; exit $$check
 
 # What can outlive a cluster and keep costing, in the whole team - scripts/doks-leftovers.sh lists it
