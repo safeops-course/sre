@@ -38,11 +38,14 @@ resource "exoscale_security_group" "nodes" {
 
 locals {
   # Between the nodes only (the group itself as the source): Cilium's overlay and health checks, and the
-  # kubelet, which the control plane reaches through its tunnel from a node.
+  # kubelet, which the control plane reaches through its tunnel from a node. Plus node-exporter: it listens on
+  # the node's own address (host network), so Prometheus reaches the other node's exporter outside the
+  # overlay - the one host-network port in flux/ (kube-prometheus-stack).
   node_to_node_rules = {
     cilium_vxlan  = { protocol = "UDP", port = 8472, description = "Cilium VXLAN overlay" }
     cilium_health = { protocol = "TCP", port = 4240, description = "Cilium health checks" }
     kubelet       = { protocol = "TCP", port = 10250, description = "kubelet (logs, exec, metrics-server)" }
+    node_exporter = { protocol = "TCP", port = 9100, description = "node-exporter (Prometheus scrapes every node)" }
   }
 }
 
@@ -70,8 +73,10 @@ resource "exoscale_security_group_rule" "cilium_icmp" {
 }
 
 # The load balancer sends the traffic to the Services' NodePorts on the nodes' public addresses, and checks
-# them from there - it has no address of its own to allow, so the whole range is open. Only what a
-# LoadBalancer Service exposes listens there (Traefik).
+# them from there - it has no address of its own to allow, so the whole range is open. Every NodePort or
+# LoadBalancer Service is therefore reachable on the nodes' public addresses, not only Traefik's (the platform
+# creates no other); the namespaces' default-deny NetworkPolicies still decide which pods answer
+# (docs/exoscale.md, what it builds).
 resource "exoscale_security_group_rule" "nodeports" {
   security_group_id = exoscale_security_group.nodes.id
   type              = "INGRESS"
@@ -115,7 +120,9 @@ resource "exoscale_sks_cluster" "this" {
 }
 
 # Two pools by role, as on the other clouds. A node pool is an Exoscale instance pool; its instances get the
-# nodes' security group, IPv4 only (ipv6 = false: pods and Services have none anyway).
+# nodes' security group, IPv4 only (ipv6 = false: pods and Services have none anyway). After the group's
+# rules: a node never starts without them, and on destroy they go only after the pools - and so after the
+# pre-destroy hook, which depends on the pools.
 resource "exoscale_sks_nodepool" "platform" {
   cluster_id         = exoscale_sks_cluster.this.id
   zone               = var.zone
@@ -127,6 +134,12 @@ resource "exoscale_sks_nodepool" "platform" {
   security_group_ids = [exoscale_security_group.nodes.id]
   ipv6               = false
   labels             = { pool = "platform" }
+
+  depends_on = [
+    exoscale_security_group_rule.node_to_node,
+    exoscale_security_group_rule.cilium_icmp,
+    exoscale_security_group_rule.nodeports,
+  ]
 }
 
 resource "exoscale_sks_nodepool" "apps" {
@@ -140,6 +153,12 @@ resource "exoscale_sks_nodepool" "apps" {
   security_group_ids = [exoscale_security_group.nodes.id]
   ipv6               = false
   labels             = { pool = "apps" }
+
+  depends_on = [
+    exoscale_security_group_rule.node_to_node,
+    exoscale_security_group_rule.cilium_icmp,
+    exoscale_security_group_rule.nodeports,
+  ]
 }
 
 # ─── kubeconfig ───────────────────────────────────────────────────────────────

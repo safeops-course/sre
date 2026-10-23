@@ -19,7 +19,8 @@ export TF_VAR_backup_s3_bucket TF_VAR_backup_s3_access_key_id TF_VAR_backup_s3_s
 export EXOSCALE_CONFIG
 export TF_VAR_exo_config := $(EXOSCALE_CONFIG)
 # exo itself (.env.sks EXO, a full path, or exo on PATH) - exported for scripts/sks-leftovers.sh too.
-EXO ?= exo
+# $(or): an EXO= line left empty in .env.sks means exo on PATH, never an empty command.
+EXO := $(or $(EXO),exo)
 export EXO
 export TF_VAR_exo := $(EXO)
 # The API key and secret of the config's default account: Terraform's provider reads EXOSCALE_API_KEY and
@@ -50,7 +51,7 @@ ZONE      := $(shell sed -n 's/^zone *= *"\([^"]*\)".*/\1/p' terraform.tfvars)
 VERSION   := $(shell sed -n 's/^kubernetes_version *= *"\([^"]*\)".*/\1/p' terraform.tfvars)
 LEFTOVERS := ../../../scripts/sks-leftovers.sh
 
-.PHONY: help settings keycheck access preflight init plan apply destroy leftovers
+.PHONY: help settings keycheck access release preflight init plan apply destroy leftovers
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -65,8 +66,8 @@ settings: ## Check that every setting is there (no cloud calls)
 	[ -z "$$missing" ] || { echo "missing:$$missing - set them in $(ENV_FILE) (template: .env.sks.example)" >&2; exit 2; }
 	@test -n "$(CLUSTER)" && test -n "$(ZONE)" && test -n "$(VERSION)" || { echo "no cluster_name, zone or kubernetes_version in terraform.tfvars" >&2; exit 2; }
 	@case "$$EXOSCALE_CONFIG" in /*) ;; *) echo "EXOSCALE_CONFIG must be a full path (it is written into kubeconfig.yaml): $$EXOSCALE_CONFIG" >&2; exit 2 ;; esac
-	@[ -f "$$EXOSCALE_CONFIG" ] || { echo "no exo config at $$EXOSCALE_CONFIG - EXOSCALE_CONFIG=... exo config add (docs/exoscale.md, step 3)" >&2; exit 2; }
-	@[ -n "$${EXOSCALE_API_KEY:-}" ] && [ -n "$${EXOSCALE_API_SECRET:-}" ] || { echo "no key and secret of the default account in $$EXOSCALE_CONFIG (or no yq v4 to read it) - exo config add with EXOSCALE_CONFIG set (docs/exoscale.md, step 3)" >&2; exit 2; }
+	@[ -f "$$EXOSCALE_CONFIG" ] || { echo "no exo config at $$EXOSCALE_CONFIG - EXOSCALE_CONFIG=... exo config add (docs/exoscale.md, step 2)" >&2; exit 2; }
+	@[ -n "$${EXOSCALE_API_KEY:-}" ] && [ -n "$${EXOSCALE_API_SECRET:-}" ] || { echo "no key and secret of the default account in $$EXOSCALE_CONFIG (or no yq v4 to read it) - exo config add with EXOSCALE_CONFIG set (docs/exoscale.md, step 2)" >&2; exit 2; }
 
 # The key Terraform sends must decrypt what this cluster's Flux decrypts (see gke_cluster/Makefile).
 keycheck: settings ## The age key is a recipient of every platform rule in .sops.yaml (no cloud calls)
@@ -79,19 +80,24 @@ keycheck: settings ## The age key is a recipient of every platform rule in .sops
 	[ -z "$$missing" ] || { echo "the age key is $$recipient - not a recipient of: $$missing (.sops.yaml): Flux could not decrypt flux/secrets" >&2; exit 2; }
 
 # Terraform (the key from EXOSCALE_CONFIG) and kubectl (exo with the same file) use one key, so the plan's
-# identity check covers both. Here the tools, that exo answers for the expected organization, and that SKS
-# still offers kubernetes_version in the zone - read-only calls. destroy needs the same before its
-# pre-destroy hook: without exo the hook reaches nothing, and the volumes, the load balancer and the DNS
-# records stay behind.
-access: settings ## The tools, exo's organization and the Kubernetes release (read-only calls)
+# identity check covers both. Here the tools and that exo answers for the expected organization - read-only
+# calls. destroy needs the same before its pre-destroy hook: without exo the hook reaches nothing, and the
+# volumes, the load balancer and the DNS records stay behind.
+access: settings ## The tools and exo's organization (read-only calls)
 	@for t in "$(EXO)" kubectl jq yq; do command -v "$$t" >/dev/null || { echo "missing: $$t (docs/exoscale.md, prerequisites)" >&2; exit 2; }; done
 	@sg="$$("$(EXO)" compute security-group show default -O json 2>/dev/null | jq -r '.id // ""')" && [ -n "$$sg" ] \
-	  || { echo "exo cannot sign in with $$EXOSCALE_CONFIG (key revoked, or its role lacks compute?) - docs/exoscale.md, step 3" >&2; exit 2; }; \
+	  || { echo "exo cannot sign in with $$EXOSCALE_CONFIG (key revoked, or its role lacks compute?) - docs/exoscale.md, steps 1-2" >&2; exit 2; }; \
 	[ "$$sg" = "$$TF_VAR_expected_default_security_group_id" ] || { echo "exo's key belongs to the organization with default security group $$sg, expected $$TF_VAR_expected_default_security_group_id" >&2; exit 2; }
-	@versions="$$("$(EXO)" compute sks versions --zone "$(ZONE)" -O json | jq -r '.[].version')" || { echo "could not list the SKS versions of $(ZONE)" >&2; exit 2; }; \
+
+# SKS still offers kubernetes_version in the zone - for a new cluster only (plan, apply). Never for destroy:
+# Exoscale drops a release when a newer patch comes, and a running cluster must stay destroyable. exo's
+# answer is read first, then searched: a failed call says so, never "no longer offers".
+release: settings ## SKS still offers kubernetes_version in the zone (one read-only call)
+	@json="$$("$(EXO)" compute sks versions --zone "$(ZONE)" -O json)" || { echo "could not list the SKS versions of $(ZONE) (exo error above)" >&2; exit 2; }; \
+	versions="$$(jq -r '.[].version' <<<"$$json")" && [ -n "$$versions" ] || { echo "could not read the SKS versions of $(ZONE): $$json" >&2; exit 2; }; \
 	grep -qxF "$(VERSION)" <<<"$$versions" || { echo "SKS in $(ZONE) no longer offers kubernetes_version $(VERSION) - it offers: $$(tr '\n' ' ' <<<"$$versions")(terraform.tfvars)" >&2; exit 2; }
 
-preflight: keycheck access ## The settings and age key, the tools, exo's organization and the release
+preflight: keycheck access release ## The settings and age key, the tools, exo's organization and the release
 
 init: ## Terraform init (state in R2)
 	@$(TF) init -input=false >/dev/null
