@@ -2,7 +2,9 @@
 # expected_account_uuid and the token - TF_VAR_* and DIGITALOCEAN_CONFIG from .env.doks.
 
 cluster_name = "sre"
-region       = "fra1" # Frankfurt: in the EU, closest to the course's own location
+# Amsterdam: in the EU, and it offers s-4vcpu-8gb - fra1 does not any more (only the -intel variant,
+# $56 a month instead of $48; doctl compute region list, 2026-10-23).
+region = "ams3"
 
 # The platform's minor (kind and Hetzner pin 1.36.4). DOKS picks the patch.
 kubernetes_version = "1.36"

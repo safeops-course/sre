@@ -80,7 +80,7 @@ infra/terraform/
                      # Azure RBAC, no local accounts; pools "platform" (system) + "apps"; `make plan|apply|destroy|leftovers`,
                      # kubeconfig.yaml context aks-sre-control-plane (Azure kubelogin, AZURE_KUBELOGIN - not Homebrew's
                      # int128 kubelogin); flux.tf: the same Flux bootstrap, profile flux/bootstrap/profiles/aks
-  doks_cluster/      # DOKS (DigitalOcean), per test cycle, fra1 - no foundation (account settings are console-only,
+  doks_cluster/      # DOKS (DigitalOcean), per test cycle, ams3 - no foundation (account settings are console-only,
                      # docs/digitalocean.md): own VPC, VPC-native Cilium, IPv4 only (IPv6 only on Traefik's REGIONAL load
                      # balancer), pools "platform" + "apps", metrics-server (Helm); `make plan|apply|destroy|leftovers`,
                      # kubeconfig.yaml context doks-sre-control-plane (doctl exec with DIGITALOCEAN_CONFIG - its own config
