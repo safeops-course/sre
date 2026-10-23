@@ -7,8 +7,8 @@ variable "expected_account_uuid" {
   type        = string
 
   validation {
-    condition     = can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.expected_account_uuid))
-    error_message = "expected_account_uuid must be a UUID (doctl account get --format UUID)."
+    condition     = can(regex("^[0-9a-f]{40}$", var.expected_account_uuid))
+    error_message = "expected_account_uuid must be 40 lowercase hex characters - DigitalOcean's account UUID is not an RFC UUID (doctl account get --format UUID)."
   }
 }
 
