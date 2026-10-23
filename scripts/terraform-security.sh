@@ -53,7 +53,7 @@ fi
 
 failed=""
 for dir in infra/terraform/kind_cluster infra/terraform/hcloud_cluster infra/terraform/gcp_foundation \
-  infra/terraform/gke_cluster infra/terraform/aws_foundation infra/terraform/eks_cluster infra/terraform/azure_foundation infra/terraform/aks_cluster infra/terraform/doks_cluster infra/terraform/state-lab; do
+  infra/terraform/gke_cluster infra/terraform/aws_foundation infra/terraform/eks_cluster infra/terraform/azure_foundation infra/terraform/aks_cluster infra/terraform/doks_cluster infra/terraform/sks_cluster infra/terraform/state-lab; do
     echo "checkov: ${dir}"
     checkov -d "${dir}" --framework terraform --quiet --compact --skip-check CKV_TF_1 || failed="${failed} ${dir}"
 done

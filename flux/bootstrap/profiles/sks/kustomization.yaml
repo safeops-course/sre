@@ -1,0 +1,50 @@
+# SKS profile: the full platform on the SKS cluster (infra/terraform/sks_cluster) - the same as on Hetzner,
+# GKE, EKS, AKS and DOKS. Clusters of different providers never run at the same time: they share the DNS
+# names (each provider has its own external-dns owner ID, from cluster-config cloud_provider, so the first
+# one keeps them) and image automation writes to the same branch.
+#
+#   base         flux/bootstrap/flux-system - what every cluster runs
+#   components   every one, as on the other clouds
+#   patches      Traefik's LoadBalancer Service: which node pool the network load balancer sends to, and its
+#                name (below). IPv4 only - the written exception of docs/providers.md, from cluster-config
+#                service_ip_family_policy, not from here
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../flux-system
+components:
+  - ../../components/platform-secrets
+  - ../../components/public-edge
+  - ../../components/image-automation
+  - ../../components/alerting
+  - ../../components/opentelemetry
+patches:
+  # Point the self-managing Kustomization at this profile.
+  - target: { kind: Kustomization, name: flux-system }
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: ./flux/bootstrap/profiles/sks
+
+  # --- Traefik: the network load balancer --------------------------------------------
+  # Exoscale's cloud controller makes a network load balancer for the Service, which sends to the NodePorts
+  # of ONE instance pool (an SKS node pool). Without a pool named it infers the pool from the nodes that run
+  # Traefik, and refuses the Service once they are in two pools ("multiple Instance Pools detected"; Traefik
+  # scales 1-10 across both). The platform pool, always: with the default externalTrafficPolicy (Cluster)
+  # any node forwards to Traefik wherever it runs. The cloud controller has no IPv6 setting for the load
+  # balancer, so it gets IPv4 only. The name tells the load balancer apart in the organization (make
+  # leftovers).
+  # https://github.com/exoscale/exoscale-cloud-controller-manager/blob/master/docs/service-loadbalancer.md
+  - target: { kind: Kustomization, name: traefik }
+    patch: |-
+      - op: add
+        path: /spec/patches
+        value:
+          - target: { kind: HelmRelease, name: traefik }
+            patch: |-
+              - op: add
+                path: /spec/values/service/annotations
+                value:
+                  service.beta.kubernetes.io/exoscale-loadbalancer-name: ${cluster_name}-sks-traefik
+                  service.beta.kubernetes.io/exoscale-loadbalancer-sks-cluster-name: ${cluster_name}
+                  service.beta.kubernetes.io/exoscale-loadbalancer-service-sks-nodepool-name: platform

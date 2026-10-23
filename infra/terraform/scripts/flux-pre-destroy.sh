@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs before `terraform destroy` removes the nodes (terraform_data.flux_pre_destroy, hcloud, gke, eks, aks, doks and kind).
+# Runs before `terraform destroy` removes the nodes (terraform_data.flux_pre_destroy, hcloud, gke, eks, aks, doks, sks and kind).
 # While the cluster is still alive, let it clean up what Terraform does not know about:
 #   1. suspend Flux, so it does not recreate what we delete - but keep its controllers running: they
 #      remove their own finalizers (HelmRelease, ImagePolicy, ...) when those objects are deleted;
@@ -35,7 +35,7 @@
 #
 # Usage: flux-pre-destroy.sh <kubeconfig> [namespaces, comma-separated]
 #   Called by the destroy-time provisioner of terraform_data.flux_pre_destroy in
-#   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and {gke,eks,aks,doks}_cluster/flux.tf - not meant to be run by hand.
+#   infra/terraform/{hcloud_cluster,kind_cluster}/main.tf and {gke,eks,aks,doks,sks}_cluster/flux.tf - not meant to be run by hand.
 # Needs kubectl and jq (the published Ingresses, the last-resort namespace finalize). It talks only to the cluster in
 # the kubeconfig it is given (--kubeconfig), never to the current context.
 # Changes the cluster: it suspends Flux, deletes the OpenTelemetry collectors, stops Kyverno and CloudNativePG, deletes the webhooks, every PodDisruptionBudget
