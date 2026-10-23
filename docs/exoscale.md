@@ -72,6 +72,7 @@ in `infra/terraform/sks_cluster/terraform.tfvars`.
 | Node pools | `platform` and `apps`, fixed size | Split by role, as on the other clouds. |
 | Storage | A StorageClass `sbs` (Exoscale Block Storage, waits for the pod), the default; no volume expansion | The CSI driver's own class is not the default. Exoscale resizes a volume only while it is detached, so conformance C4 skips the expansion check with that reason. |
 | Load balancer | A network load balancer sending to the `platform` pool (`flux/bootstrap/profiles/sks`) | A load balancer sends to one instance pool; without one named, the cloud controller refuses the Service once Traefik runs in both pools. |
+| API server port | cluster-config `api_server_port`, read from the EndpointSlice `default/kubernetes` at apply | Behind the Service `kubernetes` the API server listens on a port of Exoscale's own, not 443; `allow-postgres-egress-apiserver` opens it, or CloudNativePG cannot reach the API and no database starts. A port changed later (a control plane upgrade) needs another apply. |
 | kubeconfig | `kubeconfig.yaml`, context `sks-sre-control-plane`, exo as the exec plugin with `EXOSCALE_CONFIG` | A short-lived client certificate per call; no credentials in the file. |
 
 What a deleted cluster leaves on Exoscale: its network load balancers and block storage volumes, billed. The
@@ -114,5 +115,6 @@ Until that is worth it, a person runs the cycle.
 | `Forbidden by role policy for compute` (make, plan) | The key's role does not allow compute | The role's policy (step 1); the key keeps working after the change. |
 | `no key and secret of the default account in ...` (make) | The file has no default account, or yq is missing | `exo config add` with `EXOSCALE_CONFIG` set; `yq --version` (v4). |
 | `SKS in <zone> no longer offers kubernetes_version` (make plan) | Exoscale dropped that release | A release it lists, in `terraform.tfvars`. `make destroy` does not check it: a running cluster stays destroyable. |
+| `app-postgres-1-initdb` pods fail, `dial tcp 10.96.0.1:443: i/o timeout` | The API server's port changed since the last apply | `make plan` / `apply` - it reads the port again (`kubectl get endpointslice -n default kubernetes`). |
 | Traefik's Service has no external address | The cloud controller refused the annotations | `kubectl -n traefik describe service traefik` shows its events. |
 | A volume stays `Pending` after a resize | Exoscale resizes only detached volumes | Not done by the platform (the StorageClass refuses expansion); scale the workload down to resize by hand. |

@@ -54,6 +54,10 @@ DigitalOcean (`infra/terraform/doks_cluster`, `docs/digitalocean.md`) and Exosca
   `service_ip_family_policy = "PreferDualStack"` to cluster-config (`"dual"` and the default `RequireDualStack`
   everywhere else): the apps' and Traefik's Services read the policy (no
   `ipFamilies` - a listed IPv6 would be refused) - a written exception, and conformance C13 checks the promise.
+- [ ] **The API server's port:** `allow-postgres-egress-apiserver` opens 443 and 6443, and Cilium checks it against
+  the address behind the Service `kubernetes`. Where that is another port (SKS: one of Exoscale's own), the
+  module reads it from the EndpointSlice `default/kubernetes` and writes cluster-config `api_server_port`;
+  conformance C3 fails when CloudNativePG cannot reach the API server.
 
 ## Proof
 

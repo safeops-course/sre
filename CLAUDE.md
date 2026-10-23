@@ -151,6 +151,8 @@ scripts/             # Pre-commit hooks, automation scripts
 
 ### FluxCD / Kubernetes
 - Environments: develop, staging, production — each has its own namespace and overlays
+- Every Flux Kustomization sets `retryInterval: 2m0s` next to its `interval`: a failed apply or health check is
+  tried again in 2 minutes, not a whole interval later (one slow start held its dependents 10 minutes on SKS)
 - Kustomize overlays pattern: `base/` + `overlays/{develop,staging,production}/patches/`
 - SOPS secrets go in `flux/secrets/` with `.sops.yaml` rules per directory
 - external-dns (namespace `external-dns`) reads the Cloudflare DNS token from its SOPS Secret

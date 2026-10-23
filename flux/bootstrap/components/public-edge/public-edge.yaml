@@ -26,6 +26,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: origin-ca-issuer
@@ -40,6 +41,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -58,6 +60,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -81,6 +84,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -100,6 +104,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system

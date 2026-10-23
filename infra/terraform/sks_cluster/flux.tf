@@ -44,6 +44,29 @@ resource "kubernetes_namespace_v1" "bootstrap" {
   depends_on = [exoscale_sks_nodepool.platform, exoscale_sks_nodepool.apps]
 }
 
+# The API server's real port, read from the cluster: Postgres reaches it through the Service kubernetes
+# (10.96.0.1:443), and Cilium checks the NetworkPolicy against the address behind it. On SKS that is a port
+# of Exoscale's own (31101 on the first cycle, 2026-10-24), not the 443 or 6443 every other cluster uses, and
+# allow-postgres-egress-apiserver dropped CloudNativePG's calls - no database. Exoscale publishes the port
+# nowhere else (exoscale_sks_cluster.endpoint is a name on 443). Read at apply: a port Exoscale changes later
+# (a control plane upgrade) needs another apply - until then CloudNativePG fails loudly and conformance C3
+# names the port.
+data "kubernetes_endpoint_slice_v1" "api_server" {
+  metadata {
+    name      = "kubernetes"
+    namespace = "default"
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.port) == 1
+      error_message = "The EndpointSlice default/kubernetes has ${length(self.port)} ports, expected the API server's one."
+    }
+  }
+
+  depends_on = [exoscale_sks_nodepool.platform, exoscale_sks_nodepool.apps]
+}
+
 # Read by Flux postBuild substitutions (${cluster_name} and the rest).
 resource "kubernetes_config_map_v1" "cluster_config" {
   metadata {
@@ -67,6 +90,9 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     # Pods have no IPv6 here, so there is no pod range to cut out of ::/0 (allow-backend-egress-https).
     # The rule still needs a value: a unique local range, already inside its fc00::/7 exception (as on EKS).
     cluster_ipv6_range = "fd00::/8"
+    # The API server's port behind the Service kubernetes (data.kubernetes_endpoint_slice_v1.api_server),
+    # opened to Postgres by allow-postgres-egress-apiserver.
+    api_server_port = data.kubernetes_endpoint_slice_v1.api_server.port[0].port
   }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]
