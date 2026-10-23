@@ -93,6 +93,10 @@ make -C infra/terraform/doks_cluster destroy         # asks first, then lists le
 
 A cycle that tests a branch (pushed first) plans with `TF_VAR_flux_git_repository_branch=<branch>`.
 
+The destroy deletes the cluster, then waits until its nodes have left the VPC before it deletes the VPC
+(`infra/terraform/scripts/doks-wait-vpc-empty.sh`, up to 10 minutes): DigitalOcean deletes a cluster's nodes
+in the background, and a VPC with members cannot be deleted.
+
 `make leftovers` (`scripts/doks-leftovers.sh`) lists Kubernetes clusters, droplets, load balancers,
 volumes, volume snapshots and the cycle's VPC in the team. It fails when anything is left, or when a query
 fails - never "nothing left" on an error. Delete what it names, then run it again. After a successful
@@ -115,5 +119,6 @@ person runs the cycle.
 | The VPC or the cluster is refused for overlapping ranges | `vpc_cidr`, `cluster_subnet` or `service_subnet` overlaps another VPC of the team - the default VPCs included: DigitalOcean makes one per region the team uses, a /16 out of 10.0.0.0/8, which is why the ranges are in 172.16.0.0/12 | Other ranges in `terraform.tfvars` (`doctl vpcs list` shows the team's). |
 | `unable to find default VPC in <region> region` (plan) | The region has no default VPC yet | Create it (step 1, the region's default VPC). |
 | `<cluster_name>-doks is the default VPC of <region>` (plan), or `Can not delete default VPCs` (destroy) | The cycle's VPC was the region's first, so DigitalOcean made it the default | `doctl vpcs create --name default-<region> --region <region>`, then `doctl vpcs update <its id> --default=true`, then `make destroy` again. |
+| `Can not delete VPC with members` (destroy) | The nodes were still being deleted when the VPC went - the wait timed out after 10 minutes, or the state predates it | `doctl compute droplet list` until they are gone, then `make destroy` again. |
 | 403 on create or delete | The token lacks a scope | A new token with the scope (step 1) - scopes cannot be added. |
 | Traefik's Service has no external address | The cloud controller refused the annotations | `kubectl -n traefik describe service traefik` shows its events. |
