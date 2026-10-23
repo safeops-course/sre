@@ -136,7 +136,7 @@ destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), the
 	  id="$$(jq -r '.id // ""' <<<"$$show")" && endpoint="$$(jq -r '.endpoint // ""' <<<"$$show")" && \
 	  [ -n "$$id" ] && [ -n "$$endpoint" ] && \
 	  "$(EXO)" compute sks authority-cert "$$id" control-plane --zone "$(ZONE)" > kubeconfig.ca.pem && \
-	  kubectl config set-cluster "sks-$(CLUSTER)" --kubeconfig kubeconfig.yaml.new --server "$$endpoint" \
+	  kubectl config set-cluster "sks-$(CLUSTER)" --kubeconfig kubeconfig.yaml.new --server "https://$$endpoint:443" \
 	    --certificate-authority kubeconfig.ca.pem --embed-certs >/dev/null && \
 	  kubectl config set-credentials "sks-$(CLUSTER)" --kubeconfig kubeconfig.yaml.new \
 	    --exec-api-version client.authentication.k8s.io/v1beta1 --exec-command "$(EXO)" \

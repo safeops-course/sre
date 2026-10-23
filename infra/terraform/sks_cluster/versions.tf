@@ -44,6 +44,10 @@ provider "exoscale" {}
 # or Terraform's - without exo's default config. Not exoscale_sks_kubeconfig: its certificate stays valid for
 # 30 days, sits in the state, and kubeconfig.yaml must hold no credentials.
 locals {
+  # Exoscale gives the endpoint as a bare host name (<id>.sks-<zone>.exo.io); the API server is HTTPS on 443,
+  # as in exo's own kubeconfig. The kubernetes provider and kubectl need the full URL.
+  api_server_url = "https://${exoscale_sks_cluster.this.endpoint}:443"
+
   sks_exec = {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = var.exo
@@ -53,7 +57,7 @@ locals {
 }
 
 provider "kubernetes" {
-  host                   = exoscale_sks_cluster.this.endpoint
+  host                   = local.api_server_url
   cluster_ca_certificate = exoscale_sks_cluster.this.control_plane_ca
 
   exec {

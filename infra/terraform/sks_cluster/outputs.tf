@@ -12,7 +12,7 @@ output "cluster_id" {
 
 output "cluster_endpoint" {
   description = "The API server's public endpoint (the client certificate decides who gets in)."
-  value       = exoscale_sks_cluster.this.endpoint
+  value       = local.api_server_url
 }
 
 output "kubernetes_version" {

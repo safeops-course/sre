@@ -175,7 +175,7 @@ resource "local_file" "kubeconfig" {
     clusters = [{
       name = "sks-${var.cluster_name}"
       cluster = {
-        server                       = exoscale_sks_cluster.this.endpoint
+        server                       = local.api_server_url
         "certificate-authority-data" = base64encode(exoscale_sks_cluster.this.control_plane_ca)
       }
     }]
