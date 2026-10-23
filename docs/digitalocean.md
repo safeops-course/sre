@@ -107,6 +107,6 @@ person runs the cycle.
 | `The DigitalOcean token belongs to account X, expected Y` (plan) | `DIGITALOCEAN_CONFIG` holds another account's token | `doctl auth init` with the right `DIGITALOCEAN_CONFIG`, or fix `TF_VAR_expected_account_uuid`. |
 | `no access-token in ...` (make) | The token is in a named doctl context, or yq is missing | `doctl auth init` without `--context`, so the file's `default` context has it. |
 | `doctl cannot sign in` (make) | The token expired or was revoked | A new token (step 1), then `doctl auth init` again. |
-| The VPC or the cluster is refused for overlapping ranges | `vpc_cidr`, `cluster_subnet` or `service_subnet` overlaps another VPC of the team - its default VPC included | Other ranges in `terraform.tfvars` (`doctl vpcs list` shows the team's). |
+| The VPC or the cluster is refused for overlapping ranges | `vpc_cidr`, `cluster_subnet` or `service_subnet` overlaps another VPC of the team - the default VPCs included: DigitalOcean makes one per region the team uses, a /16 out of 10.0.0.0/8, which is why the ranges are in 172.16.0.0/12 | Other ranges in `terraform.tfvars` (`doctl vpcs list` shows the team's). |
 | 403 on create or delete | The token lacks a scope | A new token with the scope (step 1) - scopes cannot be added. |
 | Traefik's Service has no external address | The cloud controller refused the annotations | `kubectl -n traefik describe service traefik` shows its events. |

@@ -15,12 +15,13 @@ ha                               = false
 auto_upgrade                     = false
 destroy_all_associated_resources = true
 
-# Clear of GKE's ranges (10.100-10.111), EKS's VPC (10.112.0.0/16) and AKS's (10.120-10.121, 10.224.0.0/12),
-# and of one another. DigitalOcean refuses a range that overlaps another VPC of the team - its default VPC
-# in fra1 included (docs/digitalocean.md, troubleshooting).
-vpc_cidr       = "10.130.0.0/20"
-cluster_subnet = "10.131.0.0/16"
-service_subnet = "10.132.0.0/19"
+# DigitalOcean refuses a range that overlaps any other VPC of the team, and it creates a default VPC in
+# every region the team uses, each with a /16 out of 10.0.0.0/8 (2026-10-23: 10.130 sgp1, 10.132 nyc3,
+# 10.135 fra1, 10.136 nyc1 - 10.130.0.0/20 was refused at the first apply). So 172.16.0.0/12, where no
+# default VPC goes, clear of Docker's 172.17.0.0/16 and of one another (docs/digitalocean.md, troubleshooting).
+vpc_cidr       = "172.20.0.0/20"
+cluster_subnet = "172.21.0.0/16"
+service_subnet = "172.22.0.0/19"
 
 # Shared 4 vCPU / 8 GiB each ($0.0714 an hour): memory, not CPU, is what the platform needs - on AKS
 # (2 vCPU / 8 GiB) memory was 75-84 % used, CPU requests 1.1-1.5 of 1.9 cores (2026-10-21).
