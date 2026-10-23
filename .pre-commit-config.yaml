@@ -108,14 +108,6 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-      - id: doks-wait-vpc-empty-test
-        name: DOKS wait-for-empty-VPC tests (stub doctl, no DigitalOcean)
-        entry: tests/doks-wait-vpc-empty.test.sh
-        language: script
-        files: ^(infra/terraform/scripts/doks-wait-vpc-empty\.sh|tests/doks-wait-vpc-empty\.test\.sh)$
-        pass_filenames: false
-        stages: [pre-commit]
-
       - id: check-policy-exceptions-test
         name: policy-exception check tests (throw-away copy, no cluster)
         entry: tests/check-policy-exceptions.test.sh

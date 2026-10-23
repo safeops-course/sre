@@ -112,8 +112,8 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      Kubernetes objects it depends on, and an unreachable API would stop the whole teardown here;
 #   2. the Kubernetes objects, the Flux null_resources and metrics-server's Helm release leave the state -
 #      the cluster goes anyway, and an unreachable API must not stop the destroy of what is billed;
-#   3. terraform destroy (it waits for the nodes to leave the VPC before deleting it - main.tf
-#      terraform_data.vpc_empty); then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it;
+#   3. terraform destroy (the VPC waits up to 10 minutes for the nodes to leave it - main.tf); then
+#      kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it;
 #   4. leftovers, whatever the destroy returned - the script itself, so its own exit status counts; after a
 #      successful destroy with --settle (DigitalOcean deletes the load balancers and volumes in the
 #      background); a failed destroy keeps its own exit status.

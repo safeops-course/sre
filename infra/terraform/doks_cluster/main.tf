@@ -53,33 +53,17 @@ resource "digitalocean_vpc" "this" {
   region   = var.region
   ip_range = var.vpc_cidr
 
+  # The cluster's delete returns at once while DigitalOcean removes its nodes in the background, and a VPC
+  # with members cannot be deleted: the provider retries until this timeout - its default, 2 minutes, was
+  # too short (2026-10-23, the second cycle: "Can not delete VPC with members" after 1m50s).
+  timeouts {
+    delete = "10m"
+  }
+
   lifecycle {
     precondition {
       condition     = data.digitalocean_vpc.region_default.name != "${var.cluster_name}-doks"
       error_message = "${var.cluster_name}-doks is the default VPC of ${var.region}, so it cannot be deleted. Make another VPC of the region its default first (docs/digitalocean.md, troubleshooting)."
-    }
-  }
-}
-
-# On destroy only, after the cluster and before its VPC: wait until no droplet and no load balancer is
-# left in the VPC. The cluster's delete returns at once while DigitalOcean removes its nodes in the
-# background, and a VPC with members cannot be deleted - the provider retries for about 2 minutes, then
-# fails (2026-10-23, the second cycle: "Can not delete VPC with members"). The cluster depends on this, so
-# a destroy runs cluster -> this -> VPC. A timeout fails the destroy loudly, naming what is still there.
-resource "terraform_data" "vpc_empty" {
-  input = {
-    vpc_id       = digitalocean_vpc.this.id
-    doctl        = var.doctl
-    doctl_config = var.doctl_config
-  }
-
-  provisioner "local-exec" {
-    when        = destroy
-    interpreter = ["/bin/bash", "-c"]
-    command     = "\"${path.module}/../scripts/doks-wait-vpc-empty.sh\" \"${self.input.vpc_id}\""
-    environment = {
-      DOCTL               = self.input.doctl
-      DIGITALOCEAN_CONFIG = self.input.doctl_config
     }
   }
 }
@@ -127,9 +111,6 @@ resource "digitalocean_kubernetes_cluster" "this" {
       error_message = "The cluster runs ${self.version}, kubernetes_version is ${var.kubernetes_version}: upgrade it with doctl kubernetes cluster upgrade (one minor at a time), or set kubernetes_version back."
     }
   }
-
-  # Destroyed before terraform_data.vpc_empty, which waits for the nodes to leave the VPC.
-  depends_on = [terraform_data.vpc_empty]
 
   # The default pool. It cannot be removed while the cluster exists; the platform runs here.
   node_pool {

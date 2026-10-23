@@ -42,7 +42,7 @@ EOF
 chmod +x "${WORK}/bin/doctl"
 touch "${WORK}/config.yaml"
 # The defaults are what is tested: no LEFTOVERS_ATTEMPTS from the caller's shell; no waiting.
-unset LEFTOVERS_ATTEMPTS
+unset LEFTOVERS_ATTEMPTS DOCTL
 export PATH="${WORK}/bin:${PATH}" DIGITALOCEAN_CONFIG="${WORK}/config.yaml" STUB_COUNT="${WORK}/count" LEFTOVERS_WAIT=0
 
 # case_ NAME WANT_RC [VAR=value...] -- ARGS... - run the script once and compare its exit code.
@@ -100,6 +100,12 @@ case_ "a missing config file refused"                     2 DIGITALOCEAN_CONFIG=
 # The Makefile passes doctl as DOCTL, a full path that need not be on PATH (2026-10-23: "doctl: command not found").
 mkdir -p "${WORK}/elsewhere" && mv "${WORK}/bin/doctl" "${WORK}/elsewhere/doctl"
 case_ "doctl from DOCTL, not on PATH"                     0 DOCTL="${WORK}/elsewhere/doctl" -- sre
-case_ "without DOCTL and doctl not on PATH: no 'nothing left'" 2 -- sre
+# PATH without any directory that holds a real doctl - this case must never reach DigitalOcean.
+nodoctl_path=""
+IFS=: read -r -a path_dirs <<<"${PATH}"
+for d in "${path_dirs[@]}"; do
+  [ -x "${d}/doctl" ] || nodoctl_path="${nodoctl_path:+${nodoctl_path}:}${d}"
+done
+case_ "without DOCTL and doctl not on PATH: no 'nothing left'" 2 PATH="${nodoctl_path}" -- sre
 
 exit "${FAILED}"

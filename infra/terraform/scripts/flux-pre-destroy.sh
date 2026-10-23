@@ -280,10 +280,12 @@ stop_deployments() {
   fi
   deadline=$((SECONDS + OPERATOR_TIMEOUT))
   while (( SECONDS < deadline )); do
+    # A failed listing must not leave an earlier list for the warning below.
     if pods="$(kc -n "${ns}" get pods -o json 2>/dev/null \
-      | jq -r '.items[] | select(any(.metadata.ownerReferences[]?; .kind == "ReplicaSet")) | .metadata.name')" \
-      && [[ -z "${pods}" ]]; then
-      return 0
+      | jq -r '.items[] | select(any(.metadata.ownerReferences[]?; .kind == "ReplicaSet")) | .metadata.name')"; then
+      [[ -z "${pods}" ]] && return 0
+    else
+      pods="(the pods could not be listed)"
     fi
     sleep 5
   done
@@ -307,8 +309,10 @@ stop_log_shipping() {
   fi
   deadline=$((SECONDS + OPERATOR_TIMEOUT))
   while (( SECONDS < deadline )); do
-    if pods="$(kc -n "${ns}" get pods -l "${selector}" -o name 2>/dev/null)" && [[ -z "${pods}" ]]; then
-      return 0
+    if pods="$(kc -n "${ns}" get pods -l "${selector}" -o name 2>/dev/null)"; then
+      [[ -z "${pods}" ]] && return 0
+    else
+      pods="(the pods could not be listed)"
     fi
     sleep 5
   done
