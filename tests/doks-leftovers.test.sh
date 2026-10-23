@@ -97,5 +97,9 @@ case_ "0 attempts refused (would check nothing)"          2 LEFTOVERS_ATTEMPTS=0
 case_ "a wait that is no number refused"                  2 LEFTOVERS_WAIT=x -- --settle sre
 case_ "no DIGITALOCEAN_CONFIG refused"                    2 DIGITALOCEAN_CONFIG= -- sre
 case_ "a missing config file refused"                     2 DIGITALOCEAN_CONFIG=/nonexistent/config.yaml -- sre
+# The Makefile passes doctl as DOCTL, a full path that need not be on PATH (2026-10-23: "doctl: command not found").
+mkdir -p "${WORK}/elsewhere" && mv "${WORK}/bin/doctl" "${WORK}/elsewhere/doctl"
+case_ "doctl from DOCTL, not on PATH"                     0 DOCTL="${WORK}/elsewhere/doctl" -- sre
+case_ "without DOCTL and doctl not on PATH: no 'nothing left'" 2 -- sre
 
 exit "${FAILED}"

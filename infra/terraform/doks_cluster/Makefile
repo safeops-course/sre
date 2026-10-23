@@ -18,7 +18,9 @@ export TF_VAR_backup_s3_bucket TF_VAR_backup_s3_access_key_id TF_VAR_backup_s3_s
 # names it (variables.tf doctl_config), and Terraform's provider gets the token from it below.
 export DIGITALOCEAN_CONFIG
 export TF_VAR_doctl_config := $(DIGITALOCEAN_CONFIG)
+# doctl itself (.env.doks DOCTL, a full path, or doctl on PATH) - exported for scripts/doks-leftovers.sh too.
 DOCTL ?= doctl
+export DOCTL
 export TF_VAR_doctl := $(DOCTL)
 # The token, from doctl's config ("default" context): Terraform's provider reads DIGITALOCEAN_TOKEN. Read
 # from the file, never typed, never in .env.doks. A token in the environment of a named doctl context would be
@@ -100,8 +102,10 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      through it, and a file this checkout lacks (it is git-ignored) or kept from an earlier cluster of
 #      the same name (another endpoint and CA) would leave the volumes, the load balancer and the DNS
 #      records behind. doctl writes it to a new file (read-only calls, no token in it; on a failure the old
-#      file is left as it was); kubectl then gives the exec the DIGITALOCEAN_CONFIG it needs and the
-#      context its fixed name. Never `terraform apply -target=local_file.kubeconfig`: a target brings the
+#      file is left as it was); kubectl then writes the exec in full - the same command, arguments
+#      (--context=default) and DIGITALOCEAN_CONFIG as main.tf's kubeconfig: --exec-command alone drops
+#      doctl's arguments (2026-10-23: args null, the hook found the cluster unreachable) - gives the context
+#      its fixed name, and the new file must reach the API before it replaces the old one. Never `terraform apply -target=local_file.kubeconfig`: a target brings the
 #      cluster into an apply nobody planned or approved;
 #   1. the pre-destroy hook alone (flux.tf: volumes, Traefik's load balancer Service, Flux) while the
 #      cluster, its CSI driver and cloud controller run; -refresh=false: a refresh would read the
@@ -119,11 +123,15 @@ destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), the
 	  id="$$("$(DOCTL)" --context default kubernetes cluster get "$(CLUSTER)" --format ID --no-header)" && [ -n "$$id" ] && \
 	  KUBECONFIG=kubeconfig.yaml.new "$(DOCTL)" --context default kubernetes cluster kubeconfig save "$$id" --set-current-context >/dev/null && \
 	  user="$$(kubectl config view --kubeconfig kubeconfig.yaml.new -o jsonpath='{.contexts[0].context.user}')" && [ -n "$$user" ] && \
-	  kubectl config set-credentials "$$user" --kubeconfig kubeconfig.yaml.new --exec-command "$(DOCTL)" \
-	    --exec-env "DIGITALOCEAN_CONFIG=$$DIGITALOCEAN_CONFIG" >/dev/null && \
+	  kubectl config set-credentials "$$user" --kubeconfig kubeconfig.yaml.new \
+	    --exec-api-version client.authentication.k8s.io/v1beta1 --exec-command "$(DOCTL)" \
+	    --exec-arg=kubernetes --exec-arg=cluster --exec-arg=kubeconfig --exec-arg=exec-credential \
+	    --exec-arg=--version=v1beta1 --exec-arg=--context=default --exec-arg="$$id" \
+	    --exec-env "DIGITALOCEAN_CONFIG=$$DIGITALOCEAN_CONFIG" --exec-interactive-mode Never >/dev/null && \
 	  kubectl config rename-context "$$(kubectl config current-context --kubeconfig kubeconfig.yaml.new)" \
 	    "doks-$(CLUSTER)-control-plane" --kubeconfig kubeconfig.yaml.new >/dev/null && \
 	  ! grep -qE '^ *(token|client-key-data):' kubeconfig.yaml.new && \
+	  kubectl version --kubeconfig kubeconfig.yaml.new --request-timeout=30s >/dev/null && \
 	  chmod 600 kubeconfig.yaml.new && mv kubeconfig.yaml.new kubeconfig.yaml; \
 	} || { rm -f kubeconfig.yaml.new; echo "WARNING: could not write kubeconfig.yaml (no cluster $(CLUSTER)?) - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2; }
 	@$(TF) destroy -refresh=false -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)

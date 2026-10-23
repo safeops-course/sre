@@ -35,6 +35,17 @@ data "digitalocean_kubernetes_versions" "minor" {
 }
 
 # ─── Network ──────────────────────────────────────────────────────────────────
+# The region's default VPC. DigitalOcean makes the first VPC of a region its default, and a default VPC
+# cannot be deleted (2026-10-23: the first cycle in ams3 made sre-doks the default, and its destroy was
+# refused - "Can not delete default VPCs"). So the cycle's VPC must never be the first: the region needs a
+# default VPC of the team's own before it (docs/digitalocean.md, step 1). The read fails the plan when the
+# region has none.
+data "digitalocean_vpc" "region_default" {
+  region = var.region
+
+  depends_on = [data.digitalocean_account.me]
+}
+
 # A VPC of its own, deleted with the cycle. Its range, the pods' and the Services' must not overlap one
 # another or any other VPC of the team - DigitalOcean refuses the cluster otherwise.
 resource "digitalocean_vpc" "this" {
@@ -42,7 +53,12 @@ resource "digitalocean_vpc" "this" {
   region   = var.region
   ip_range = var.vpc_cidr
 
-  depends_on = [data.digitalocean_account.me]
+  lifecycle {
+    precondition {
+      condition     = data.digitalocean_vpc.region_default.name != "${var.cluster_name}-doks"
+      error_message = "${var.cluster_name}-doks is the default VPC of ${var.region}, so it cannot be deleted. Make another VPC of the region its default first (docs/digitalocean.md, troubleshooting)."
+    }
+  }
 }
 
 # ─── Cluster ──────────────────────────────────────────────────────────────────

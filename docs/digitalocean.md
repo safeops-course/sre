@@ -21,6 +21,11 @@ sign-in, the spend alert, the token - has no API to manage it, so it is done onc
   (read, delete), `block_storage_snapshot` (read, delete), `droplet` (read), `regions` / `sizes` /
   `actions` / `account` (read). Scopes cannot be changed later: a missing one is a new token. The token
   is shown once - it goes straight into step 2, never into a file you keep, a chat or a repository.
+- **The region's default VPC**, once, after step 2 (free; `region` in `terraform.tfvars`, ams3):
+  `doctl vpcs create --name default-ams3 --region ams3` - DigitalOcean picks its range. The first VPC of a
+  region becomes its default, and a default VPC cannot be deleted: without this one the cycle's own VPC
+  would be the first, and its destroy would fail. `doctl vpcs list` shows whether the region has one
+  already (a droplet or cluster made there earlier creates it); the plan fails while it has none.
 
 ### 2. Prerequisites and sign-in - in a config file of its own
 
@@ -108,5 +113,7 @@ person runs the cycle.
 | `no access-token in ...` (make) | The token is in a named doctl context, or yq is missing | `doctl auth init` without `--context`, so the file's `default` context has it. |
 | `doctl cannot sign in` (make) | The token expired or was revoked | A new token (step 1), then `doctl auth init` again. |
 | The VPC or the cluster is refused for overlapping ranges | `vpc_cidr`, `cluster_subnet` or `service_subnet` overlaps another VPC of the team - the default VPCs included: DigitalOcean makes one per region the team uses, a /16 out of 10.0.0.0/8, which is why the ranges are in 172.16.0.0/12 | Other ranges in `terraform.tfvars` (`doctl vpcs list` shows the team's). |
+| `unable to find default VPC in <region> region` (plan) | The region has no default VPC yet | Create it (step 1, the region's default VPC). |
+| `<cluster_name>-doks is the default VPC of <region>` (plan), or `Can not delete default VPCs` (destroy) | The cycle's VPC was the region's first, so DigitalOcean made it the default | `doctl vpcs create --name default-<region> --region <region>`, then `doctl vpcs update <its id> --default=true`, then `make destroy` again. |
 | 403 on create or delete | The token lacks a scope | A new token with the scope (step 1) - scopes cannot be added. |
 | Traefik's Service has no external address | The cloud controller refused the annotations | `kubectl -n traefik describe service traefik` shows its events. |

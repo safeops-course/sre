@@ -15,8 +15,9 @@
 #             not LEFT. A failed query is not retried - it is no lag. The same as scripts/aks-leftovers.sh.
 #
 # Runs at the end of the doks_cluster Makefile's destroy (with --settle when the destroy succeeded) and as
-# its `make leftovers`. Needs: doctl and jq; DIGITALOCEAN_CONFIG, doctl's config file with the token in its
-# "default" context (doctl reads the variable itself). A token in the environment would win over that file,
+# its `make leftovers`. Needs: doctl (DOCTL, as the Makefile exports it, or doctl on PATH) and jq;
+# DIGITALOCEAN_CONFIG, doctl's config file with the token in its "default" context (doctl reads the
+# variable itself). A token in the environment would win over that file,
 # so DIGITALOCEAN_ACCESS_TOKEN and DIGITALOCEAN_CONTEXT are cleared - a direct run lists the same team as
 # make does. Changes nothing - it only lists. Exit 0 = empty, 1 = something left, 2 = bad usage or a query
 # failed: an error never reads as "nothing left". Called through make, both 1 and 2 surface as make's own
@@ -64,6 +65,7 @@ if (( settle )); then
 fi
 
 vpc="${cluster}-doks" # doks_cluster/main.tf digitalocean_vpc.this
+doctl="${DOCTL:-doctl}"
 
 # check_once LABEL - list every kind once; prints a line per kind that lists something, starting with LABEL
 # (LEFT, or "still listed" before the last settle attempt), and FAIL lines. Returns 0 empty, 1 left,
@@ -75,7 +77,7 @@ check_once() {
   check() {
     local what="$1" filter="$2" json names
     shift 2
-    if ! json="$(doctl --context default "$@" --output json)"; then
+    if ! json="$("${doctl}" --context default "$@" --output json)"; then
       failed=1
       echo "FAIL could not list ${what} (doctl error above)" >&2
       return 0
