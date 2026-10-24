@@ -6,6 +6,10 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  # Every Flux Kustomization: after a failed apply or health check, try again in 2 minutes, not a whole
+  # interval. Without it one slow start (CRDs not yet established, a volume still attaching) holds
+  # everything that depends on it for 10 minutes (found on SKS, 2026-10-24).
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -20,6 +24,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -39,6 +44,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -60,6 +66,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -78,6 +85,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -103,6 +111,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -110,6 +119,7 @@ spec:
   prune: true
   wait: false
   # ${cluster_ipv6_range}: the pods' IPv6 range, cut out of allow-backend-egress-https (cluster-config).
+  # ${api_server_port}: the API server's port where it is not 443/6443, for allow-postgres-egress-apiserver.
   postBuild:
     substituteFrom:
       - kind: ConfigMap
@@ -124,6 +134,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -140,6 +151,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -165,6 +177,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -172,6 +185,7 @@ spec:
   prune: true
   wait: false
   # ${cluster_ipv6_range}: the pods' IPv6 range, cut out of allow-backend-egress-https (cluster-config).
+  # ${api_server_port}: the API server's port where it is not 443/6443, for allow-postgres-egress-apiserver.
   postBuild:
     substituteFrom:
       - kind: ConfigMap
@@ -186,6 +200,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -202,6 +217,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -227,6 +243,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -234,6 +251,7 @@ spec:
   prune: true
   wait: false
   # ${cluster_ipv6_range}: the pods' IPv6 range, cut out of allow-backend-egress-https (cluster-config).
+  # ${api_server_port}: the API server's port where it is not 443/6443, for allow-postgres-egress-apiserver.
   postBuild:
     substituteFrom:
       - kind: ConfigMap
@@ -248,6 +266,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -264,6 +283,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -281,6 +301,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -297,6 +318,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -317,6 +339,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -334,6 +357,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -351,6 +375,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -371,6 +396,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -393,6 +419,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -410,6 +437,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -427,6 +455,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  retryInterval: 2m0s
   sourceRef:
     kind: GitRepository
     name: flux-system

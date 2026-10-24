@@ -1,7 +1,9 @@
 # Postgres (CNPG) pods talk to the Kubernetes API server: the CNPG instance manager inside each pod reads
 # and updates its Cluster object. The API server is not a pod - its address and port depend on the
-# cluster: 6443 on kind and k3s, 443 on managed clouds (GKE; EKS and AKS too) - so the rule uses an
-# ipBlock for any address on those two ports. The residual risk is small: 443 is open to Postgres anyway
+# cluster: 6443 on kind and k3s, 443 on most managed clouds (GKE, EKS, AKS, DOKS), a port of the
+# provider's own on SKS - so the rule uses an ipBlock for any address on those two ports, plus
+# ${api_server_port} from cluster-config where the module reads the real one from the cluster (SKS;
+# without it the default 443 repeats the entry above). The residual risk is small: 443 is open to Postgres anyway
 # (allow-postgres-egress-https, the backups), and every request to the API server still needs the
 # pod's own RBAC. cluster-conformance C3 checks that this rule, not another one, lets it through.
 # IPv6 too: an ipBlock covers one family, and on a dual-stack cluster the API server may be reached over IPv6.
@@ -38,3 +40,5 @@ spec:
           port: 6443
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: ${api_server_port:=443}

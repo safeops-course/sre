@@ -1,18 +1,20 @@
 # Adding a cloud provider
 
-The platform runs the same way on every provider: kind locally, Hetzner, GKE, AWS, Azure, DigitalOcean - and, by the
+The platform runs the same way on every provider: kind locally, Hetzner, GKE, AWS, Azure, DigitalOcean, Exoscale - and, by the
 same pattern, any other. A new provider is a checklist, not a new design. GKE
 (`infra/terraform/gcp_foundation`, `infra/terraform/gke_cluster`, `docs/gcp.md`), AWS
 (`infra/terraform/aws_foundation`, `infra/terraform/eks_cluster`, `docs/aws.md`) and Azure
 (`infra/terraform/azure_foundation`, `infra/terraform/aks_cluster`, `docs/azure.md`) are full examples to copy from;
-DigitalOcean (`infra/terraform/doks_cluster`, `docs/digitalocean.md`) is one without a foundation module.
+DigitalOcean (`infra/terraform/doks_cluster`, `docs/digitalocean.md`) and Exoscale (`infra/terraform/sks_cluster`,
+`docs/exoscale.md`) are ones without a foundation module.
 
 ## Terraform
 
 - [ ] **Two modules when the provider needs account-level setup:** a foundation applied once by a
   person (APIs, identities, CI federation, alerts, budget - nothing billed) and a cluster module
   created and destroyed per cycle. Without an API for that setup (DigitalOcean: two-factor sign-in, spend
-  alerts and tokens are console-only) the cluster module alone, and the runbook lists the steps by hand.
+  alerts and tokens are console-only; Exoscale: the cycle's key is allowed compute only, never IAM) the cluster
+  module alone, and the runbook lists the steps by hand.
 - [ ] **Runs from a laptop and from CI, with the same targets** - each its own make call:
   `make -C infra/terraform/<module> preflight`, then `plan`, `apply`, `destroy`, `leftovers`. Plan is saved
   through `scripts/guard-terraform-plan.sh`; apply applies only that plan.
@@ -47,10 +49,15 @@ DigitalOcean (`infra/terraform/doks_cluster`, `docs/digitalocean.md`) is one wit
   (C5); the module writes its pod IPv6 range to cluster-config `cluster_ipv6_range`, which
   `allow-backend-egress-https` cuts out of `::/0` (on GKE it is global, not in fc00::/7). Every app pod answers on
   both of its addresses (`make smoke-test`: an image that listens on IPv4 only fails there, not as a 502 later).
-  Without it by default (EKS gives a cluster IPv4 or IPv6, not both; DOKS IPv6 only on load balancers), the module writes `ip_stack = "ipv4"` and
+  Without it by default (EKS gives a cluster IPv4 or IPv6, not both; DOKS IPv6 only on load balancers; SKS none - its cloud
+  controller has no IPv6 setting for the load balancer), the module writes `ip_stack = "ipv4"` and
   `service_ip_family_policy = "PreferDualStack"` to cluster-config (`"dual"` and the default `RequireDualStack`
   everywhere else): the apps' and Traefik's Services read the policy (no
   `ipFamilies` - a listed IPv6 would be refused) - a written exception, and conformance C13 checks the promise.
+- [ ] **The API server's port:** `allow-postgres-egress-apiserver` opens 443 and 6443, and Cilium checks it against
+  the address behind the Service `kubernetes`. Where that is another port (SKS: one of Exoscale's own), the
+  module reads it from the EndpointSlice `default/kubernetes` and writes cluster-config `api_server_port`;
+  conformance C3 fails when CloudNativePG cannot reach the API server.
 
 ## Proof
 

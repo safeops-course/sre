@@ -85,10 +85,16 @@ infra/terraform/
                      # balancer), pools "platform" + "apps", metrics-server (Helm); `make plan|apply|destroy|leftovers`,
                      # kubeconfig.yaml context doks-sre-control-plane (doctl exec with DIGITALOCEAN_CONFIG - its own config
                      # file, never doctl's default); settings in .env.doks; flux.tf: the same Flux bootstrap, profile profiles/doks
+  sks_cluster/       # SKS (Exoscale), per test cycle, bg-sof-1 - no foundation (the organization's settings and the
+                     # compute-only API key by hand, docs/exoscale.md): own security group, Cilium, CCM + CSI + metrics-server
+                     # from SKS, default StorageClass sbs (no expansion), IPv4 only, pools "platform" + "apps" (Traefik's NLB
+                     # sends to platform); `make plan|apply|destroy|leftovers`, kubeconfig.yaml context sks-sre-control-plane
+                     # (exo exec with EXOSCALE_CONFIG - its own config file, never exo's default); settings in .env.sks;
+                     # flux.tf: the same Flux bootstrap, profile profiles/sks
   state-lab/         # Lab: local vs shared (MinIO, locked) state - two ConfigMaps in namespace lab
 flux/
   bootstrap/         # FluxCD bootstrap: a profile per cluster on the provider-neutral base flux-system/.
-                     # profiles/hetzner, profiles/gke, profiles/eks, profiles/aks and profiles/doks = base + all components (components/: platform-secrets, public-edge,
+                     # profiles/hetzner, profiles/gke, profiles/eks, profiles/aks, profiles/doks and profiles/sks = base + all components (components/: platform-secrets, public-edge,
                      # image-automation, alerting, opentelemetry) (+ the Hetzner load balancer patch on Hetzner);
                      # profiles/local (kind) = base + minio, lab, local secrets + kind patches, and only the opentelemetry
                      # component (its collectors send to their own log there - docs/observability/logs.md).
@@ -119,7 +125,7 @@ scripts/             # Pre-commit hooks, automation scripts
   writes its pod IPv6 range to cluster-config `cluster_ipv6_range`; `allow-backend-egress-https` cuts it out of `::/0`
   (postBuild on network-policies-*). Cilium `policyCIDRMatchMode: nodes`, so an ipBlock reaches the API server on a node
   (kind, k3s). App Services and Traefik ask for `RequireDualStack`: a single-stack cluster fails loudly; a provider
-  without IPv6 by default (EKS, DOKS) writes cluster-config `ip_stack = "ipv4"` and `service_ip_family_policy = "PreferDualStack"`
+  without IPv6 by default (EKS, DOKS, SKS) writes cluster-config `ip_stack = "ipv4"` and `service_ip_family_policy = "PreferDualStack"`
   (the app and Traefik Services read it)
 - **Ingress**: Traefik, installed by Flux on every cluster (`flux/infrastructure/ingress/traefik`; Hetzner: kube-hetzner
   `ingress_controller = "custom"` creates only the load balancer; kind: NodePort 30080/30443 from the local profile)
@@ -139,12 +145,14 @@ scripts/             # Pre-commit hooks, automation scripts
 - State is remote in R2 — never delete state files manually without understanding implications
 - Use `make destroy` (not bare `terraform destroy`) — it handles Flux/k8s resource cleanup first
 - Sensitive variables come as `TF_VAR_*` from git-ignored env files - `.env.local` through `load-env.sh` (Hetzner),
-  `.env.gcp` / `.env.aws` / `.env.azure` / `.env.doks` read by the module Makefiles (templates `.env.*.example`) - never from a committed file
+  `.env.gcp` / `.env.aws` / `.env.azure` / `.env.doks` / `.env.sks` read by the module Makefiles (templates `.env.*.example`) - never from a committed file
 - A cloud module's `terraform.tfvars` is committed and holds only public choices (region, sizes, GitHub ids);
   kind keeps a git-ignored `terraform.tfvars` from `terraform.tfvars.example`
 
 ### FluxCD / Kubernetes
 - Environments: develop, staging, production — each has its own namespace and overlays
+- Every Flux Kustomization sets `retryInterval: 2m0s` next to its `interval`: a failed apply or health check is
+  tried again in 2 minutes, not a whole interval later (one slow start held its dependents 10 minutes on SKS)
 - Kustomize overlays pattern: `base/` + `overlays/{develop,staging,production}/patches/`
 - SOPS secrets go in `flux/secrets/` with `.sops.yaml` rules per directory
 - external-dns (namespace `external-dns`) reads the Cloudflare DNS token from its SOPS Secret
@@ -212,7 +220,7 @@ scripts/             # Pre-commit hooks, automation scripts
 - `make install-hooks` — install all pre-commit hooks
 - `make pre-commit` — run all hooks manually
 - `make fmt` — terraform fmt recursive
-- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, eks, azure_foundation, aks, doks, state-lab), no backend, no credentials
+- `make validate` — terraform validate of every module (kind, hcloud, gcp_foundation, gke, aws_foundation, eks, azure_foundation, aks, doks, sks, state-lab), no backend, no credentials
 - `make tf` — list the Terraform modules and their targets
 - `make kind-plan` / `kind-apply` / `kind-drift` / `kind-destroy` — local cluster; plan is saved with
   `guard-terraform-plan.sh`, apply applies only that plan (refused when older than `TF_MAX_AGE`, default 60 min)

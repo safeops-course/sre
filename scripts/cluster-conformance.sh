@@ -12,7 +12,7 @@
 #
 # Usage: scripts/cluster-conformance.sh            (or: make cluster-conformance KUBE_CONTEXT=...)
 #   KUBE_CONTEXT           the cluster (default kind-sre-control-plane); every kubectl call names it
-#   EXPECTED_K8S_VERSION   the version Git pins for this cluster (x.y.z). Known for kind and Hetzner
+#   EXPECTED_K8S_VERSION   the version Git pins for this cluster (x.y.z). Known for kind, Hetzner and SKS (auto_upgrade = false)
 #                          (read from their Terraform variables). Without one (a managed cluster runs
 #                          the version its provider offers) C1 checks the minor against kind's pin.
 #
@@ -56,17 +56,22 @@ probe() {
 }
 
 # expected_version - the Kubernetes version Git pins for this cluster: EXPECTED_K8S_VERSION, else the
-# kind node image, or the Hetzner k3s_version - terraform.tfvars when it sets one, else the variable's
-# default (never its description, which carries an example); empty when unknown.
+# kind node image, the Hetzner k3s_version - terraform.tfvars when it sets one, else the variable's
+# default (never its description, which carries an example) - or the SKS kubernetes_version; empty when unknown.
 expected_version() {
   if [ -n "${EXPECTED_K8S_VERSION:-}" ]; then echo "$EXPECTED_K8S_VERSION"; return; fi
-  local hcloud="$ROOT/infra/terraform/hcloud_cluster" pin
+  local hcloud="$ROOT/infra/terraform/hcloud_cluster" sks="$ROOT/infra/terraform/sks_cluster" pin
   case "$CONTEXT" in
     kind-*) grep -oE 'kindest/node:v[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/infra/terraform/kind_cluster/variables.tf" | head -1 | sed 's/.*:v//' ;;
     hetzner-*)
       pin="$(grep -E '^k3s_version *=' "$hcloud/terraform.tfvars" 2>/dev/null || true)"
       [ -n "$pin" ] || pin="$(awk '/variable "k3s_version"/,/^}/' "$hcloud/variables.tf" | grep -E '^ *default *=')"
       grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' <<<"$pin" | head -1 | sed 's/^v//' ;;
+    sks-*)
+      # SKS keeps the release Git pins only while Exoscale may not upgrade it (auto_upgrade = false, the
+      # course's choice); with auto_upgrade it picks the patch, and C1 checks the minor as for GKE.
+      grep -qE '^auto_upgrade *= *false' "$sks/terraform.tfvars" 2>/dev/null || return 0
+      grep -E '^kubernetes_version *=' "$sks/terraform.tfvars" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
   esac
 }
 
@@ -228,10 +233,14 @@ fi
 # label: some CNIs never apply policies to the API server (on kind it lives in the node's host
 # network - NetworkPolicy leaves that undefined), and then the rule is not exercised at all - SKIP,
 # not a pass. Where the control is blocked, the labelled probe must get through: the rule allows TCP
-# 6443 (kind, k3s) and 443 (managed clouds); a provider whose API server listens elsewhere fails here.
+# 6443 (kind, k3s), 443 (managed clouds) and cluster-config api_server_port (SKS: a port of Exoscale's own,
+# read by the module's Terraform); a provider whose API server listens elsewhere fails here.
+# The rule is applied as Flux applies it: ${api_server_port:=443} substituted from cluster-config, 443
+# where the key is missing (Flux's default).
 # busybox's nslookup ignores search domains for a dotted name - hence the full name.
 api=kubernetes.default.svc.cluster.local
-k -n "$NS" apply -f "$np/allow-postgres-egress-apiserver.yaml" >/dev/null
+api_server_port="$(jq -r '.data.api_server_port // "443"' <<<"$cluster_config" 2>/dev/null)" || api_server_port=443
+sed "s/\${api_server_port:=443}/${api_server_port}/" "$np/allow-postgres-egress-apiserver.yaml" | k -n "$NS" apply -f - >/dev/null
 control="$(probe blocked -l app=control "$api" 443)"
 if [ "$control" = open ]; then
   skip C3 "API server egress - this CNI does not apply policies to the API server (open under default-deny); the rule is not exercised here"
@@ -417,7 +426,7 @@ else
 fi
 
 # C12 - nothing billed is left after a destroy: a check after the cluster is gone, not on it.
-skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers, EKS: make -C infra/terraform/eks_cluster leftovers, AKS: make -C infra/terraform/aks_cluster leftovers, DOKS: make -C infra/terraform/doks_cluster leftovers; kind: nothing billed)"
+skip C12 "teardown leftovers - after destroy: the provider's check (Hetzner: scripts/hcloud-leftovers.sh, GKE: make -C infra/terraform/gke_cluster leftovers, EKS: make -C infra/terraform/eks_cluster leftovers, AKS: make -C infra/terraform/aks_cluster leftovers, DOKS: make -C infra/terraform/doks_cluster leftovers, SKS: make -C infra/terraform/sks_cluster leftovers; kind: nothing billed)"
 
 # C13 - the address families the provider promises: cluster-config ip_stack, written by the module's
 # Terraform. "dual": IPv4 and IPv6 for every node's pods and for Services (decided before C2) - a provider

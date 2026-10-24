@@ -108,6 +108,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: sks-leftovers-test
+        name: SKS leftovers tests (stub exo, no Exoscale)
+        entry: tests/sks-leftovers.test.sh
+        language: script
+        files: ^(scripts/sks-leftovers\.sh|tests/sks-leftovers\.test\.sh)$
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-policy-exceptions-test
         name: policy-exception check tests (throw-away copy, no cluster)
         entry: tests/check-policy-exceptions.test.sh
