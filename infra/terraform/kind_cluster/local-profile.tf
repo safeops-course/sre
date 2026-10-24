@@ -5,7 +5,7 @@
 # profile Terraform generates equivalent secrets once per cluster:
 #   - backend-secrets   (jwt-secret, uptrace-dsn)                  in each env namespace
 #   - app-postgres-app  (CNPG owner credentials)                   in each env namespace
-#   - cnpg-backup-s3    (MinIO instead of Hetzner Object Storage) in each env namespace
+#   - cnpg-backup-s3    (MinIO instead of the cloud clusters' R2 backup bucket) in each env namespace
 #   - minio-credentials (MinIO root user)                          in the minio namespace
 #   - sops-age          from an age key generated on first apply   (see age_key_file)
 # Nothing here is written to Git; `terraform destroy` removes it all.
@@ -128,7 +128,7 @@ resource "kubernetes_secret_v1" "minio_credentials" {
   }
 }
 
-# Same secret name/keys the CNPG clusters reference for Hetzner Object Storage, pointed at MinIO.
+# Same secret name/keys the CNPG clusters reference for the R2 backup bucket, pointed at MinIO.
 # https://cloudnative-pg.io/documentation/current/backup/
 resource "kubernetes_secret_v1" "local_cnpg_backup" {
   for_each   = local.local_envs

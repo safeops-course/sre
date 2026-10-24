@@ -76,7 +76,7 @@ locals {
     "end-time"    = var.kured_end_time
   } : {}
 
-  # etcd S3 backup — the same Hetzner Object Storage bucket and key as the CNPG backups (BACKUP_S3).
+  # etcd S3 backup — the same R2 backup bucket and key as the CNPG backups (BACKUP_S3).
   # k3s expects a bare hostname (no https:// prefix). https://docs.k3s.io/cli/etcd-snapshot
   etcd_s3_endpoint = var.backup_s3_endpoint != "" ? replace(var.backup_s3_endpoint, "https://", "") : ""
 
@@ -210,7 +210,7 @@ module "kube_hetzner" {
   enable_kured  = var.kured_enabled
   kured_options = local.kured_options
 
-  # etcd backup to Hetzner Object Storage
+  # etcd backup to the R2 backup bucket
   etcd_s3_backup = local.etcd_s3_backup
 
   # OIDC (Dex) for kubectl and Headlamp - applied in place (k3s restart, no node recreation)

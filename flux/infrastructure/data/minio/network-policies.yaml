@@ -1,6 +1,6 @@
 ---
 # The environment namespaces are default-deny; let the CNPG pods reach MinIO
-# (the base only opens 443, for Hetzner Object Storage on the platform). One policy per environment.
+# (the base only opens 443, for the R2 backup bucket on the cloud clusters). One policy per environment.
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

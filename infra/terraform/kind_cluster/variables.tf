@@ -101,14 +101,14 @@ variable "sops_age_key_revision" {
 # ─── Backups: only for local_profile = false (MinIO is used otherwise) ────────
 
 variable "backup_s3_access_key_id" {
-  description = "S3 access key for CNPG backups (Hetzner Object Storage, BACKUP_S3). Only for local_profile = false."
+  description = "S3 access key for CNPG backups (the R2 backup bucket, BACKUP_S3). Only for local_profile = false."
   type        = string
   default     = ""
   sensitive   = true
 }
 
 variable "backup_s3_secret_access_key" {
-  description = "S3 secret key for CNPG backups (Hetzner Object Storage, BACKUP_S3). Only for local_profile = false."
+  description = "S3 secret key for CNPG backups (the R2 backup bucket, BACKUP_S3). Only for local_profile = false."
   type        = string
   default     = ""
   sensitive   = true
@@ -121,13 +121,13 @@ variable "backup_s3_bucket" {
 }
 
 variable "backup_s3_endpoint" {
-  description = "S3 endpoint for CNPG backups, for example https://nbg1.your-objectstorage.com."
+  description = "S3 endpoint for CNPG backups, for example https://<account>.r2.cloudflarestorage.com."
   type        = string
   default     = ""
 }
 
 variable "backup_s3_region" {
-  description = "S3 region for CNPG backups, for example nbg1."
+  description = "S3 region for CNPG backups, for example auto (R2)."
   type        = string
   default     = ""
 }

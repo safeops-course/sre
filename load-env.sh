@@ -59,10 +59,10 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   echo "  HCLOUD_TOKEN=<your-hcloud-token>"
   echo "  FLUX_GIT_TOKEN=github_pat_..."
   echo "  GHCR_TOKEN=ghp_..."
-  echo "  BACKUP_S3_ACCESS_KEY_ID=<hetzner-object-storage-access-key>"
-  echo "  BACKUP_S3_SECRET_ACCESS_KEY=<hetzner-object-storage-secret-key>"
-  echo "  BACKUP_S3_ENDPOINT=https://nbg1.your-objectstorage.com"
-  echo "  BACKUP_S3_REGION=nbg1"
+  echo "  BACKUP_S3_ACCESS_KEY_ID=<r2-backup-bucket-access-key>"
+  echo "  BACKUP_S3_SECRET_ACCESS_KEY=<r2-backup-bucket-secret-key>"
+  echo "  BACKUP_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com"
+  echo "  BACKUP_S3_REGION=auto"
   echo "  BACKUP_S3_BUCKET=<your-backup-bucket>"
   die "Aborting: ${ENV_FILE} not found."
 fi
@@ -82,7 +82,7 @@ export TF_VAR_hcloud_token="${HCLOUD_TOKEN:-}"
 export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}"
 export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}"
 
-# CNPG and etcd backups (Hetzner Object Storage) - separate key, never the state key
+# CNPG and etcd backups (Cloudflare R2, their own bucket) - separate key, never the state key
 export TF_VAR_backup_s3_access_key_id="${BACKUP_S3_ACCESS_KEY_ID:-}"
 export TF_VAR_backup_s3_secret_access_key="${BACKUP_S3_SECRET_ACCESS_KEY:-}"
 export TF_VAR_backup_s3_bucket="${BACKUP_S3_BUCKET:-}"
