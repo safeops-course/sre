@@ -12,7 +12,7 @@
 #
 # Usage: scripts/cluster-conformance.sh            (or: make cluster-conformance KUBE_CONTEXT=...)
 #   KUBE_CONTEXT           the cluster (default kind-sre-control-plane); every kubectl call names it
-#   EXPECTED_K8S_VERSION   the version Git pins for this cluster (x.y.z). Known for kind and Hetzner
+#   EXPECTED_K8S_VERSION   the version Git pins for this cluster (x.y.z). Known for kind, Hetzner and SKS (auto_upgrade = false)
 #                          (read from their Terraform variables). Without one (a managed cluster runs
 #                          the version its provider offers) C1 checks the minor against kind's pin.
 #
@@ -56,17 +56,22 @@ probe() {
 }
 
 # expected_version - the Kubernetes version Git pins for this cluster: EXPECTED_K8S_VERSION, else the
-# kind node image, or the Hetzner k3s_version - terraform.tfvars when it sets one, else the variable's
-# default (never its description, which carries an example); empty when unknown.
+# kind node image, the Hetzner k3s_version - terraform.tfvars when it sets one, else the variable's
+# default (never its description, which carries an example) - or the SKS kubernetes_version; empty when unknown.
 expected_version() {
   if [ -n "${EXPECTED_K8S_VERSION:-}" ]; then echo "$EXPECTED_K8S_VERSION"; return; fi
-  local hcloud="$ROOT/infra/terraform/hcloud_cluster" pin
+  local hcloud="$ROOT/infra/terraform/hcloud_cluster" sks="$ROOT/infra/terraform/sks_cluster" pin
   case "$CONTEXT" in
     kind-*) grep -oE 'kindest/node:v[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/infra/terraform/kind_cluster/variables.tf" | head -1 | sed 's/.*:v//' ;;
     hetzner-*)
       pin="$(grep -E '^k3s_version *=' "$hcloud/terraform.tfvars" 2>/dev/null || true)"
       [ -n "$pin" ] || pin="$(awk '/variable "k3s_version"/,/^}/' "$hcloud/variables.tf" | grep -E '^ *default *=')"
       grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' <<<"$pin" | head -1 | sed 's/^v//' ;;
+    sks-*)
+      # SKS keeps the release Git pins only while Exoscale may not upgrade it (auto_upgrade = false, the
+      # course's choice); with auto_upgrade it picks the patch, and C1 checks the minor as for GKE.
+      grep -qE '^auto_upgrade *= *false' "$sks/terraform.tfvars" 2>/dev/null || return 0
+      grep -E '^kubernetes_version *=' "$sks/terraform.tfvars" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
   esac
 }
 

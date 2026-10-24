@@ -48,6 +48,7 @@ locals {
   # as in exo's own kubeconfig. The kubernetes provider and kubectl need the full URL.
   api_server_url = "https://${exoscale_sks_cluster.this.endpoint}:443"
 
+  # make destroy writes the same exec by hand (Makefile, step 0: it cannot trust this state) - change both.
   sks_exec = {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = var.exo

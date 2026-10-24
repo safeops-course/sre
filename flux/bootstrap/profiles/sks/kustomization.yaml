@@ -5,8 +5,8 @@
 #
 #   base         flux/bootstrap/flux-system - what every cluster runs
 #   components   every one, as on the other clouds
-#   patches      Traefik's LoadBalancer Service: which node pool the network load balancer sends to, and its
-#                name (below). IPv4 only - the written exception of docs/providers.md, from cluster-config
+#   patches      Traefik's LoadBalancer Service: which node pool the network load balancer sends to, its
+#                name and its two fixed NodePorts (below). IPv4 only - the written exception of docs/providers.md, from cluster-config
 #                service_ip_family_policy, not from here
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -48,3 +48,12 @@ patches:
                   service.beta.kubernetes.io/exoscale-loadbalancer-name: ${cluster_name}-sks-traefik
                   service.beta.kubernetes.io/exoscale-loadbalancer-sks-cluster-name: ${cluster_name}
                   service.beta.kubernetes.io/exoscale-loadbalancer-service-sks-nodepool-name: platform
+              # Fixed NodePorts, the same as kind's: the nodes' security group opens only these two to the
+              # internet (infra/terraform/sks_cluster/main.tf, local.traefik_node_ports - change both).
+              - op: add
+                path: /spec/values/ports/web/nodePort
+                value: 30080
+              - op: add
+                path: /spec/values/ports/websecure
+                value:
+                  nodePort: 30443

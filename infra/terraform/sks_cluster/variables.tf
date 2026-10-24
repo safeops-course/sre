@@ -23,7 +23,7 @@ variable "zone" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes release of the control plane at creation (e.g. 1.36.5) - one SKS offers (exo compute sks versions; make access checks it). The platform's minor, as on kind and Hetzner."
+  description = "Kubernetes release of the control plane at creation (e.g. 1.36.5) - one SKS offers (exo compute sks versions; make release checks it before plan and apply). The platform's minor, as on kind and Hetzner."
   type        = string
 
   validation {
@@ -104,6 +104,12 @@ variable "flux_version" {
 variable "flux_git_repository_url" {
   description = "Git repository Flux follows (https://github.com/<owner>/<repo>.git)."
   type        = string
+}
+
+variable "read_cluster_api" {
+  description = "Read the API server's port from the cluster (flux.tf). Always true; only make destroy's last step sets it false, so an unreachable API never stops the destroy of what is billed."
+  type        = bool
+  default     = true
 }
 
 variable "flux_git_repository_branch" {

@@ -6,7 +6,7 @@ cluster_name = "sre"
 zone = "bg-sof-1"
 
 # The platform's minor (kind and Hetzner pin 1.36.4); the newest 1.36 release SKS offers
-# (exo compute sks versions, 2026-10-23). make access fails when SKS no longer offers it.
+# (exo compute sks versions, 2026-10-23). make release (run by plan) fails when SKS no longer offers it.
 kubernetes_version = "1.36.5"
 
 # A free control plane without an SLA and no automatic upgrades ONLY because this cluster lives for a test

@@ -48,10 +48,14 @@ resource "kubernetes_namespace_v1" "bootstrap" {
 # (10.96.0.1:443), and Cilium checks the NetworkPolicy against the address behind it. On SKS that is a port
 # of Exoscale's own (31101 on the first cycle, 2026-10-24), not the 443 or 6443 every other cluster uses, and
 # allow-postgres-egress-apiserver dropped CloudNativePG's calls - no database. Exoscale publishes the port
-# nowhere else (exoscale_sks_cluster.endpoint is a name on 443). Read at apply: a port Exoscale changes later
-# (a control plane upgrade) needs another apply - until then CloudNativePG fails loudly and conformance C3
-# names the port.
+# nowhere else (exoscale_sks_cluster.endpoint is a name on 443), and it differs per cluster (32425 on the
+# second). Read at every plan: a port Exoscale changes later (whether a control plane upgrade does is not
+# known) shows as a change of cluster-config in the next plan, and needs that apply - until then
+# CloudNativePG cannot reach the API and conformance C3 fails. Read only while read_cluster_api is true:
+# make destroy's last step sets it false, so an unreachable API never stops the destroy of what is billed.
 data "kubernetes_endpoint_slice_v1" "api_server" {
+  count = var.read_cluster_api ? 1 : 0
+
   metadata {
     name      = "kubernetes"
     namespace = "default"
@@ -92,7 +96,7 @@ resource "kubernetes_config_map_v1" "cluster_config" {
     cluster_ipv6_range = "fd00::/8"
     # The API server's port behind the Service kubernetes (data.kubernetes_endpoint_slice_v1.api_server),
     # opened to Postgres by allow-postgres-egress-apiserver.
-    api_server_port = data.kubernetes_endpoint_slice_v1.api_server.port[0].port
+    api_server_port = one(data.kubernetes_endpoint_slice_v1.api_server[*].port[0].port)
   }
 
   depends_on = [kubernetes_namespace_v1.bootstrap]

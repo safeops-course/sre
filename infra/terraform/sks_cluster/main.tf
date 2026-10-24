@@ -72,19 +72,27 @@ resource "exoscale_security_group_rule" "cilium_icmp" {
   description            = "Cilium health checks (ping)"
 }
 
-# The load balancer sends the traffic to the Services' NodePorts on the nodes' public addresses, and checks
-# them from there - it has no address of its own to allow, so the whole range is open. Every NodePort or
-# LoadBalancer Service is therefore reachable on the nodes' public addresses, not only Traefik's (the platform
-# creates no other); the namespaces' default-deny NetworkPolicies still decide which pods answer
-# (docs/exoscale.md, what it builds).
+# The load balancer sends the traffic to Traefik's NodePorts on the nodes' public addresses, and checks them
+# from there - it has no address of its own to allow, so these ports are open to the internet. Only Traefik's
+# two, fixed in flux/bootstrap/profiles/sks (change both): any other NodePort or LoadBalancer Service stays
+# closed to the internet instead of open on every node (docs/exoscale.md, what it builds).
+locals {
+  traefik_node_ports = {
+    web       = { port = 30080, description = "Traefik HTTP NodePort for the network load balancer" }
+    websecure = { port = 30443, description = "Traefik HTTPS NodePort for the network load balancer" }
+  }
+}
+
 resource "exoscale_security_group_rule" "nodeports" {
+  for_each = local.traefik_node_ports
+
   security_group_id = exoscale_security_group.nodes.id
   type              = "INGRESS"
   protocol          = "TCP"
-  start_port        = 30000
-  end_port          = 32767
+  start_port        = each.value.port
+  end_port          = each.value.port
   cidr              = "0.0.0.0/0"
-  description       = "NodePorts for the network load balancer"
+  description       = each.value.description
 }
 
 # ─── Cluster ──────────────────────────────────────────────────────────────────

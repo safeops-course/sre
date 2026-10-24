@@ -124,7 +124,9 @@ apply: preflight ## Apply exactly the saved tfplan (refused when older than TF_M
 #      Kubernetes objects it depends on, and an unreachable API would stop the whole teardown here;
 #   2. the Kubernetes objects and the Flux null_resources leave the state - the cluster goes anyway, and an
 #      unreachable API must not stop the destroy of what is billed;
-#   3. terraform destroy; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer knows it;
+#   3. terraform destroy with read_cluster_api=false: the API server's port (flux.tf) is not read, so an
+#      unreachable API cannot stop it; then kubeconfig.yaml goes - step 0 rewrote it, so local_file no longer
+#      knows it;
 #   4. leftovers, whatever the destroy returned - the script itself, so its own exit status counts; after a
 #      successful destroy with --settle (Exoscale may still be deleting the load balancer and the volumes);
 #      a failed destroy keeps its own exit status.
@@ -151,7 +153,7 @@ destroy: access init ## Destroy the cluster (asks; AUTO_APPROVE=1 does not), the
 	} || { rm -f kubeconfig.yaml.new kubeconfig.ca.pem; echo "WARNING: could not write kubeconfig.yaml (no cluster $(CLUSTER) in $(ZONE)?) - the pre-destroy hook cannot reach the cluster; check make leftovers" >&2; }
 	@$(TF) destroy -refresh=false -target='terraform_data.flux_pre_destroy' $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 	@for r in $$($(TF) state list | grep -E '^(kubernetes_|null_resource\.flux_)'); do $(TF) state rm "$$r" >/dev/null; done
-	@rc=0; $(TF) destroy $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
+	@rc=0; $(TF) destroy -var read_cluster_api=false $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,) || rc=$$?; \
 	if [ $$rc -eq 0 ]; then rm -f kubeconfig.yaml; settle=--settle; else settle=; fi; \
 	$(LEFTOVERS) $$settle "$(CLUSTER)" "$(ZONE)"; check=$$?; \
 	if [ $$rc -ne 0 ]; then exit $$rc; fi; exit $$check
