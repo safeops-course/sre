@@ -22,8 +22,9 @@ Secrets (really secret):
   plan nor in the state
 - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` - Terraform state in Cloudflare R2 (CI only, never in
   the cluster: the state holds the admin kubeconfig)
-- `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Hetzner Object
-  Storage (Hetzner console -> Security -> S3 credentials); this key lives in the cluster
+- `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Cloudflare R2:
+  an R2 API token limited to the backup bucket (Cloudflare dashboard -> R2 -> Manage API tokens,
+  Object Read & Write), never the state bucket's; this key lives in the cluster
 - `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`. An ephemeral Terraform
   variable written through `data_wo`: never in the plan or the state, so every plan and apply needs
   it. After rotating it, bump `sops_age_key_revision`, otherwise Terraform does not re-send it
