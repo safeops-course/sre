@@ -669,7 +669,7 @@ resource "kubernetes_config_map_v1" "backup_s3" {
   }
 }
 
-# CNPG backup credentials (Hetzner Object Storage) for the full platform profile
+# CNPG backup credentials (the cloud clusters' R2 backup bucket) for the full platform profile
 # (local_profile = false). The local profile uses MinIO instead (local-profile.tf).
 # Full platform profile only (local_profile = false; local-profile.tf seeds all three
 # envs for the local profile). CNPG owner credentials for production (bootstrap.initdb.secret, and DATABASE_* of the

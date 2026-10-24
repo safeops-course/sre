@@ -22,8 +22,9 @@ Secrets (really secret):
   plan nor in the state
 - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` - Terraform state in Cloudflare R2 (CI only, never in
   the cluster: the state holds the admin kubeconfig)
-- `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Hetzner Object
-  Storage (Hetzner console -> Security -> S3 credentials); this key lives in the cluster
+- `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` - CNPG and etcd backups in Cloudflare R2:
+  an R2 API token limited to the backup bucket (Cloudflare dashboard -> R2 -> Manage API tokens,
+  Object Read & Write), never the state bucket's; this key lives in the cluster
 - `SOPS_AGE_KEY` - decrypts the platform secrets under `flux/secrets/**`. An ephemeral Terraform
   variable written through `data_wo`: never in the plan or the state, so every plan and apply needs
   it. After rotating it, bump `sops_age_key_revision`, otherwise Terraform does not re-send it
@@ -37,9 +38,10 @@ Secrets (really secret):
 
 Variables (not secret - visible in the settings and in logs):
 - `HCLOUD_SSH_PUBLIC_KEY` - the public half of the node key
-- `BACKUP_S3_ENDPOINT` - `https://nbg1.your-objectstorage.com` (the cluster location)
-- `BACKUP_S3_REGION` - `nbg1`
-- `BACKUP_S3_BUCKET` - a private bucket in the same Hetzner project (bucket names are global)
+- `BACKUP_S3_ENDPOINT` - `https://<account>.r2.cloudflarestorage.com` - the backups go to Cloudflare R2, the
+  same target for every provider (`docs/providers.md`)
+- `BACKUP_S3_REGION` - `auto` (R2)
+- `BACKUP_S3_BUCKET` - the backup bucket, separate from the state bucket
 
 The state bucket and endpoint are fixed in `infra/terraform/hcloud_cluster/backend.tf`. The three
 `BACKUP_S3_*` variables have one consumer, Terraform: it configures the etcd snapshots, writes the
@@ -47,8 +49,8 @@ The state bucket and endpoint are fixed in `infra/terraform/hcloud_cluster/backe
 the CNPG clusters (`postBuild.substituteFrom`). Change them in GitHub only.
 
 Why two stores: the backup key has to live in the cluster, the state key must not. An S3 key is
-scoped to a whole bucket (R2) or a whole project (Hetzner), not to a prefix - with one bucket, a
-leaked backup key would read the state.
+scoped to a whole bucket, not to a prefix - with one bucket, a leaked backup key would read the state.
+So the backups have their own bucket and their own R2 token, limited to that bucket.
 
 Not needed: the repository and the container images are public, so Flux and the nodes need no Git
 or registry token (the former `FLUX_GIT_TOKEN`, `GHCR_USERNAME` and `GHCR_TOKEN`).

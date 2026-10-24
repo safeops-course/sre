@@ -5,7 +5,7 @@
 # something kind does not have - a DNS zone and a load balancer (public-edge), a Git write token
 # (image-automation), alert receivers (alerting), the platform's SOPS key (platform-secrets).
 # What is added:
-#   - minio          S3-compatible target for CNPG backups instead of Hetzner Object Storage
+#   - minio          S3-compatible target for CNPG backups instead of the cloud clusters' R2 backup bucket
 #   - secrets-local  the learner's own SOPS-encrypted secrets (secrets chapter)
 #   - lab            scratch namespace with Pod Security warn/audit (admission-policy drills)
 # What stays although kind has no DNS zone: cert-manager - the Barman Cloud plugin of CloudNativePG makes

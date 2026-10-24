@@ -23,7 +23,7 @@ database and owner `app`, credentials in the Secret `app-postgres-app`.
   The plugin runs as a sidecar in the database pod; its resources are in the ObjectStore.
 - **Where:** MinIO inside the cluster on kind (bucket `sre`), its data in a directory on the laptop
   (`infra/terraform/kind_cluster/.minio-data`) - it survives `make kind-destroy`, not the loss of the
-  laptop; Hetzner Object Storage on the platform. The endpoint and bucket come from Terraform
+  laptop; on the cloud clusters Cloudflare R2, a backup bucket of its own. The endpoint and bucket come from Terraform
   (ConfigMap substitution); the keys from the Secret `cnpg-backup-s3`.
 - **One archive per cluster:** the server name is `app-postgres-pg18-<BACKUP_CLUSTER_ID>`, the day
   and time Terraform created the Kubernetes cluster. A rebuilt cluster writes a new archive - the
