@@ -200,7 +200,7 @@ minutes; kind has no automation, and a tag changes there only by a commit.
 | Never build or push an image for production. Promote a tested staging tag, and prove it by digest: the two tags (`docker buildx imagetools inspect`) and the running pods (`status.containerStatuses[].imageID`) show the same index digest. | Production images come only from the promotion workflow (`promote-production.yml`, a re-tag); the proof is instruction only. |
 | Never change a running image by hand (`kubectl set image`, `kubectl rollout undo`). Change `newTag` through a pull request. | Flux sets the Deployment back; on Hetzner the everyday sign-in only reads production. |
 | Keep each overlay's `newTag` matching its own environment's ImagePolicy, with the setter comment `# {"$imagepolicy": "<namespace>:<name>:tag"}`. | `scripts/check-image-tags.sh` in pre-commit and CI. |
-| A production rollback on Hetzner pins the ImagePolicy's pattern to the good tag together with `newTag`, in one pull request - a revert of `newTag` alone is written back by the automation. Restore the pattern in another once the fix is promoted. | Instruction only (reviewed in the pull request). |
+| A production rollback on the cloud cluster pins the ImagePolicy's pattern to the good tag together with `newTag`, in one pull request - a revert of `newTag` alone is written back by the automation. Restore the pattern in another once the fix is promoted. | Instruction only (reviewed in the pull request). |
 
 ## Chapter 11 - An alert is a request for a person to act
 
@@ -329,7 +329,7 @@ back when its metrics fail.
 | Rule for the agent | What enforces it |
 |---|---|
 | When a canary rolls a release back, find out why from its events and metrics - never lower the threshold, remove a metric or set `skipAnalysis` to get the release through. | The alert `CanaryRolledBack`; review of the Canary's diff. |
-| A failed check with *no values* is a broken analysis, not a bad release: fix the traffic or the metrics before the next release. | `frontend-synthetic-traffic` and the Traefik PodMonitor in the module; instruction. |
+| A failed check with *no values* is a broken analysis, not a bad release: fix the traffic or the metrics before the next release. | `frontend-synthetic-traffic` and the Traefik PodMonitor in the monitoring stack; instruction. |
 | A route made for a canary is a public route: never match an internal name on a public entrypoint. | Instruction; review. |
 | `RANDOM_ERROR_RATE` is for `develop` and labs only. | `scripts/check-app-security.sh` in pre-commit and in the Flux Diff workflow. |
 
