@@ -18,7 +18,7 @@ Use Terraform to provision a local multi-node kind cluster. Terraform manages li
 | backend + frontend in develop/staging/production | Dex, Headlamp, OIDC RBAC |
 | kube-prometheus-stack (Prometheus, Grafana) | Uptrace export of the collectors (on kind they print to their own log) |
 | CloudNativePG operator + one cluster per environment | Slack delivery (the Guardian logs its alerts instead) |
-| **MinIO** as the CNPG backup target (replaces Hetzner Object Storage) | Flux image automation (needs a git write token) |
+| **MinIO** as the CNPG backup target (replaces the cloud clusters' Cloudflare R2) | Flux image automation (needs a git write token) |
 | Kyverno + both policy packs (Audit) | `flux/secrets/*` encrypted for the platform key |
 | Flagger (develop canaries are opt-in, Ch19), Chaos Monkey | |
 | The OpenTelemetry collectors (pod logs, Kubernetes Events; `docs/observability/logs.md`) | |
@@ -44,10 +44,10 @@ Images are pulled from `ghcr.io/safeops-course/*`; no registry credentials are n
 - `curl`, `tar`, and `unzip` available on your workstation
 - Go 1.24+ and Node.js 20+ with npm for backend/frontend development
 - `make` (GNU make recommended)
-- Terraform 1.11+, `kubectl`, `pre-commit`, `checkov` at least the version CI runs (the Terraform security hook fails without it or with an older one; Homebrew lags behind, so `uv tool install checkov==<version>` - `make check-tools` prints it), `jq` (the AI agent's kube-context hook, Chapter 01, and `scripts/lab-pod.sh`) and `yq` v4 (the pre-commit guardrails that read the Flux manifests) - `make check-tools` checks that every tool is installed, and its minimum version where one is set
+- Terraform 1.11+, `kubectl`, `pre-commit`, `checkov` at least the version CI runs (the Terraform security hook fails without it or with an older one; Homebrew lags behind, so `uv tool install checkov`, later `uv tool upgrade checkov`), `jq` (the AI agent's kube-context hook, Chapter 01, and `scripts/lab-pod.sh`) and `yq` v4 (the pre-commit guardrails that read the Flux manifests) - `make check-tools` checks that every tool is installed, and its minimum version where one is set
 
 ## Provision the Cluster with Terraform
-Use the Terraform module under `infra/terraform/kind_cluster/` to create (or destroy) the local kind cluster. The module codifies the multi-node topology directly in Terraform, automatically merges the generated kubeconfig into `~/.kube/config`, and bootstraps Flux via Flux Operator + `FluxInstance`.
+Use the Terraform module under `infra/terraform/kind_cluster/` to create (or destroy) the local kind cluster. The module codifies the two-node topology (one control plane, one worker) directly in Terraform, automatically merges the generated kubeconfig into `~/.kube/config`, and bootstraps Flux via Flux Operator + `FluxInstance`.
 GitOps reconciliation is on by default (course repo, local profile, anonymous HTTPS - the repository is public). Working from a fork, put its URL into `infra/terraform/kind_cluster/terraform.tfvars` (git-ignored; start from `terraform.tfvars.example`) - not into an `export`: a plan from a terminal without it would point Flux back to the course repository and reinstall Flux:
 ```bash
 cp infra/terraform/kind_cluster/terraform.tfvars.example infra/terraform/kind_cluster/terraform.tfvars
@@ -64,11 +64,10 @@ printf 'GitHub PAT: '; IFS= read -rs TF_VAR_flux_git_token; echo   # silent; wor
 export TF_VAR_flux_git_token
 ```
 ```bash
-cd infra/terraform/kind_cluster
-terraform init
-terraform apply
+make kind-plan     # saves the plan - read it
+make kind-apply    # applies exactly that plan (refused when older than 60 minutes)
 ```
-The Terraform workflow creates the three-node topology (one control plane, two workers), writes a kubeconfig alongside the module (`kubeconfig.yaml`), and becomes the single source of truth for lifecycle operations.
+The Terraform workflow creates the two-node topology (one control plane, one worker) with Cilium as the CNI, writes a kubeconfig alongside the module (`kubeconfig.yaml`), and becomes the single source of truth for lifecycle operations.
 
 ### Name the Cluster in Every Command
 Terraform merges the kubeconfig into your default config (`~/.kube/config`) under kind's context name `kind-sre-control-plane`, and also writes it next to the module (`kubeconfig.yaml`). Do not switch the current context: it is one line in a file every terminal shares, and another terminal - or an AI agent - can change it between your check and your command (Chapter 01). Name the cluster instead:
@@ -86,10 +85,9 @@ docker run -d --restart=always -p 5001:5000 --name kind-registry registry:2
 Ensure the registry is running before applying Terraform so the mirror entry in the cluster configuration is valid.
 
 ## Destroy the Cluster
-Use Terraform to tear down the environment when finished:
+Tear the environment down with the make target, not a bare `terraform destroy` - it removes Flux and the cluster's objects first (Chapter 02):
 ```bash
-cd infra/terraform/kind_cluster
-terraform destroy
+make kind-destroy
 ```
 
 ## Test Pods in the Environment Namespaces
@@ -116,9 +114,8 @@ Pods stuck in `ImagePullBackOff` mean the GHCR packages are not public for your 
 
 ## Next Steps
 - Review `docs/gitops/flux.md` for Flux usage; controllers are installed automatically by Terraform.
-- Build and run the backend locally: `cd backend && go run ./cmd/api`, then curl `http://localhost:8080/healthz` or scrape `http://localhost:8080/metrics`.
-- Build the container image via `make -C backend image` and push it to your preferred registry (kind can use the local mirror at `localhost:5001`).
-- Publish the production-ready image to GitHub Container Registry with `make backend-publish` (or `make -C backend publish`). Export `DOCKER_PAT` (PAT with `write:packages`) and optionally `DOCKER_USER` beforehand; override `REGISTRY_HOST`/`REGISTRY_NAMESPACE`/`IMAGE_NAME`/`TAG` as needed.
+- The backend and the frontend live in their own repositories (`safeops-course/backend`, `safeops-course/frontend`); their README files are the reference. In a backend clone: `go run ./cmd/api`, then curl `http://localhost:8080/healthz` or scrape `http://localhost:8080/metrics`.
+- Build the container image there with `make image` and push it to your preferred registry (kind can use the local mirror at `localhost:5001`). `make publish` pushes to GitHub Container Registry; the environments run only images the backend repository's CI builds and signs (Chapter 17), so a local image runs in `lab` only.
 - The image build embeds git metadata (`APP_VERSION`, `APP_COMMIT`, `APP_COMMIT_SHORT`, `APP_BUILD_DATE`) via Go ldflags; `APP_VERSION` defaults to the latest annotated tag (SemVer). Override it when publishing a release and verify `/version` reflects your build (including `build_time`).
-- Run `make test` (executes Go unit tests; Vue tests pending) before committing.
+- Run `go test ./...` in the backend clone before committing (its CI runs `go test -race ./...`).
 - Explore the API via `http://localhost:8080/swagger` for Swagger UI or `http://localhost:8080/openapi` for the raw spec.
