@@ -14,12 +14,12 @@ Use Terraform to provision a local multi-node kind cluster. Terraform manages li
 
 | Included on kind | Excluded on kind (the cloud profiles only) |
 |---|---|
-| namespaces, NetworkPolicies, ResourceQuotas/LimitRanges | cert-manager, external-dns, Cloudflare DNS/TLS |
-| backend + frontend in develop/staging/production | Dex, Headlamp, OIDC RBAC |
+| namespaces, NetworkPolicies, ResourceQuotas/LimitRanges | external-dns, Cloudflare DNS/TLS (cert-manager stays - the Barman Cloud plugin's certificates) |
+| backend + frontend in develop/staging/production | Dex, Headlamp (the OIDC RBAC roles stay - `kubectl --as`, Chapter 21) |
 | kube-prometheus-stack (Prometheus, Grafana) | Uptrace export of the collectors (on kind they print to their own log) |
 | CloudNativePG operator + one cluster per environment | Slack delivery (the Guardian logs its alerts instead) |
 | **MinIO** as the CNPG backup target (replaces the cloud clusters' Cloudflare R2) | Flux image automation (needs a git write token) |
-| Kyverno + both policy packs (Audit) | `flux/secrets/*` encrypted for the platform key |
+| Kyverno + both policy packs (they refuse in develop, staging and production, and only report elsewhere) | `flux/secrets/*` encrypted for the platform key |
 | Flagger (develop canaries are opt-in, Ch19), Chaos Monkey | |
 | The OpenTelemetry collectors (pod logs, Kubernetes Events; `docs/observability/logs.md`) | |
 | **The Guardian** (k8s-ai-monitor, Ch14): Alertmanager hands it every alert but `Watchdog` and `InfoInhibitor`; with your own LLM key (below) it analyses production incidents | |
@@ -42,7 +42,7 @@ Images are pulled from `ghcr.io/safeops-course/*`; no registry credentials are n
 ## Prerequisites
 - Docker Engine with at least 4 CPUs and 8 GB of memory for the two-node kind cluster (12 GB recommended); `make check-tools` verifies it
 - `curl`, `tar`, and `unzip` available on your workstation
-- Go 1.24+ and Node.js 20+ with npm for backend/frontend development
+- Go (the version in the backend's `go.mod`) and Node.js 20+ with npm for backend/frontend development
 - `make` (GNU make recommended)
 - Terraform 1.11+, `kubectl`, `pre-commit`, `checkov` at least the version CI runs (the Terraform security hook fails without it or with an older one; Homebrew lags behind, so `uv tool install checkov`, later `uv tool upgrade checkov`), `jq` (the AI agent's kube-context hook, Chapter 01, and `scripts/lab-pod.sh`) and `yq` v4 (the pre-commit guardrails that read the Flux manifests) - `make check-tools` checks that every tool is installed, and its minimum version where one is set
 
@@ -85,7 +85,7 @@ docker run -d --restart=always -p 5001:5000 --name kind-registry registry:2
 Ensure the registry is running before applying Terraform so the mirror entry in the cluster configuration is valid.
 
 ## Destroy the Cluster
-Tear the environment down with the make target, not a bare `terraform destroy` - it removes Flux and the cluster's objects first (Chapter 02):
+Tear the environment down with the make target: it deletes the kind cluster, proves it is gone, then empties the Terraform state (Chapter 00):
 ```bash
 make kind-destroy
 ```
@@ -115,7 +115,7 @@ Pods stuck in `ImagePullBackOff` mean the GHCR packages are not public for your 
 ## Next Steps
 - Review `docs/gitops/flux.md` for Flux usage; controllers are installed automatically by Terraform.
 - The backend and the frontend live in their own repositories (`safeops-course/backend`, `safeops-course/frontend`); their README files are the reference. In a backend clone: `go run ./cmd/api`, then curl `http://localhost:8080/healthz` or scrape `http://localhost:8080/metrics`.
-- Build the container image there with `make image` and push it to your preferred registry (kind can use the local mirror at `localhost:5001`). `make publish` pushes to GitHub Container Registry; the environments run only images the backend repository's CI builds and signs (Chapter 17), so a local image runs in `lab` only.
-- The image build embeds git metadata (`APP_VERSION`, `APP_COMMIT`, `APP_COMMIT_SHORT`, `APP_BUILD_DATE`) via Go ldflags; `APP_VERSION` defaults to the latest annotated tag (SemVer). Override it when publishing a release and verify `/version` reflects your build (including `build_time`).
+- Build the container image there with `make image` and push it to your preferred registry (kind can use the local mirror at `localhost:5001`). `make publish` pushes to GitHub Container Registry - set `REGISTRY_NAMESPACE` and `IMAGE_NAME` to your own (the defaults name the owner's). The environments run only images the backend repository's CI builds and signs (Chapter 17), so a local image runs in `lab` only.
+- The image build embeds git metadata (`APP_VERSION`, `APP_COMMIT`, `APP_COMMIT_SHORT`, `BUILD_DATE`) via Go ldflags; `APP_VERSION` defaults to the latest annotated tag (SemVer). Override it when publishing a release and verify `/version` reflects your build (including `build_time`).
 - Run `go test ./...` in the backend clone before committing (its CI runs `go test -race ./...`).
 - Explore the API via `http://localhost:8080/swagger` for Swagger UI or `http://localhost:8080/openapi` for the raw spec.

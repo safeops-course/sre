@@ -224,7 +224,7 @@ traffic the backend alerts stay quiet; other alerts still fire on their own cond
 ## Chapter 12 - A backup is only as good as the last restore you proved
 
 `app-postgres` archives every WAL segment and takes a daily base backup to the object store (MinIO on
-kind, Hetzner Object Storage on the platform). A restore is a new cluster next to the original,
+kind, a Cloudflare R2 bucket of its own on the cloud cluster). A restore is a new cluster next to the original,
 `app-postgres-restore`, printed by `scripts/postgres-restore-manifest.sh` (`serverName`, optional
 `targetTime`); the NetworkPolicies allow exactly that name. Four alerts watch the backups
 (`flux/infrastructure/observability/kube-prometheus-stack/monitoring/backup-alerts.yaml`).

@@ -5,7 +5,7 @@
 #
 # For the Hetzner (Cloud track) Terraform run from a workstation. The secrets live in .env.local
 # next to this script (git-ignored); this file turns them into the variables the tools read:
-#   - TF_VAR_* for the hcloud_cluster module (Hetzner token, GHCR and Flux Git tokens, backup keys,
+#   - TF_VAR_* for the hcloud_cluster module (Hetzner token, backup keys, the optional GHCR and Flux Git tokens of a private fork,
 #     the SOPS age key read from ~/.ssh/age.agekey, the node SSH public key from ~/.ssh);
 #   - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from the R2 keys, for the Terraform state backend.
 # It also adds the node SSH private key to ssh-agent, because kube-hetzner signs in to the nodes
@@ -57,8 +57,8 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   echo "  R2_ACCESS_KEY_ID=<your-r2-access-key>"
   echo "  R2_SECRET_ACCESS_KEY=<your-r2-secret-key>"
   echo "  HCLOUD_TOKEN=<your-hcloud-token>"
-  echo "  FLUX_GIT_TOKEN=github_pat_..."
-  echo "  GHCR_TOKEN=ghp_..."
+  echo "  FLUX_GIT_TOKEN=github_pat_...   # optional - only for a private fork"
+  echo "  GHCR_TOKEN=ghp_...              # optional - only for private images"
   echo "  BACKUP_S3_ACCESS_KEY_ID=<r2-backup-bucket-access-key>"
   echo "  BACKUP_S3_SECRET_ACCESS_KEY=<r2-backup-bucket-secret-key>"
   echo "  BACKUP_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com"
