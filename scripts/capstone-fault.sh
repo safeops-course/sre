@@ -207,7 +207,8 @@ run_github() {
   gh pr checks "${pr}" --repo "${repo}" --watch >/dev/null \
     || die "the pull request's checks failed - nothing merged: ${pr}"
   echo "capstone-fault: checks passed; the pull request is open for review: ${pr}"
-  echo "Review it and explicitly approve the lab fault before merging it yourself. Do not bypass repository rules."
+  echo "Review it and record your sign-off as a pull request comment (GitHub does not let you approve your own pull request), then merge it yourself."
+  echo "Only if your fork's ruleset requires an approving review, ask an authorized reviewer. Do not bypass repository rules."
   echo "After the merge, wait for Flux to apply main, then continue the capstone."
 }
 

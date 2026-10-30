@@ -65,8 +65,8 @@ hint() {
     pre-commit:Darwin) echo "brew install pre-commit  | https://pre-commit.com/#install" ;;
     pre-commit:*)      echo "pip install pre-commit  | https://pre-commit.com/#install" ;;
     checkov:*)         echo "uv tool install checkov==${MIN_CHECKOV} (or pipx / pip; Homebrew lags behind)  | https://www.checkov.io/2.Basics/Installing%20Checkov.html" ;;
-    gh:Darwin)        echo "brew install gh | https://cli.github.com/" ;;
-    gh:*)             echo "https://github.com/cli/cli#installation" ;;
+    gh:Darwin)         echo "brew install gh | https://cli.github.com/" ;;
+    gh:*)              echo "https://github.com/cli/cli#installation" ;;
     git:Darwin)        echo "xcode-select --install or brew install git" ;;
     git:*)             echo "apt install git" ;;
     make:Darwin)       echo "xcode-select --install" ;;
