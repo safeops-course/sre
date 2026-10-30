@@ -6,7 +6,7 @@
 # checks (check-app-security.sh, check-app-resources.sh) - a fault the pull request checks catch
 # would never reach the cluster, and the capstone would have nothing to find.
 # The GitHub path runs too, against a local bare repository as origin and a stub gh that logs its calls
-# and answers like GitHub: it pushes, opens and merges, names the repository in every gh call, refuses
+# and answers like GitHub: it pushes and opens a PR without merging, names the repository in every gh call, refuses
 # a repository that is not a fork or a branch left on origin, and leaves no worktree or local branch.
 # Run: tests/capstone-fault.test.sh   (pre-commit runs it when the script, this test or a file a
 # fault edits changes - so an edit that breaks a fault fails here, not in a learner's capstone)
@@ -118,8 +118,8 @@ check "  - and the checkout is clean, still on main" \
 
 # --- the GitHub path, with origin a local bare repository and a stub gh ---
 
-# stub_gh - ${WORK}/bin/gh: logs each call to ${STUB_LOG}; is-fork and merge answers from
-# STUB_FORK (default true) and STUB_MERGE_RC (default 0); STUB_CHECKS=none answers like a fork whose
+# stub_gh - ${WORK}/bin/gh: logs each call to ${STUB_LOG}; is-fork and checks answers from
+# STUB_FORK (default true); STUB_CHECKS=failed reports a failed check, and STUB_CHECKS=none a fork whose
 # Actions are off. Also ${WORK}/bin/ssh, for ssh -G only:
 # the alias github-alias resolves to github.com, any other host to itself - the machine's ssh config
 # must not decide the test.
@@ -140,8 +140,9 @@ case "$1 $2" in
   "pr create") echo "https://github.com/learner/sre/pull/1" ;;
   "pr checks")
     if [[ "${STUB_CHECKS:-}" == "none" ]]; then echo "no checks reported on the 'x' branch"; exit 1; fi
+    if [[ "${STUB_CHECKS:-}" == "failed" ]]; then echo "checks failed"; exit 1; fi
     echo "all checks passed" ;;
-  "pr merge") exit "${STUB_MERGE_RC:-0}" ;;
+  "pr merge") echo "unexpected automatic merge" >&2; exit 1 ;;
   *) echo "stub gh: unexpected call: $*" >&2; exit 1 ;;
 esac
 STUB
@@ -207,6 +208,9 @@ check "github: the checkout is clean, still on main" \
 check "github: every pull request call names the fork" \
   test "$(grep -c '^pr ' "${WORK}/gh.log")" -eq "$(grep -c '^pr .*--repo learner/sre' "${WORK}/gh.log")"
 
+check "github: passing checks never trigger a merge" bash -c "! grep -q '^pr merge' '${WORK}/gh.log'"
+check "github: tells the learner review is required" grep -q 'open for review' "${WORK}/out"
+
 expect_refused "github: a branch left on origin is refused"
 check "  - for that reason" grep -q 'from an earlier run' "${WORK}/out"
 check "  - and no worktree left" no_worktree_left
@@ -242,8 +246,8 @@ check "  - and never calls merge" bash -c "! grep -q '^pr merge' '${WORK}/gh.log
 check "  - and no worktree left" no_worktree_left
 
 github_repo_with_origin
-STUB_MERGE_RC=1 expect_refused "github: a refused merge fails"
-check "  - and says what to do" grep -q 'the pull request is open' "${WORK}/out"
+STUB_CHECKS=failed expect_refused "github: failed checks leave the pull request unmerged"
+check "  - and never calls merge" bash -c "! grep -q '^pr merge' '${WORK}/gh.log'"
 check "  - and no worktree left" no_worktree_left
 
 exit "${FAILED}"

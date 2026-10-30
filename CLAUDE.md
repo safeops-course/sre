@@ -231,7 +231,7 @@ scripts/             # Pre-commit hooks, automation scripts
   ingress load balancer, metrics-server, webhooks reachable, WAL archiving, image architectures, the address families the provider promises (C13: cluster-config `ip_stack`; on "dual" C2 and C5 check both families); PASS/FAIL/SKIP with a
   reason. Creates and deletes the namespace `conformance` (a real disk for ~1 min on a cloud); nightly on kind
 - `make capstone-fault` — Chapter 23: a colleague's pull request with one random fault (f1 sign-up limit,
-  f2 database network policies, f3 backend CPU), merged in the learner's repository; `scripts/capstone-fault.sh --local` commits only
+  f2 database network policies, f3 backend CPU), left open for review in the learner's repository; `scripts/capstone-fault.sh --local` commits only
   (tests/capstone-fault.test.sh). `make capstone-check` — the capstone's acceptance criteria against Git and
   the cluster, PROVEN / NOT PROVEN YET (read-only but for the smoke test's probe pod)
 
