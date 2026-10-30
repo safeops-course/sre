@@ -5,7 +5,7 @@
 # Why: the capstone asks for one change proven in staging and production while the platform is not
 # quiet - like every real week, someone else merges something too. This script plays that colleague:
 # it picks one of three faults at random, commits it with the message the colleague would write,
-# opens a pull request in your repository and merges it once its checks pass. The faults
+# opens a pull request in your repository and leaves it for review after its checks pass. The faults
 # (each verified on kind: it passes CI, it breaks, a revert through Git fixes it):
 #   f1  sign-ups limited to one a minute (AUTH_REGISTRATIONS_PER_MINUTE) - the pods stay Ready, no
 #       alert fires, most sign-ups get 429;
@@ -22,9 +22,9 @@
 #        CAPSTONE_FAULT=f2 scripts/capstone-fault.sh ...   (a chosen fault instead of a random one)
 # Needs git; without --local also gh, logged in, a clean main equal to origin/main, and an origin that
 # is a fork on GitHub (yours). CAPSTONE_POLL_SECONDS (default 10) is the wait between check polls - for tests.
-# Changes: without --local a branch, a pull request and its merge in your GitHub repository; Flux then
-# applies main to the cluster. Your working copy is not touched - the change is made in a temporary
-# git worktree. With --local, a new branch with one commit in this repository.
+# Changes: without --local a branch and an open pull request in your GitHub repository. A person
+# reviews and explicitly merges it before Flux applies the fault. Your working copy is not touched:
+# the change is made in a temporary git worktree. With --local, a new branch with one commit in this repository.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -155,7 +155,7 @@ github_repo() {
   echo "${path%.git}"
 }
 
-# run_github - the fault as a pull request in your GitHub repository, merged once its checks pass.
+# run_github - the fault as a pull request in your GitHub repository, left open for review.
 run_github() {
   command -v gh >/dev/null || die "gh is required (make check-tools), or use --local"
   gh auth status >/dev/null 2>&1 || die "gh is not logged in (gh auth login)"
@@ -206,9 +206,9 @@ run_github() {
   fi
   gh pr checks "${pr}" --repo "${repo}" --watch >/dev/null \
     || die "the pull request's checks failed - nothing merged: ${pr}"
-  gh pr merge "${pr}" --repo "${repo}" --merge --delete-branch >/dev/null \
-    || die "the merge was refused (a ruleset that needs a review?) - the pull request is open: merge it yourself, as a colleague's approved change, or close it (gh pr close ${pr} --repo ${repo} --delete-branch) and run this again"
-  echo "capstone-fault: and merged it. Flux applies main within a few minutes - carry on with your change."
+  echo "capstone-fault: checks passed; the pull request is open for review: ${pr}"
+  echo "Review it and explicitly approve the lab fault before merging it yourself. Do not bypass repository rules."
+  echo "After the merge, wait for Flux to apply main, then continue the capstone."
 }
 
 case "${1:-}" in

@@ -196,7 +196,7 @@ cluster-conformance: ## The cluster contract (C1-C13) against KUBE_CONTEXT - wha
 	@KUBE_CONTEXT=$(KUBE_CONTEXT) scripts/cluster-conformance.sh
 
 # --- Chapter 23 capstone ---------------------------------------------------
-capstone-fault: ## Capstone: a colleague's pull request, merged in your repository (one random fault)
+capstone-fault: ## Capstone: open a colleague's pull request for review (one random fault; never merges)
 	@scripts/capstone-fault.sh
 
 capstone-check: ## Capstone: each acceptance criterion against Git and KUBE_CONTEXT (read-only)
